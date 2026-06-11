@@ -9,7 +9,10 @@ import 'dotenv/config';
 import { fashionProducts, seedProducts } from './data-generator/products';
 import { generateCustomerAttributes } from './services/customer-attributes';
 import { generateCustomerMetrics } from './services/customer-metrics';
+import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard } from './services/opportunities';
 import { generatePersonas, getPersonaCustomers, getPersonaDistribution } from './services/personas';
+import { generateCampaign, saveCampaign, approveCampaign, launchCampaign, getCampaigns, getCampaignById } from './services/campaigns';
+import { verifySignature, processWebhook, type WebhookEvent } from './services/webhooks';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -529,6 +532,51 @@ app.post('/api/personas/generate', async (req, res) => {
   }
 });
 
+app.post('/api/opportunities/generate', async (req, res) => {
+  try {
+    const { companyId, model } = req.body ?? {};
+    const report = await generateOpportunities(supabase, { companyId, model });
+
+    res.json({
+      success: true,
+      data: report,
+    });
+  } catch (error) {
+    console.error('Error generating opportunities:', error);
+    res.status(500).json({ error: 'Failed to generate opportunities' });
+  }
+});
+
+app.get('/api/opportunities', async (req, res) => {
+  try {
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+    const report = await getOpportunityDashboard(supabase, companyId);
+
+    res.json({
+      success: true,
+      data: report,
+    });
+  } catch (error) {
+    console.error('Error fetching opportunities:', error);
+    res.status(500).json({ error: 'Failed to fetch opportunities' });
+  }
+});
+
+app.get('/api/opportunities/:opportunityId', async (req, res) => {
+  try {
+    const { opportunityId } = req.params;
+    const result = await getOpportunityCustomers(supabase, opportunityId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching opportunity details:', error);
+    res.status(500).json({ error: 'Failed to fetch opportunity details' });
+  }
+});
+
 app.get('/api/personas', async (req, res) => {
   try {
     const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
@@ -557,6 +605,149 @@ app.get('/api/personas/:personaName', async (req, res) => {
   } catch (error) {
     console.error('Error fetching persona customers:', error);
     res.status(500).json({ error: 'Failed to fetch persona customers' });
+  }
+});
+
+// ============================================
+// CAMPAIGNS
+// ============================================
+
+// POST /api/campaigns/generate
+app.post('/api/campaigns/generate', async (req, res) => {
+  try {
+    const { opportunityId, companyId, model } = req.body ?? {};
+
+    if (!opportunityId) {
+      return res.status(400).json({ error: 'opportunityId is required' });
+    }
+
+    const result = await generateCampaign(supabase, { opportunityId, companyId, model });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error generating campaign:', error);
+    res.status(500).json({ error: 'Failed to generate campaign' });
+  }
+});
+
+// POST /api/campaigns
+app.post('/api/campaigns', async (req, res) => {
+  try {
+    const { opportunityId, campaign, companyId } = req.body ?? {};
+
+    if (!opportunityId || !campaign) {
+      return res.status(400).json({ error: 'opportunityId and campaign are required' });
+    }
+
+    const result = await saveCampaign(supabase, opportunityId, campaign, companyId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error saving campaign:', error);
+    res.status(500).json({ error: 'Failed to save campaign' });
+  }
+});
+
+// GET /api/campaigns
+app.get('/api/campaigns', async (req, res) => {
+  try {
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+    const campaigns = await getCampaigns(supabase, companyId);
+
+    res.json({
+      success: true,
+      data: campaigns,
+    });
+  } catch (error) {
+    console.error('Error fetching campaigns:', error);
+    res.status(500).json({ error: 'Failed to fetch campaigns' });
+  }
+});
+
+// GET /api/campaigns/:id
+app.get('/api/campaigns/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const campaign = await getCampaignById(supabase, id);
+
+    res.json({
+      success: true,
+      data: campaign,
+    });
+  } catch (error) {
+    console.error('Error fetching campaign:', error);
+    res.status(500).json({ error: 'Failed to fetch campaign' });
+  }
+});
+
+// POST /api/campaigns/:id/approve
+app.post('/api/campaigns/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const campaign = await approveCampaign(supabase, id);
+
+    res.json({
+      success: true,
+      data: campaign,
+    });
+  } catch (error) {
+    console.error('Error approving campaign:', error);
+    res.status(500).json({ error: 'Failed to approve campaign' });
+  }
+});
+
+// POST /api/campaigns/:id/launch
+app.post('/api/campaigns/:id/launch', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await launchCampaign(supabase, id);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error launching campaign:', error);
+    res.status(500).json({ error: 'Failed to launch campaign' });
+  }
+});
+
+// ============================================
+// WEBHOOKS
+// ============================================
+
+// POST /api/webhooks/channel-status
+app.post('/api/webhooks/channel-status', async (req, res) => {
+  try {
+    const signature = req.headers['x-signature'] as string;
+
+    if (!signature) {
+      return res.status(401).json({ error: 'Missing X-Signature header' });
+    }
+
+    // Verify signature
+    const payload = JSON.stringify(req.body);
+    const isValid = verifySignature(payload, signature);
+
+    if (!isValid) {
+      console.warn('[Webhook] Invalid signature received');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    // Process webhook
+    const event = req.body as WebhookEvent;
+    const result = await processWebhook(supabase, event);
+
+    res.json(result);
+  } catch (error) {
+    console.error('[Webhook] Processing error:', error);
+    res.status(500).json({ error: 'Failed to process webhook' });
   }
 });
 

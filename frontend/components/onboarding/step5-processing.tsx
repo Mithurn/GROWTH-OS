@@ -20,7 +20,7 @@ export function Step5Processing({ onComplete }: ProcessingProps) {
     { id: 'customers', label: 'Customers Imported', completed: false },
     { id: 'orders', label: 'Orders Imported', completed: false },
     { id: 'metrics', label: 'Customer Metrics Generated', completed: false },
-    { id: 'intelligence', label: 'Customer Intelligence Prepared', completed: false },
+    { id: 'opportunities', label: 'Opportunity Engine Ready', completed: false },
   ]);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function Step5Processing({ onComplete }: ProcessingProps) {
         {allCompleted && (
           <div className="mt-6 p-4 bg-primary/10 border border-primary/20 rounded-lg text-center">
             <p className="text-sm font-medium text-primary">
-              🎉 Processing complete! Redirecting to customer intelligence...
+              🎉 Processing complete! Redirecting to growth opportunities...
             </p>
           </div>
         )}

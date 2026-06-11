@@ -32,6 +32,8 @@ model Customer {
   customerMetrics      CustomerMetrics?
   customerAttributes   CustomerAttributes?
   persona              Persona?
+  opportunities        OpportunityCustomer[]
+  communications       Communication[]
 
   @@index([email])
   @@index([phone])
@@ -46,6 +48,8 @@ model Company {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   personas     Persona[]
+  opportunities Opportunity[]
+  campaigns    Campaign[]
 
   @@index([companyName])
   @@map("companies")
@@ -154,4 +158,148 @@ model Persona {
   @@index([companyId])
   @@index([personaName])
   @@map("personas")
+}
+
+model Opportunity {
+  id                        String   @id @default(uuid())
+  companyId                 String   @map("company_id")
+  opportunityKey            String   @map("opportunity_key")
+  opportunityType           String   @map("opportunity_type")
+  title                     String
+  description               String
+  audienceSize              Int      @default(0) @map("audience_size")
+  potentialRevenue          Decimal  @default(0) @map("potential_revenue") @db.Decimal(12, 2)
+  confidenceScore           Decimal  @default(0) @map("confidence_score") @db.Decimal(5, 2)
+  priorityScore             Decimal  @default(0) @map("priority_score") @db.Decimal(5, 2)
+  supportingCustomerSegment String   @map("supporting_customer_segment")
+  recommendedAction         String   @map("recommended_action")
+  audienceDefinition        Json     @map("audience_definition")
+  triggerReason             String   @map("trigger_reason")
+  aiSummary                 String   @map("ai_summary")
+  status                    String   @default("Detected")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  audience                  OpportunityCustomer[]
+  campaigns                 Campaign[]
+
+  @@unique([companyId, opportunityKey])
+  @@index([companyId])
+  @@index([opportunityType])
+  @@index([status])
+  @@index([priorityScore])
+  @@map("opportunities")
+}
+
+model OpportunityCustomer {
+  id             String   @id @default(uuid())
+  opportunityId  String   @map("opportunity_id")
+  customerId     String   @map("customer_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, customerId])
+  @@index([opportunityId])
+  @@index([customerId])
+  @@map("opportunity_customers")
+}
+
+// ============================================
+// PHASE 2: Campaign Planner Tables
+// ============================================
+
+model Campaign {
+  id               String    @id @default(uuid())
+  companyId        String    @map("company_id")
+  opportunityId    String    @map("opportunity_id")
+  name             String
+  objective        String
+  channel          String
+  offer            String?
+  messageAngle     String?   @map("message_angle")
+  messageContent   String    @map("message_content")
+  expectedOutcome  String?   @map("expected_outcome")
+  reasoning        String?
+  status           String    @default("Draft")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  approvedAt       DateTime? @map("approved_at")
+  launchedAt       DateTime? @map("launched_at")
+  completedAt      DateTime? @map("completed_at")
+
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  communications   Communication[]
+
+  @@index([companyId])
+  @@index([opportunityId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("campaigns")
+}
+
+model Communication {
+  id                  String    @id @default(uuid())
+  campaignId          String    @map("campaign_id")
+  customerId          String    @map("customer_id")
+  channel             String
+  message             String
+  status              String    @default("QUEUED")
+  providerMessageId   String?   @map("provider_message_id")
+  failureReason       String?   @map("failure_reason")
+  retryCount          Int       @default(0) @map("retry_count")
+  sentAt              DateTime? @map("sent_at")
+  deliveredAt         DateTime? @map("delivered_at")
+  readAt              DateTime? @map("read_at")
+  clickedAt           DateTime? @map("clicked_at")
+  failedAt            DateTime? @map("failed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  campaign            Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer            Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  events              CommunicationEvent[]
+
+  @@index([campaignId])
+  @@index([customerId])
+  @@index([status])
+  @@index([providerMessageId])
+  @@index([createdAt])
+  @@map("communications")
+}
+
+model CommunicationEvent {
+  id                String    @id @default(uuid())
+  communicationId   String    @map("communication_id")
+  eventType         String    @map("event_type")
+  eventTimestamp    DateTime  @default(now()) @map("event_timestamp")
+  sequenceNumber    Int       @map("sequence_number")
+  providerMessageId String?   @map("provider_message_id")
+  providerEventId   String?   @map("provider_event_id")
+  errorMessage      String?   @map("error_message")
+  metadata          Json?
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  communication     Communication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
+
+  @@index([communicationId])
+  @@index([eventType])
+  @@index([eventTimestamp])
+  @@index([sequenceNumber])
+  @@index([providerEventId])
+  @@map("communication_events")
+}
+
+model ProcessedWebhookEvent {
+  id              String    @id @default(uuid())
+  eventId         String    @unique @map("event_id")
+  communicationId String?   @map("communication_id")
+  processedAt     DateTime  @default(now()) @map("processed_at")
+
+  @@index([eventId])
+  @@index([processedAt])
+  @@map("processed_webhook_events")
 }

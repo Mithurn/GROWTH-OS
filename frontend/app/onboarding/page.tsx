@@ -9,7 +9,7 @@ import { Step2CustomerRecords } from '@/components/onboarding/step2-customer-rec
 import { Step3PurchaseHistory } from '@/components/onboarding/step3-purchase-history';
 import { Step4Review } from '@/components/onboarding/step4-review';
 import { Step5Processing } from '@/components/onboarding/step5-processing';
-import { uploadCustomerCSV, uploadOrderCSV, startIngestion, getIngestionStatus } from '@/lib/api';
+import { saveBusinessInfo, uploadCustomerCSV, uploadOrderCSV, startIngestion, getIngestionStatus } from '@/lib/api';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -88,7 +88,21 @@ export default function OnboardingPage() {
   };
 
   const handleNext = async () => {
-    if (currentStep === 4) {
+    if (currentStep === 1) {
+      try {
+        const result = await saveBusinessInfo(businessData.companyName, businessData.industry);
+        const savedCompanyId = result?.data?.id ?? null;
+
+        if (savedCompanyId) {
+          window.localStorage.setItem('xeno_company_id', savedCompanyId);
+        }
+
+        setCurrentStep(2);
+      } catch (error) {
+        console.error('Error saving business info:', error);
+        alert('Failed to save business information');
+      }
+    } else if (currentStep === 4) {
       // Start ingestion process
       await startProcessing();
     } else if (currentStep < 5) {
@@ -119,7 +133,7 @@ export default function OnboardingPage() {
         if (status.step === 'completed') {
           clearInterval(pollInterval);
           setTimeout(() => {
-            router.push('/intelligence');
+            router.push('/opportunities');
           }, 2000);
         } else if (status.step === 'error') {
           clearInterval(pollInterval);
@@ -149,9 +163,9 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Xeno Grow</h1>
-          <p className="text-gray-600">Let&apos;s get your customer intelligence set up</p>
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to Xeno Grow</h1>
+          <p className="text-gray-600">Let&apos;s get your growth engine set up</p>
         </div>
 
         {/* Progress Tracker */}
@@ -186,18 +200,18 @@ export default function OnboardingPage() {
 
           {currentStep === 4 && (
             <Step4Review
-              data={{
+                data={{
                 companyName: businessData.companyName,
                 industry: businessData.industry,
                 totalCustomers: customerPreview?.totalCustomers || 0,
                 totalOrders: ordersPreview?.totalOrders || 0,
-                productsDetected: 50,
+                productsDetected: 52,
               }}
             />
           )}
 
           {currentStep === 5 && (
-            <Step5Processing onComplete={() => router.push('/intelligence')} />
+            <Step5Processing onComplete={() => undefined} />
           )}
         </div>
 
@@ -212,14 +226,14 @@ export default function OnboardingPage() {
               Back
             </Button>
 
-            <Button
-              onClick={handleNext}
-              disabled={!canProceed() || isProcessing}
-            >
-              {currentStep === 4 ? 'Generate Intelligence' : 'Continue'}
-            </Button>
-          </div>
-        )}
+              <Button
+                onClick={handleNext}
+                disabled={!canProceed() || isProcessing}
+              >
+              {currentStep === 4 ? 'Generate Opportunities' : 'Continue'}
+              </Button>
+            </div>
+          )}
       </div>
     </div>
   );

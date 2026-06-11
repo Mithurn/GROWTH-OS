@@ -1,0 +1,22 @@
+{
+  "name": "channel-service",
+  "version": "1.0.0",
+  "description": "Simulated channel provider for WhatsApp, Email, and SMS",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "dotenv": "^17.4.2",
+    "uuid": "^11.0.5"
+  }
+}
