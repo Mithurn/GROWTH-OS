@@ -1,0 +1,157 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// PHASE 1: Core Tables
+// ============================================
+
+model Customer {
+  id                   String   @id @default(uuid())
+  externalCustomerId   String?  @map("external_customer_id")
+  firstName            String   @map("first_name")
+  lastName             String?  @map("last_name")
+  email                String?  @unique
+  phone                String?
+  gender               String?
+  city                 String?
+  state                String?
+  signupDate           DateTime @default(now()) @map("signup_date")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  orders               Order[]
+  customerMetrics      CustomerMetrics?
+  customerAttributes   CustomerAttributes?
+  persona              Persona?
+
+  @@index([email])
+  @@index([phone])
+  @@map("customers")
+}
+
+model Company {
+  id           String   @id @default(uuid())
+  companyName  String   @unique @map("company_name")
+  industry     String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  personas     Persona[]
+
+  @@index([companyName])
+  @@map("companies")
+}
+
+model Product {
+  id           String  @id @default(uuid())
+  sku          String  @unique
+  productName  String  @map("product_name")
+  category     String?
+  subcategory  String? @map("subcategory")
+  price        Decimal @db.Decimal(10, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  orderItems   OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  customerId  String   @map("customer_id")
+  orderDate   DateTime @map("order_date")
+  totalAmount Decimal  @map("total_amount") @db.Decimal(10, 2)
+  channel     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@index([customerId])
+  @@index([orderDate])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String  @id @default(uuid())
+  orderId    String  @map("order_id")
+  productId  String  @map("product_id")
+  quantity   Int
+  unitPrice  Decimal @map("unit_price") @db.Decimal(10, 2)
+
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model CustomerMetrics {
+  id                  String   @id @default(uuid())
+  customerId          String   @unique @map("customer_id")
+  totalOrders         Int      @default(0) @map("total_orders")
+  totalSpent          Decimal  @default(0) @map("total_spent") @db.Decimal(10, 2)
+  avgOrderValue       Decimal  @default(0) @map("avg_order_value") @db.Decimal(10, 2)
+  lastOrderDate       DateTime? @map("last_order_date")
+  daysSinceLastOrder  Int?     @map("days_since_last_order")
+  purchaseFrequency   String?  @map("purchase_frequency")
+  engagementScore     Decimal? @map("engagement_score") @db.Decimal(5, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  customer            Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([totalSpent])
+  @@index([lastOrderDate])
+  @@map("customer_metrics")
+}
+
+model CustomerAttributes {
+  id                      String   @id @default(uuid())
+  customerId              String   @unique @map("customer_id")
+  favoriteCategory        String?  @map("favorite_category")
+  secondFavoriteCategory  String?  @map("second_favorite_category")
+  preferredChannel        String?  @map("preferred_channel")
+  discountAffinity        String?  @map("discount_affinity")
+  avgDaysBetweenOrders    Decimal? @map("avg_days_between_orders") @db.Decimal(10, 2)
+  dominantPriceBand       String?  @map("dominant_price_band")
+  categoryDiversityScore  Decimal  @default(0) @map("category_diversity_score") @db.Decimal(5, 2)
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  customer                Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([favoriteCategory])
+  @@index([preferredChannel])
+  @@index([discountAffinity])
+  @@index([dominantPriceBand])
+  @@map("customer_attributes")
+}
+
+model Persona {
+  id                 String   @id @default(uuid())
+  companyId          String   @map("company_id")
+  customerId         String   @unique @map("customer_id")
+  personaName        String   @map("persona_name")
+  personaDescription String   @map("persona_description")
+  confidenceScore    Decimal  @default(0) @map("confidence_score") @db.Decimal(5, 2)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([personaName])
+  @@map("personas")
+}
