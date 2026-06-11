@@ -1,0 +1,81 @@
+customer_id,first_name,last_name,email,phone,gender,city,state,signup_date
+CUST000001,Anthony,Dare,anthony.dare@example.com,+910994256535,Male,Kolkata,West Bengal,2025-01-25
+CUST000002,Althea,Schulist,althea.schulist@example.com,+916426242349,Female,Bangalore,Karnataka,2024-12-11
+CUST000003,Merle,Mills,merle.mills@example.com,+916218778075,Male,Delhi,Delhi,2025-03-21
+CUST000004,Susie,O'Connell,susie.o'connell@example.com,+915058606610,Female,Pune,Maharashtra,2025-04-20
+CUST000005,Margie,Schultz-Jakubowski,margie.schultz-jakubowski@example.com,+914803729351,Female,Lucknow,Uttar Pradesh,2025-02-01
+CUST000006,Name,Kuphal,name.kuphal@example.com,+915783954033,Male,Jaipur,Rajasthan,2024-12-24
+CUST000007,Assunta,Yost,assunta.yost@example.com,+912837050104,Male,Lucknow,Uttar Pradesh,2025-04-07
+CUST000008,Connie,Gutkowski,connie.gutkowski@example.com,+918812876403,Female,Jaipur,Rajasthan,2025-06-03
+CUST000009,Telly,Stroman,telly.stroman@example.com,+918753002044,Male,Hyderabad,Telangana,2025-01-20
+CUST000010,Gayle,Kovacek,gayle.kovacek@example.com,+917060625895,Female,Bangalore,Karnataka,2025-02-09
+CUST000011,Owen,Sauer,owen.sauer@example.com,+917196752966,Male,Pune,Maharashtra,2025-10-14
+CUST000012,Dominic,Spinka,dominic.spinka@example.com,+916617986434,Male,Pune,Maharashtra,2025-10-02
+CUST000013,Cristina,Prosacco,cristina.prosacco@example.com,+917289350132,Female,Pune,Maharashtra,2025-06-05
+CUST000014,Ian,Cassin,ian.cassin@example.com,+917025188412,Male,Ahmedabad,Gujarat,2025-04-23
+CUST000015,Juana,Lemke,juana.lemke@example.com,+914416635383,Female,Jaipur,Rajasthan,2025-05-31
+CUST000016,Kennith,Rice,kennith.rice@example.com,+914881700057,Female,Jaipur,Rajasthan,2025-05-03
+CUST000017,Ericka,Doyle,ericka.doyle@example.com,+917849362596,Male,Kolkata,West Bengal,2025-06-06
+CUST000018,Ignacio,Turner,ignacio.turner@example.com,+911294270553,Male,Delhi,Delhi,2025-07-03
+CUST000019,Marian,Kemmer,marian.kemmer@example.com,+914183926240,Female,Bangalore,Karnataka,2025-09-06
+CUST000020,Diana,Lynch,diana.lynch@example.com,+910511668127,Female,Ahmedabad,Gujarat,2025-09-08
+CUST000021,Jayde,Torp,jayde.torp@example.com,+911091738860,Female,Kolkata,West Bengal,2025-05-20
+CUST000022,Nina,Torp,nina.torp@example.com,+915823154439,Female,Hyderabad,Telangana,2025-03-14
+CUST000023,Kristine,Doyle,kristine.doyle@example.com,+913252126675,Female,Jaipur,Rajasthan,2025-08-06
+CUST000024,Katie,Russel,katie.russel@example.com,+912529524542,Female,Delhi,Delhi,2025-09-13
+CUST000025,Keara,Tremblay,keara.tremblay@example.com,+915805594508,Male,Mumbai,Maharashtra,2026-04-24
+CUST000026,Antonette,Friesen,antonette.friesen@example.com,+919178280904,Male,Ahmedabad,Gujarat,2025-10-19
+CUST000027,Haskell,Bednar,haskell.bednar@example.com,+913776446562,Female,Kolkata,West Bengal,2025-10-11
+CUST000028,Lester,Wilderman,lester.wilderman@example.com,+918875524698,Male,Mumbai,Maharashtra,2025-12-09
+CUST000029,Juliana,Cummerata,juliana.cummerata@example.com,+916394593160,Male,Delhi,Delhi,2025-11-05
+CUST000030,Melissa,Jacobi,melissa.jacobi@example.com,+917435963741,Female,Kolkata,West Bengal,2025-12-25
+CUST000031,Marisol,Kovacek,marisol.kovacek@example.com,+916724714228,Female,Jaipur,Rajasthan,2025-06-25
+CUST000032,Ciara,MacGyver,ciara.macgyver@example.com,+912361779986,Male,Ahmedabad,Gujarat,2025-12-29
+CUST000033,Irene,Koelpin,irene.koelpin@example.com,+912013798701,Female,Pune,Maharashtra,2026-02-25
+CUST000034,Greyson,Lindgren,greyson.lindgren@example.com,+912964383016,Female,Ahmedabad,Gujarat,2025-07-07
+CUST000035,Marc,Schimmel,marc.schimmel@example.com,+919236343426,Male,Kolkata,West Bengal,2026-05-25
+CUST000036,Tracy,Fritsch,tracy.fritsch@example.com,+915636758480,Female,Chennai,Tamil Nadu,2025-09-06
+CUST000037,Inez,Gutkowski,inez.gutkowski@example.com,+917272813324,Female,Ahmedabad,Gujarat,2026-03-31
+CUST000038,Uriah,Wuckert,uriah.wuckert@example.com,+911958079479,Male,Chennai,Tamil Nadu,2026-02-03
+CUST000039,Angelo,Kreiger,angelo.kreiger@example.com,+910450101940,Male,Lucknow,Uttar Pradesh,2025-07-05
+CUST000040,Alexzander,Tromp,alexzander.tromp@example.com,+917848294478,Female,Bangalore,Karnataka,2025-04-05
+CUST000041,Thalia,D'Amore,thalia.d'amore@example.com,+917648290468,Female,Hyderabad,Telangana,2024-12-30
+CUST000042,Angelo,Brakus,angelo.brakus@example.com,+916867347496,Male,Jaipur,Rajasthan,2025-03-12
+CUST000043,Gideon,Stracke,gideon.stracke@example.com,+910092471790,Female,Chennai,Tamil Nadu,2025-03-29
+CUST000044,Leilani,Labadie,leilani.labadie@example.com,+912360622195,Male,Pune,Maharashtra,2025-01-17
+CUST000045,Casimer,Wolf,casimer.wolf@example.com,+911433054971,Male,Mumbai,Maharashtra,2024-12-25
+CUST000046,Jonas,Ziemann,jonas.ziemann@example.com,+917485803723,Male,Hyderabad,Telangana,2024-12-29
+CUST000047,Mitchel,Brown,mitchel.brown@example.com,+917221921272,Male,Pune,Maharashtra,2025-01-29
+CUST000048,Alvena,Johns,alvena.johns@example.com,+912016544115,Female,Bangalore,Karnataka,2026-05-10
+CUST000049,Carey,Gleichner,carey.gleichner@example.com,+918130398335,Male,Ahmedabad,Gujarat,2025-06-07
+CUST000050,Ray,Paucek,ray.paucek@example.com,+917954973075,Male,Kolkata,West Bengal,2026-04-04
+CUST000051,Edythe,Johns,edythe.johns@example.com,+919904867487,Female,Bangalore,Karnataka,2025-08-13
+CUST000052,Daniella,Dach,daniella.dach@example.com,+918240178329,Male,Bangalore,Karnataka,2025-08-15
+CUST000053,Phil,Hintz,phil.hintz@example.com,+915600856199,Male,Lucknow,Uttar Pradesh,2026-01-04
+CUST000054,Beulah,Ritchie,beulah.ritchie@example.com,+914024307437,Female,Ahmedabad,Gujarat,2025-09-20
+CUST000055,Skye,Ratke,skye.ratke@example.com,+919407304233,Male,Jaipur,Rajasthan,2026-01-24
+CUST000056,Winifred,Littel,winifred.littel@example.com,+911654894567,Female,Pune,Maharashtra,2026-05-10
+CUST000057,Brennon,Altenwerth,brennon.altenwerth@example.com,+918727647673,Male,Jaipur,Rajasthan,2026-02-10
+CUST000058,Vince,Kreiger,vince.kreiger@example.com,+910925328287,Female,Pune,Maharashtra,2025-06-22
+CUST000059,Abbigail,Pfannerstill,abbigail.pfannerstill@example.com,+914629040284,Female,Ahmedabad,Gujarat,2025-10-13
+CUST000060,Vida,Bergstrom,vida.bergstrom@example.com,+916747990511,Male,Bangalore,Karnataka,2025-09-21
+CUST000061,Frederick,Kirlin,frederick.kirlin@example.com,+913799772883,Male,Kolkata,West Bengal,2025-09-07
+CUST000062,Irving,Schuppe,irving.schuppe@example.com,+918497635871,Male,Bangalore,Karnataka,2025-11-10
+CUST000063,Josefina,Cronin,josefina.cronin@example.com,+915727901927,Female,Ahmedabad,Gujarat,2025-08-05
+CUST000064,Gilberto,Gleichner,gilberto.gleichner@example.com,+918209633041,Male,Pune,Maharashtra,2025-07-29
+CUST000065,Hector,Hettinger,hector.hettinger@example.com,+915990654536,Male,Hyderabad,Telangana,2025-09-26
+CUST000066,Neva,Nitzsche,neva.nitzsche@example.com,+911290465493,Male,Chennai,Tamil Nadu,2026-03-06
+CUST000067,Daniel,Corwin,daniel.corwin@example.com,+915525914400,Male,Mumbai,Maharashtra,2025-10-11
+CUST000068,Aliya,Johns,aliya.johns@example.com,+919063969919,Male,Pune,Maharashtra,2025-09-27
+CUST000069,Cielo,Kulas,cielo.kulas@example.com,+914396919756,Female,Hyderabad,Telangana,2025-08-19
+CUST000070,Margie,Blanda,margie.blanda@example.com,+910489297834,Female,Mumbai,Maharashtra,2026-04-25
+CUST000071,Jeffry,Rohan,jeffry.rohan@example.com,+918525920860,Male,Bangalore,Karnataka,2026-03-04
+CUST000072,Janet,Leannon,janet.leannon@example.com,+917327953092,Female,Mumbai,Maharashtra,2026-03-25
+CUST000073,Breanna,Windler,breanna.windler@example.com,+914688067588,Female,Mumbai,Maharashtra,2026-04-05
+CUST000074,Marty,Toy,marty.toy@example.com,+915283479047,Male,Chennai,Tamil Nadu,2025-10-02
+CUST000075,Brent,Baumbach,brent.baumbach@example.com,+919551358345,Male,Delhi,Delhi,2025-12-17
+CUST000076,Paolo,Miller,paolo.miller@example.com,+911183901839,Male,Ahmedabad,Gujarat,2026-05-20
+CUST000077,Tianna,Shields,tianna.shields@example.com,+918061824707,Female,Pune,Maharashtra,2025-10-16
+CUST000078,Edmund,Renner,edmund.renner@example.com,+914928108193,Male,Delhi,Delhi,2026-01-30
+CUST000079,Tina,O'Hara,tina.o'hara@example.com,+914092072118,Female,Bangalore,Karnataka,2026-05-18
+CUST000080,Abbigail,Lakin,abbigail.lakin@example.com,+917289138179,Female,Pune,Maharashtra,2026-02-15
