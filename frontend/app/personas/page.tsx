@@ -191,8 +191,8 @@ export default function PersonasPage() {
               <Button onClick={handleGeneratePersonas} disabled={generating}>
                 {generating ? 'Generating personas...' : 'Generate Personas'}
               </Button>
-              <Button variant="outline" onClick={() => router.push('/intelligence')}>
-                Back to Intelligence
+              <Button variant="outline" onClick={() => router.push('/opportunities')}>
+                Back to Opportunities
               </Button>
             </div>
           </div>

@@ -9,6 +9,7 @@
     "metrics:validate": "tsx src/validate-customer-metrics.ts",
     "attributes:validate": "tsx src/validate-customer-attributes.ts",
     "personas:validate": "tsx src/validate-personas.ts",
+    "opportunities:validate": "tsx src/validate-opportunities.ts",
     "repair:order-items": "tsx src/repair-order-items.ts",
     "generate:data": "tsx src/data-generator/generate-data.ts",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -190,14 +190,14 @@ export default function IntelligencePage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-700">
-              Your customer intelligence is ready. Persona generation is now available as the next AI layer.
+              Your customer intelligence is ready. The Opportunity Engine is now available as the next AI layer.
             </p>
             <div className="mt-4">
               <Link
-                href="/personas"
+                href="/opportunities"
                 className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/80"
               >
-                Open Personas
+                Open Opportunities
               </Link>
             </div>
           </CardContent>
