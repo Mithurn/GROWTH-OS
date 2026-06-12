@@ -13,6 +13,16 @@ import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard
 import { generatePersonas, getPersonaCustomers, getPersonaDistribution } from './services/personas';
 import { generateCampaign, saveCampaign, approveCampaign, launchCampaign, getCampaigns, getCampaignById } from './services/campaigns';
 import { verifySignature, processWebhook, type WebhookEvent } from './services/webhooks';
+import {
+  generateIntelligenceBrief,
+  getCampaignFunnel,
+  getOpportunityPipeline,
+  getChannelPerformance,
+  getOpportunityDistribution,
+  getOpportunityTrend,
+  getActivityFeed,
+  getRecommendedActions,
+} from './services/analytics';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -748,6 +758,133 @@ app.post('/api/webhooks/channel-status', async (req, res) => {
   } catch (error) {
     console.error('[Webhook] Processing error:', error);
     res.status(500).json({ error: 'Failed to process webhook' });
+  }
+});
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+// GET /api/analytics/intelligence-brief
+app.get('/api/analytics/intelligence-brief', async (req, res) => {
+  try {
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+    const brief = await generateIntelligenceBrief(supabase, companyId);
+
+    res.json({
+      success: true,
+      data: brief,
+    });
+  } catch (error) {
+    console.error('Error generating intelligence brief:', error);
+    res.status(500).json({ error: 'Failed to generate intelligence brief' });
+  }
+});
+
+// GET /api/analytics/campaign-funnel
+app.get('/api/analytics/campaign-funnel', async (req, res) => {
+  try {
+    const funnel = await getCampaignFunnel(supabase);
+
+    res.json({
+      success: true,
+      data: funnel,
+    });
+  } catch (error) {
+    console.error('Error fetching campaign funnel:', error);
+    res.status(500).json({ error: 'Failed to fetch campaign funnel' });
+  }
+});
+
+// GET /api/analytics/opportunity-pipeline
+app.get('/api/analytics/opportunity-pipeline', async (req, res) => {
+  try {
+    const pipeline = await getOpportunityPipeline(supabase);
+
+    res.json({
+      success: true,
+      data: pipeline,
+    });
+  } catch (error) {
+    console.error('Error fetching opportunity pipeline:', error);
+    res.status(500).json({ error: 'Failed to fetch opportunity pipeline' });
+  }
+});
+
+// GET /api/analytics/channel-performance
+app.get('/api/analytics/channel-performance', async (req, res) => {
+  try {
+    const performance = await getChannelPerformance(supabase);
+
+    res.json({
+      success: true,
+      data: performance,
+    });
+  } catch (error) {
+    console.error('Error fetching channel performance:', error);
+    res.status(500).json({ error: 'Failed to fetch channel performance' });
+  }
+});
+
+// GET /api/analytics/opportunity-distribution
+app.get('/api/analytics/opportunity-distribution', async (req, res) => {
+  try {
+    const distribution = await getOpportunityDistribution(supabase);
+
+    res.json({
+      success: true,
+      data: distribution,
+    });
+  } catch (error) {
+    console.error('Error fetching opportunity distribution:', error);
+    res.status(500).json({ error: 'Failed to fetch opportunity distribution' });
+  }
+});
+
+// GET /api/analytics/opportunity-trend
+app.get('/api/analytics/opportunity-trend', async (req, res) => {
+  try {
+    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const trend = await getOpportunityTrend(supabase, days);
+
+    res.json({
+      success: true,
+      data: trend,
+    });
+  } catch (error) {
+    console.error('Error fetching opportunity trend:', error);
+    res.status(500).json({ error: 'Failed to fetch opportunity trend' });
+  }
+});
+
+// GET /api/analytics/activity-feed
+app.get('/api/analytics/activity-feed', async (req, res) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const feed = await getActivityFeed(supabase, limit);
+
+    res.json({
+      success: true,
+      data: feed,
+    });
+  } catch (error) {
+    console.error('Error fetching activity feed:', error);
+    res.status(500).json({ error: 'Failed to fetch activity feed' });
+  }
+});
+
+// GET /api/analytics/recommended-actions
+app.get('/api/analytics/recommended-actions', async (req, res) => {
+  try {
+    const actions = await getRecommendedActions(supabase);
+
+    res.json({
+      success: true,
+      data: actions,
+    });
+  } catch (error) {
+    console.error('Error fetching recommended actions:', error);
+    res.status(500).json({ error: 'Failed to fetch recommended actions' });
   }
 });
 
