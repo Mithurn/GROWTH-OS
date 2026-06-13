@@ -3,17 +3,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const CUSTOMER_PERSONAS = {
-  DORMANT_VIP: 0.12,
-  PREMIUM_LOYALIST: 0.18,
-  DISCOUNT_HUNTER: 0.18,
-  CHURN_RISK: 0.10,
-  CROSS_SELL: 0.14,
-  SEASONAL: 0.08,
-  REGULAR: 0.20,
+  DORMANT_VIP: 0.15,        // High-value customers who stopped buying (great for winback campaigns)
+  PREMIUM_LOYALIST: 0.20,   // Best customers - frequent, high-value (upsell opportunities)
+  DISCOUNT_HUNTER: 0.15,    // Price-sensitive buyers (loyalty challenges)
+  CHURN_RISK: 0.12,         // Active but showing decline (retention campaigns)
+  CROSS_SELL: 0.18,         // Single category buyers (cross-sell opportunities)
+  SEASONAL: 0.10,           // Buy during specific periods (reactivation campaigns)
+  REGULAR: 0.10,            // Standard customers (baseline)
 };
 
-const TOTAL_CUSTOMERS = Number(process.env.TOTAL_CUSTOMERS ?? 80);
-const TARGET_LINE_ITEMS = Number(process.env.TOTAL_ORDERS ?? 240);
+const TOTAL_CUSTOMERS = Number(process.env.TOTAL_CUSTOMERS ?? 1000);  // Rich demo dataset
+const TARGET_LINE_ITEMS = Number(process.env.TOTAL_ORDERS ?? 4500);   // ~4.5 orders per customer avg
 const ORDER_HISTORY_MONTHS = Number(process.env.ORDER_HISTORY_MONTHS ?? 18);
 const CITIES = 10;
 const TODAY = new Date();
@@ -177,43 +177,50 @@ function generateOrders(customers: Customer[]): Order[] {
     // Generate orders based on persona
     switch (persona) {
       case 'DORMANT_VIP':
-        numOrders = faker.number.int({ min: 4, max: 7 });
-        orderDates = Array.from({ length: numOrders }, () => randomDate(16, 4));
+        // High spenders who haven't bought in 60-90 days (clear winback opportunity)
+        numOrders = faker.number.int({ min: 6, max: 12 });
+        orderDates = Array.from({ length: numOrders }, () => randomDate(16, 3));
         break;
 
       case 'PREMIUM_LOYALIST':
-        numOrders = faker.number.int({ min: 6, max: 10 });
+        // Frequent, consistent buyers with high order values (upsell opportunity)
+        numOrders = faker.number.int({ min: 8, max: 15 });
         orderDates = Array.from({ length: numOrders }, () => randomDate(12, 0));
         break;
 
       case 'DISCOUNT_HUNTER':
-        numOrders = faker.number.int({ min: 2, max: 5 });
+        // Only buys on sale, low AOV (loyalty program opportunity)
+        numOrders = faker.number.int({ min: 4, max: 8 });
         orderDates = Array.from({ length: numOrders }, () => randomDate(12, 0));
         break;
 
       case 'CHURN_RISK':
-        numOrders = faker.number.int({ min: 3, max: 6 });
-        const oldOrders = Math.floor(numOrders * 0.75);
+        // Was active, now slowing down (retention opportunity)
+        numOrders = faker.number.int({ min: 5, max: 10 });
+        const oldOrders = Math.floor(numOrders * 0.7);
         orderDates = [
-          ...Array.from({ length: oldOrders }, () => randomDate(14, 6)),
-          ...Array.from({ length: numOrders - oldOrders }, () => randomDate(5, 0))
+          ...Array.from({ length: oldOrders }, () => randomDate(14, 4)),
+          ...Array.from({ length: numOrders - oldOrders }, () => randomDate(3, 0))
         ];
         break;
 
       case 'CROSS_SELL':
-        numOrders = faker.number.int({ min: 2, max: 4 });
+        // Buys only from one category (cross-sell opportunity)
+        numOrders = faker.number.int({ min: 4, max: 8 });
         orderDates = Array.from({ length: numOrders }, () => randomDate(10, 0));
         preferredCategory = faker.helpers.arrayElement(Object.keys(PRODUCT_CATEGORIES));
         break;
 
       case 'SEASONAL':
-        numOrders = faker.number.int({ min: 1, max: 3 });
+        // Buys during festivals/seasons (reactivation opportunity)
+        numOrders = faker.number.int({ min: 2, max: 4 });
         orderDates = Array.from({ length: numOrders }, () => randomPastDate([1, 2, 4, 5, 8, 9, 11, 12, 14, 15]));
         break;
 
       case 'REGULAR':
       default:
-        numOrders = faker.number.int({ min: 2, max: 5 });
+        // Standard repeat customers
+        numOrders = faker.number.int({ min: 3, max: 6 });
         orderDates = Array.from({ length: numOrders }, () => randomDate(12, 0));
         break;
     }
@@ -227,26 +234,50 @@ function generateOrders(customers: Customer[]): Order[] {
       // Select products based on persona
       let selectedSKUs: string[];
       if (persona === 'CROSS_SELL' && preferredCategory) {
-        // Only buy from one category
-        selectedSKUs = [faker.helpers.arrayElement(PRODUCT_CATEGORIES[preferredCategory].skus)];
+        // Only buy from one category (90% of time) - cross-sell opportunity
+        if (Math.random() > 0.1) {
+          selectedSKUs = [faker.helpers.arrayElement(PRODUCT_CATEGORIES[preferredCategory].skus)];
+        } else {
+          selectedSKUs = [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];
+        }
       } else if (persona === 'DISCOUNT_HUNTER') {
-        // Only buy budget items (price < 1500)
+        // Only buy budget items (price < 1500) - loyalty opportunity
         const budgetSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] < 1500);
         selectedSKUs = [faker.helpers.arrayElement(budgetSKUs)];
-      } else if (persona === 'PREMIUM_LOYALIST' || persona === 'DORMANT_VIP') {
-        // Buy premium items more often
-        const premiumSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] > 2000);
-        selectedSKUs = Math.random() > 0.5
+      } else if (persona === 'PREMIUM_LOYALIST') {
+        // Buy premium items (70% high-value) - upsell to ultra-premium
+        const premiumSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] > 2500);
+        const ultraPremiumSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] > 5000);
+        selectedSKUs = Math.random() > 0.7
           ? [faker.helpers.arrayElement(premiumSKUs)]
           : [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];
-      } else {
-        // Random products
-        selectedSKUs = [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];
-      }
 
-      // Sometimes add multiple items
-      if (persona === 'PREMIUM_LOYALIST' && Math.random() > 0.6) {
-        selectedSKUs.push(faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES)));
+        // Premium loyalists often buy multiple items
+        if (Math.random() > 0.5) {
+          selectedSKUs.push(faker.helpers.arrayElement(premiumSKUs));
+        }
+        if (Math.random() > 0.7) {
+          selectedSKUs.push(faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES)));
+        }
+      } else if (persona === 'DORMANT_VIP') {
+        // Used to buy premium, now dormant - winback opportunity
+        const premiumSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] > 3000);
+        selectedSKUs = Math.random() > 0.6
+          ? [faker.helpers.arrayElement(premiumSKUs)]
+          : [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];
+
+        // VIPs buy multiple items
+        if (Math.random() > 0.6) {
+          selectedSKUs.push(faker.helpers.arrayElement(premiumSKUs));
+        }
+      } else {
+        // Random products for regular/seasonal/churn customers
+        selectedSKUs = [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];
+
+        // Occasionally add another item
+        if (Math.random() > 0.75) {
+          selectedSKUs.push(faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES)));
+        }
       }
 
       // Create order for each product

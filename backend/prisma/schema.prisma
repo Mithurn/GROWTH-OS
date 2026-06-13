@@ -44,12 +44,15 @@ model Company {
   id           String   @id @default(uuid())
   companyName  String   @unique @map("company_name")
   industry     String?
+  onboardingProfile Json? @map("onboarding_profile")
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   personas     Persona[]
   opportunities Opportunity[]
   campaigns    Campaign[]
+  agents       Agent[]
 
   @@index([companyName])
   @@map("companies")
@@ -163,6 +166,7 @@ model Persona {
 model Opportunity {
   id                        String   @id @default(uuid())
   companyId                 String   @map("company_id")
+  agentId                   String?  @map("agent_id") // AI agent that discovered this
   opportunityKey            String   @map("opportunity_key")
   opportunityType           String   @map("opportunity_type")
   title                     String
@@ -176,16 +180,19 @@ model Opportunity {
   audienceDefinition        Json     @map("audience_definition")
   triggerReason             String   @map("trigger_reason")
   aiSummary                 String   @map("ai_summary")
+  aiReasoning               String?  @map("ai_reasoning") // Why AI discovered this
   status                    String   @default("Detected")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
 
   company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agent                     Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
   audience                  OpportunityCustomer[]
   campaigns                 Campaign[]
 
   @@unique([companyId, opportunityKey])
   @@index([companyId])
+  @@index([agentId])
   @@index([opportunityType])
   @@index([status])
   @@index([priorityScore])
@@ -214,6 +221,7 @@ model OpportunityCustomer {
 model Campaign {
   id               String    @id @default(uuid())
   companyId        String    @map("company_id")
+  agentId          String?   @map("agent_id") // AI agent that launched this
   opportunityId    String    @map("opportunity_id")
   name             String
   objective        String
@@ -221,9 +229,11 @@ model Campaign {
   offer            String?
   messageAngle     String?   @map("message_angle")
   messageContent   String    @map("message_content")
+  messageVariants  Json?     @map("message_variants") // Different message versions for personalization
   expectedOutcome  String?   @map("expected_outcome")
   reasoning        String?
   status           String    @default("Draft")
+  performance      Json?     // {sent: 1248, delivered: 1200, clicked: 450, converted: 89, revenue: 45200}
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
   approvedAt       DateTime? @map("approved_at")
@@ -231,10 +241,12 @@ model Campaign {
   completedAt      DateTime? @map("completed_at")
 
   company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agent            Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
   opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   communications   Communication[]
 
   @@index([companyId])
+  @@index([agentId])
   @@index([opportunityId])
   @@index([status])
   @@index([createdAt])
@@ -246,15 +258,19 @@ model Communication {
   campaignId          String    @map("campaign_id")
   customerId          String    @map("customer_id")
   channel             String
-  message             String
+  message             String    // Personalized message for this customer
+  messageVariant      String?   @map("message_variant") // Which variant was used (A, B, C)
   status              String    @default("QUEUED")
   providerMessageId   String?   @map("provider_message_id")
   failureReason       String?   @map("failure_reason")
   retryCount          Int       @default(0) @map("retry_count")
+  converted           Boolean   @default(false) // Did customer make a purchase?
+  revenue             Decimal?  @db.Decimal(10, 2) // Revenue from conversion
   sentAt              DateTime? @map("sent_at")
   deliveredAt         DateTime? @map("delivered_at")
   readAt              DateTime? @map("read_at")
   clickedAt           DateTime? @map("clicked_at")
+  convertedAt         DateTime? @map("converted_at")
   failedAt            DateTime? @map("failed_at")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
@@ -266,6 +282,7 @@ model Communication {
   @@index([campaignId])
   @@index([customerId])
   @@index([status])
+  @@index([converted])
   @@index([providerMessageId])
   @@index([createdAt])
   @@map("communications")
@@ -302,4 +319,47 @@ model ProcessedWebhookEvent {
   @@index([eventId])
   @@index([processedAt])
   @@map("processed_webhook_events")
+}
+
+// ============================================
+// AI-NATIVE SYSTEM: Autonomous Agents
+// ============================================
+
+model Agent {
+  id              String    @id @default(uuid())
+  companyId       String    @map("company_id")
+  name            String    // Auto-generated: "Repeat Purchase Agent"
+  goal            String    // User input: "Increase repeat purchases by 20%"
+  status          String    @default("discovering") // 'discovering', 'running', 'paused', 'completed'
+  guardrails      Json      // {max_budget: 50000, frequency_cap: 3, channels: ['whatsapp', 'email']}
+  performance     Json?     // {revenue: 125000, conversion_rate: 0.38, customers_reached: 1248}
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  lastRunAt       DateTime? @map("last_run_at")
+
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  opportunities   Opportunity[]
+  campaigns       Campaign[]
+  actions         AgentAction[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("agents")
+}
+
+model AgentAction {
+  id          String   @id @default(uuid())
+  agentId     String   @map("agent_id")
+  actionType  String   @map("action_type") // 'discovered_opportunity', 'launched_campaign', 'sent_messages', 'achieved_milestone'
+  description String   // "Discovered VIP Recovery opportunity worth ₹45K"
+  details     Json?    // Additional structured data
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("agent_actions")
 }

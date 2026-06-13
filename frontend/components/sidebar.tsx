@@ -1,28 +1,49 @@
 'use client';
 
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { Target, Brain, Rocket, BarChart3 } from 'lucide-react';
+import {
+  Activity,
+  BarChart3,
+  Building2,
+  ChevronDown,
+  Home,
+  Send,
+  Settings,
+  Users,
+  Zap,
+} from 'lucide-react';
 
 const navItems = [
   {
+    name: 'Home',
+    href: '/',
+    icon: Home,
+  },
+  {
     name: 'Opportunities',
     href: '/opportunities',
-    icon: Target,
+    icon: Zap,
   },
   {
-    name: 'Customer Intelligence',
-    href: '/intelligence',
-    icon: Brain,
-  },
-  {
-    name: 'Campaign Studio',
+    name: 'Campaigns',
     href: '/campaigns',
-    icon: Rocket,
+    icon: Send,
   },
   {
     name: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
+  },
+  {
+    name: 'Customers',
+    href: '/intelligence',
+    icon: Users,
+  },
+  {
+    name: 'Settings',
+    href: '/settings',
+    icon: Settings,
   },
 ];
 
@@ -31,49 +52,74 @@ export function Sidebar() {
   const router = useRouter();
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-64 border-r border-amber-200/50 bg-gradient-to-b from-amber-50/80 to-white/95 backdrop-blur-sm">
-      {/* Header */}
-      <div className="border-b border-amber-200/50 px-6 py-5">
-        <h1 className="text-xl font-semibold tracking-tight text-stone-900">
-          Xeno Growth Agent
-        </h1>
-        <p className="mt-1 text-xs text-stone-500">AI-Powered CRM Intelligence</p>
-      </div>
+    <div className="fixed left-0 top-0 h-screen w-64 overflow-hidden border-r border-[#E4E4E7] bg-[#FAFAFA] shadow-sm">
+      <div className="flex h-full flex-col">
+        <div className="px-6 py-7">
+          <div className="flex items-center gap-3">
+            <div className="relative h-[30px] w-[132px]">
+              <Image src="/logo.png" alt="Xeno" fill priority sizes="132px" className="object-contain object-left" />
+            </div>
+          </div>
+        </div>
 
-      {/* Navigation */}
-      <nav className="space-y-1 p-4">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
+        <nav className="space-y-1 px-3">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              pathname === item.href ||
+              (item.href === '/opportunities' && pathname.startsWith('/opportunities'));
 
-          return (
-            <button
-              key={item.href}
-              onClick={() => router.push(item.href)}
-              className={`group flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
-                isActive
-                  ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-900 shadow-sm'
-                  : 'text-stone-600 hover:bg-amber-50/50 hover:text-stone-900'
-              }`}
-            >
-              <Icon
-                className={`h-5 w-5 transition-colors ${
-                  isActive ? 'text-amber-600' : 'text-stone-400 group-hover:text-amber-500'
+            return (
+              <button
+                key={item.href}
+                onClick={() => router.push(item.href)}
+                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-all duration-200 ${
+                  isActive
+                    ? 'bg-[#5B4FFF] text-white shadow-sm'
+                    : 'text-[#71717A] hover:bg-[#F4F4F5] hover:text-[#1A1A1A]'
                 }`}
-              />
-              <span className={`text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>
-                {item.name}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+              >
+                <Icon
+                  className={`h-4.5 w-4.5 transition-colors ${
+                    isActive ? 'text-white' : 'text-[#A1A1AA] group-hover:text-[#1A1A1A]'
+                  }`}
+                />
+                <span className={`text-sm ${isActive ? 'font-semibold' : 'font-medium'}`}>
+                  {item.name}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
 
-      {/* Footer */}
-      <div className="absolute bottom-0 left-0 right-0 border-t border-amber-200/50 p-4">
-        <div className="rounded-lg bg-amber-50 px-3 py-2">
-          <p className="text-xs font-medium text-amber-900">AI Engine Active</p>
-          <p className="mt-0.5 text-xs text-amber-700">Analyzing customer behavior</p>
+        <div className="mt-auto space-y-3 p-3">
+          <button className="w-full rounded-lg border border-[#E4E4E7] bg-white p-3 text-left transition hover:bg-[#F9F9F9]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F4F4F5]">
+                  <Building2 className="h-4 w-4 text-[#71717A]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[#1A1A1A]">Your Brand</p>
+                  <p className="mt-0.5 text-xs text-[#A1A1AA]">Style Studio</p>
+                </div>
+              </div>
+              <ChevronDown className="h-4 w-4 text-[#A1A1AA]" />
+            </div>
+          </button>
+
+          <div className="rounded-lg border border-[#E4E4E7] bg-white p-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-[#22C55E]" />
+              <p className="text-sm font-semibold text-[#1A1A1A]">Data Health</p>
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-[#22C55E]">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#22C55E]" />
+              Excellent
+            </div>
+            <div className="mt-2 h-px w-12 bg-[#E4E4E7]" />
+            <p className="mt-2 text-xs text-[#A1A1AA]">Last updated<br />2 mins ago</p>
+          </div>
         </div>
       </div>
     </div>
