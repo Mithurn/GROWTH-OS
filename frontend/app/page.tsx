@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import OpportunitiesPage from './opportunities/page';
 
 export default function Home() {
-  redirect('/opportunities');
+  return <OpportunitiesPage />;
 }

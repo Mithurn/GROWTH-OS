@@ -1327,3 +1327,208 @@ export async function getOpportunityCustomers(
 
   return { opportunity, customers };
 }
+
+/**
+ * Create a custom opportunity from user's marketing goal using AI
+ */
+export async function createOpportunityFromGoal(
+  supabase: SupabaseClient,
+  goal: string,
+  options: { companyId?: string; model?: string } = {},
+): Promise<OpportunityDistributionRow> {
+  const company = await ensureCompanyRow(supabase, options.companyId);
+  const model = options.model ?? openRouterConfig.defaultModel;
+  const client = new OpenAI({
+    apiKey: openRouterConfig.apiKey,
+    baseURL: openRouterConfig.baseUrl,
+    defaultHeaders: {
+      'HTTP-Referer': openRouterConfig.httpReferer,
+      'X-Title': openRouterConfig.appName,
+    },
+  });
+
+  console.log(`[createOpportunityFromGoal] Analyzing goal: "${goal}"`);
+
+  // Fetch customer data to understand the business context
+  const [customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById] = await Promise.all([
+    fetchCustomers(supabase),
+    fetchMetrics(supabase),
+    fetchAttributes(supabase),
+    fetchPersonas(supabase),
+    fetchOrders(supabase),
+    fetchOrderItems(supabase),
+    fetchProducts(supabase),
+  ]);
+
+  const profiles = buildProfiles(
+    customers,
+    metricsByCustomer,
+    attributesByCustomer,
+    personasByCustomer,
+    orders,
+    orderItems,
+    productsById,
+  );
+
+  // Get business context summary
+  const totalCustomers = profiles.length;
+  const totalRevenue = profiles.reduce((sum, p) => sum + p.totalSpent, 0);
+  const avgOrderValue = totalRevenue / profiles.reduce((sum, p) => sum + p.totalOrders, 0);
+  const topCategories = Array.from(
+    profiles.reduce((map, p) => {
+      p.purchasedCategories.forEach(cat => map.set(cat, (map.get(cat) || 0) + 1));
+      return map;
+    }, new Map<string, number>())
+  ).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat]) => cat);
+
+  const personaNames = Array.from(new Set(profiles.map(p => p.personaName).filter(Boolean)));
+
+  // Use AI to interpret the goal and create opportunity
+  const prompt = `You are an AI marketing analyst helping a ${company.industry || 'retail'} company called "${company.company_name}".
+
+Business Context:
+- Total Customers: ${totalCustomers}
+- Total Revenue: ₹${Math.round(totalRevenue).toLocaleString('en-IN')}
+- Average Order Value: ₹${Math.round(avgOrderValue).toLocaleString('en-IN')}
+- Top Product Categories: ${topCategories.join(', ')}
+- Customer Personas: ${personaNames.join(', ')}
+
+The marketer wants to achieve this goal:
+"${goal}"
+
+Create a specific, actionable marketing opportunity that helps achieve this goal. Return a JSON object with this exact structure:
+
+{
+  "opportunity_type": "string (e.g., Custom Goal, Revenue Growth, Customer Engagement)",
+  "title": "string (concise, under 50 chars, specific to the goal)",
+  "description": "string (2-3 sentences explaining the opportunity)",
+  "audience_criteria": {
+    "min_total_spent": number or null,
+    "max_days_since_last_order": number or null,
+    "preferred_categories": string[] or null,
+    "persona_names": string[] or null
+  },
+  "estimated_audience_pct": number (0-100, realistic percentage of customers who match),
+  "revenue_multiplier": number (1.1-3.0, expected revenue increase per customer),
+  "confidence_score": number (60-95, how confident you are this will work),
+  "trigger_reason": "string (why this opportunity exists based on the goal)",
+  "recommended_action": "string (specific next step)",
+  "ai_summary": "string (2-3 sentences on why this is a good opportunity)"
+}
+
+Be realistic - don't promise impossible results. Base estimates on the business context provided.`;
+
+  const response = await client.chat.completions.create({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+    max_tokens: 2000,
+    response_format: { type: 'json_object' },
+  });
+
+  const aiResponse = JSON.parse(response.choices[0]?.message?.content || '{}');
+  console.log('[createOpportunityFromGoal] AI Response:', aiResponse);
+
+  // Apply audience criteria to find matching customers
+  const matchingProfiles = profiles.filter((profile) => {
+    const criteria = aiResponse.audience_criteria || {};
+
+    if (criteria.min_total_spent && profile.totalSpent < criteria.min_total_spent) return false;
+    if (criteria.max_days_since_last_order && profile.daysSinceLastOrder && profile.daysSinceLastOrder > criteria.max_days_since_last_order) return false;
+
+    if (criteria.preferred_categories && criteria.preferred_categories.length > 0) {
+      const hasCategory = criteria.preferred_categories.some((cat: string) =>
+        profile.favoriteCategory === cat || profile.secondFavoriteCategory === cat
+      );
+      if (!hasCategory) return false;
+    }
+
+    if (criteria.persona_names && criteria.persona_names.length > 0) {
+      if (!profile.personaName || !criteria.persona_names.includes(profile.personaName)) return false;
+    }
+
+    return true;
+  });
+
+  const audienceSize = matchingProfiles.length;
+  const potentialRevenue = matchingProfiles.reduce((sum, p) => sum + p.avgOrderValue, 0) * (aiResponse.revenue_multiplier || 1.5);
+
+  // Create opportunity record
+  const opportunityKey = `custom_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  const opportunityRecord: OpportunityRecord = {
+    company_id: company.id,
+    opportunity_key: opportunityKey,
+    opportunity_type: aiResponse.opportunity_type || 'Custom Goal',
+    title: aiResponse.title || goal.substring(0, 50),
+    description: aiResponse.description || `Opportunity created from custom goal: ${goal}`,
+    audience_size: audienceSize,
+    potential_revenue: Math.round(potentialRevenue),
+    confidence_score: aiResponse.confidence_score || 75,
+    priority_score: Math.round((aiResponse.confidence_score || 75) * 0.8),
+    supporting_customer_segment: matchingProfiles.length > 0 ? matchingProfiles[0].personaName || 'All Customers' : 'All Customers',
+    recommended_action: aiResponse.recommended_action || 'Review opportunity and create campaign',
+    audience_definition: aiResponse.audience_criteria || {},
+    trigger_reason: aiResponse.trigger_reason || `Generated from marketer goal: "${goal}"`,
+    ai_summary: aiResponse.ai_summary || `AI-generated opportunity to help achieve: ${goal}`,
+    status: 'Detected',
+  };
+
+  // Persist to database
+  const { data: insertedOpportunity, error } = await supabase
+    .from('opportunities')
+    .insert(opportunityRecord)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create opportunity: ${error.message}`);
+  }
+
+  // Link customers to opportunity
+  if (matchingProfiles.length > 0) {
+    const opportunityCustomers = matchingProfiles.map(p => ({
+      opportunity_id: insertedOpportunity.id,
+      customer_id: p.customerId,
+    }));
+
+    const { error: linkError } = await supabase
+      .from('opportunity_customers')
+      .insert(opportunityCustomers);
+
+    if (linkError) {
+      console.error('[createOpportunityFromGoal] Failed to link customers:', linkError);
+    }
+  }
+
+  console.log(`[createOpportunityFromGoal] Created opportunity ${insertedOpportunity.id} with ${audienceSize} customers`);
+
+  // Return in dashboard format
+  const avgSpend = matchingProfiles.length > 0
+    ? matchingProfiles.reduce((sum, p) => sum + p.totalSpent, 0) / matchingProfiles.length
+    : 0;
+  const avgOrders = matchingProfiles.length > 0
+    ? matchingProfiles.reduce((sum, p) => sum + p.totalOrders, 0) / matchingProfiles.length
+    : 0;
+
+  return {
+    opportunity_id: insertedOpportunity.id,
+    opportunity_key: opportunityRecord.opportunity_key,
+    opportunity_type: opportunityRecord.opportunity_type,
+    title: opportunityRecord.title,
+    description: opportunityRecord.description,
+    audience_size: audienceSize,
+    potential_revenue: opportunityRecord.potential_revenue,
+    confidence_score: opportunityRecord.confidence_score,
+    priority_score: opportunityRecord.priority_score,
+    supporting_customer_segment: opportunityRecord.supporting_customer_segment,
+    recommended_action: opportunityRecord.recommended_action,
+    audience_definition: opportunityRecord.audience_definition,
+    trigger_reason: opportunityRecord.trigger_reason,
+    ai_summary: opportunityRecord.ai_summary,
+    status: opportunityRecord.status,
+    customer_count: audienceSize,
+    average_spend: Math.round(avgSpend),
+    average_orders: Math.round(avgOrders),
+    revenue_share: totalRevenue > 0 ? (potentialRevenue / totalRevenue) * 100 : 0,
+  };
+}

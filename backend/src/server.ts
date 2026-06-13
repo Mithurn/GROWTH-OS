@@ -9,7 +9,7 @@ import 'dotenv/config';
 import { fashionProducts, seedProducts } from './data-generator/products';
 import { generateCustomerAttributes } from './services/customer-attributes';
 import { generateCustomerMetrics } from './services/customer-metrics';
-import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard } from './services/opportunities';
+import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard, createOpportunityFromGoal } from './services/opportunities';
 import { generatePersonas, getPersonaCustomers, getPersonaDistribution } from './services/personas';
 import { generateCampaign, saveCampaign, approveCampaign, launchCampaign, getCampaigns, getCampaignById } from './services/campaigns';
 import { verifySignature, processWebhook, type WebhookEvent } from './services/webhooks';
@@ -23,6 +23,10 @@ import {
   getActivityFeed,
   getRecommendedActions,
 } from './services/analytics';
+import { agentOrchestrator } from './services/agent-orchestrator';
+import { getRecentActions } from './services/agent-logger';
+import { prisma } from './lib/prisma';
+import { startConversation, sendMessage, getConversation } from './services/onboarding-chat';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -59,6 +63,31 @@ function parseCSV(buffer: Buffer): Promise<any[]> {
   });
 }
 
+// GET /api/companies/:id
+app.get('/api/companies/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Error fetching company:', error);
+    res.status(500).json({ error: 'Failed to fetch company' });
+  }
+});
+
 // POST /api/onboarding/business
 app.post('/api/onboarding/business', async (req, res) => {
   try {
@@ -87,6 +116,184 @@ app.post('/api/onboarding/business', async (req, res) => {
   } catch (error) {
     console.error('Error saving business info:', error);
     res.status(500).json({ error: 'Failed to save business info' });
+  }
+});
+
+// POST /api/onboarding/profile
+app.post('/api/onboarding/profile', async (req, res) => {
+  try {
+    const {
+      companyId,
+      profile,
+    } = req.body ?? {};
+
+    if (!companyId || typeof companyId !== 'string') {
+      return res.status(400).json({ error: 'companyId is required' });
+    }
+
+    if (!profile || typeof profile !== 'object') {
+      return res.status(400).json({ error: 'profile is required' });
+    }
+
+    const { data, error } = await supabase
+      .from('companies')
+      .update({
+        onboarding_profile: profile,
+        onboarding_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId)
+      .select('id, company_name, industry, onboarding_profile, onboarding_completed_at')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Error saving onboarding profile:', error);
+    res.status(500).json({ error: 'Failed to save onboarding profile' });
+  }
+});
+
+// POST /api/onboarding/conversation/start
+app.post('/api/onboarding/conversation/start', async (req, res) => {
+  try {
+    const { companyId } = req.body;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'companyId is required' });
+    }
+
+    const conversation = await startConversation(supabase, companyId);
+
+    res.json({
+      success: true,
+      data: conversation,
+    });
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    res.status(500).json({ error: 'Failed to start conversation' });
+  }
+});
+
+// POST /api/onboarding/conversation/:id/message
+app.post('/api/onboarding/conversation/:id/message', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    const conversation = await sendMessage(supabase, id, message);
+
+    res.json({
+      success: true,
+      data: conversation,
+    });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// GET /api/onboarding/conversation/:id
+app.get('/api/onboarding/conversation/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const conversation = await getConversation(supabase, id);
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json({
+      success: true,
+      data: conversation,
+    });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+// POST /api/onboarding/complete
+app.post('/api/onboarding/complete', async (req, res) => {
+  try {
+    const { conversationId, companyId } = req.body;
+
+    if (!conversationId || !companyId) {
+      return res.status(400).json({ error: 'conversationId and companyId are required' });
+    }
+
+    // Get the completed conversation
+    const conversation = await getConversation(supabase, conversationId);
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    if (!conversation.completed) {
+      return res.status(400).json({ error: 'Conversation not completed yet' });
+    }
+
+    const extractedData = conversation.extractedData;
+
+    // Save onboarding profile to company
+    const { data: company, error: companyError } = await supabase
+      .from('companies')
+      .update({
+        onboarding_profile: extractedData,
+        onboarding_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (companyError) {
+      throw companyError;
+    }
+
+    // Create an agent with the user's preferences
+    const priority = extractedData.priority?.[0] || 'Increase revenue';
+    const channels = extractedData.channels || ['WhatsApp', 'Email'];
+    const involvement = extractedData.involvement?.[0] || 'review major campaigns only';
+
+    // Create agent using Prisma
+    const agent = await prisma.agent.create({
+      data: {
+        companyId,
+        name: `${priority} Agent`,
+        goal: priority,
+        status: 'discovering',
+        guardrails: {
+          channels,
+          involvement, // 'autopilot', 'review major campaigns only', or 'review every campaign'
+          max_budget: 100000,
+          frequency_cap: 3,
+        },
+      },
+    });
+
+    console.log(`✅ Created agent for company ${companyId}: ${agent.name}`);
+
+    res.json({
+      success: true,
+      data: {
+        company,
+        agent,
+      },
+    });
+  } catch (error) {
+    console.error('Error completing onboarding:', error);
+    res.status(500).json({ error: 'Failed to complete onboarding' });
   }
 });
 
@@ -228,14 +435,35 @@ async function processIngestion(sessionId: string, customerBuffer: Buffer, order
     );
 
     // Step 7: Calculate attributes
-    updateStatus(sessionId, 'calculating_attributes', 96, 'Calculating customer attributes...');
+    updateStatus(sessionId, 'calculating_attributes', 90, 'Calculating customer attributes...');
     const attributesReport = await generateCustomerAttributesWithVerification();
     updateStatus(
       sessionId,
       'validating_attributes',
-      99,
+      93,
       `Validated ${attributesReport.totalAttributesRecords}/${attributesReport.totalCustomers} customer attributes records...`,
     );
+
+    // Step 7.5: Generate personas
+    updateStatus(sessionId, 'generating_personas', 95, 'Generating customer personas with AI...');
+    try {
+      const personasReport = await generatePersonas(supabase, {
+        logger: {
+          info: (msg) => console.log(`[personas] ${msg}`),
+          warn: (msg) => console.warn(`[personas] ${msg}`),
+          error: (msg) => console.error(`[personas] ${msg}`),
+        },
+      });
+      updateStatus(
+        sessionId,
+        'personas_complete',
+        98,
+        `Generated ${personasReport.totalPersonas} personas for ${personasReport.personasAssigned} customers...`,
+      );
+    } catch (personaError) {
+      console.error('Persona generation failed, continuing with ingestion:', personaError);
+      updateStatus(sessionId, 'personas_skipped', 98, 'Skipped persona generation (non-critical)');
+    }
 
     // Step 8: Complete
     updateStatus(sessionId, 'completed', 100, 'Ingestion complete!');
@@ -587,6 +815,31 @@ app.get('/api/opportunities/:opportunityId', async (req, res) => {
   }
 });
 
+app.post('/api/opportunities/create-from-goal', async (req, res) => {
+  try {
+    const { goal, companyId, model } = req.body;
+
+    if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+      return res.status(400).json({ error: 'Goal is required and must be a non-empty string' });
+    }
+
+    const opportunity = await createOpportunityFromGoal(supabase, goal.trim(), { companyId, model });
+
+    res.json({
+      success: true,
+      data: opportunity,
+    });
+  } catch (error) {
+    console.error('Error creating opportunity from goal:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    res.status(500).json({
+      error: 'Failed to create opportunity from goal',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 app.get('/api/personas', async (req, res) => {
   try {
     const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
@@ -888,7 +1141,193 @@ app.get('/api/analytics/recommended-actions', async (req, res) => {
   }
 });
 
+// ============================================
+// AI AGENTS
+// ============================================
+
+// POST /api/agents
+app.post('/api/agents', async (req, res) => {
+  try {
+    const { companyId, goal, guardrails } = req.body;
+
+    if (!companyId || !goal) {
+      return res.status(400).json({ error: 'companyId and goal are required' });
+    }
+
+    // Create agent
+    const agent = await prisma.agent.create({
+      data: {
+        companyId,
+        name: `${goal.substring(0, 30)} Agent`,
+        goal,
+        status: 'discovering',
+        guardrails: guardrails || {
+          max_budget: 50000,
+          frequency_cap: 3,
+          channels: ['whatsapp', 'email']
+        },
+        performance: {
+          revenue: 0,
+          conversion_rate: 0,
+          customers_reached: 0
+        }
+      }
+    });
+
+    // Trigger agent run immediately
+    agentOrchestrator.runAgentOnce(agent.id).catch(err => {
+      console.error('Error running agent:', err);
+    });
+
+    res.json({
+      success: true,
+      data: agent,
+    });
+  } catch (error) {
+    console.error('Error creating agent:', error);
+    res.status(500).json({ error: 'Failed to create agent' });
+  }
+});
+
+// GET /api/agents
+app.get('/api/agents', async (req, res) => {
+  try {
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+
+    const agents = await prisma.agent.findMany({
+      where: companyId ? { companyId } : {},
+      include: {
+        _count: {
+          select: {
+            opportunities: true,
+            campaigns: true,
+            actions: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    res.json({
+      success: true,
+      data: agents,
+    });
+  } catch (error) {
+    console.error('Error fetching agents:', error);
+    res.status(500).json({ error: 'Failed to fetch agents' });
+  }
+});
+
+// GET /api/agents/:id
+app.get('/api/agents/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const agent = await prisma.agent.findUnique({
+      where: { id },
+      include: {
+        opportunities: {
+          orderBy: { createdAt: 'desc' },
+          take: 10
+        },
+        campaigns: {
+          orderBy: { createdAt: 'desc' },
+          take: 10
+        },
+        actions: {
+          orderBy: { createdAt: 'desc' },
+          take: 20
+        }
+      }
+    });
+
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    res.json({
+      success: true,
+      data: agent,
+    });
+  } catch (error) {
+    console.error('Error fetching agent:', error);
+    res.status(500).json({ error: 'Failed to fetch agent' });
+  }
+});
+
+// POST /api/agents/:id/run
+app.post('/api/agents/:id/run', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Trigger manual agent run
+    await agentOrchestrator.runAgentOnce(id);
+
+    res.json({
+      success: true,
+      message: 'Agent execution triggered'
+    });
+  } catch (error) {
+    console.error('Error running agent:', error);
+    res.status(500).json({ error: 'Failed to run agent' });
+  }
+});
+
+// PATCH /api/agents/:id
+app.patch('/api/agents/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, guardrails } = req.body;
+
+    const agent = await prisma.agent.update({
+      where: { id },
+      data: {
+        status: status || undefined,
+        guardrails: guardrails || undefined
+      }
+    });
+
+    res.json({
+      success: true,
+      data: agent,
+    });
+  } catch (error) {
+    console.error('Error updating agent:', error);
+    res.status(500).json({ error: 'Failed to update agent' });
+  }
+});
+
+// GET /api/activity-stream
+app.get('/api/activity-stream', async (req, res) => {
+  try {
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+
+    if (!companyId) {
+      return res.status(400).json({ error: 'companyId is required' });
+    }
+
+    const actions = await getRecentActions(companyId, limit);
+
+    res.json({
+      success: true,
+      data: actions,
+    });
+  } catch (error) {
+    console.error('Error fetching activity stream:', error);
+    res.status(500).json({ error: 'Failed to fetch activity stream' });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+
+  // Start the Agent Orchestrator
+  // Run every 5 minutes (300000ms) in production
+  // For demo/testing, you can set this to 60000ms (1 minute)
+  agentOrchestrator.start(300000);
+  console.log('🤖 Agent Orchestrator started');
 });

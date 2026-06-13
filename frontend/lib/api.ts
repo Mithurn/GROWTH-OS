@@ -16,6 +16,57 @@ export async function saveBusinessInfo(companyName: string, industry: string) {
   return response.json();
 }
 
+export async function saveOnboardingProfile(
+  companyId: string,
+  profile: Record<string, unknown>,
+) {
+  const response = await fetch(`${API_BASE_URL}/onboarding/profile`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ companyId, profile }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to save onboarding profile');
+  }
+
+  return response.json();
+}
+
+export async function startOnboardingConversation(companyId: string) {
+  const response = await fetch(`${API_BASE_URL}/onboarding/conversation/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ companyId }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to start conversation');
+  }
+
+  return response.json();
+}
+
+export async function sendConversationMessage(conversationId: string, message: string) {
+  const response = await fetch(`${API_BASE_URL}/onboarding/conversation/${conversationId}/message`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to send message');
+  }
+
+  return response.json();
+}
+
 export async function uploadCustomerCSV(file: File) {
   const formData = new FormData();
   formData.append('file', file);
@@ -85,6 +136,21 @@ export async function getIntelligencePreview() {
   return response.json();
 }
 
+export async function getIntelligenceBrief(companyId?: string) {
+  const url = new URL(`${API_BASE_URL}/analytics/intelligence-brief`);
+  if (companyId) {
+    url.searchParams.set('companyId', companyId);
+  }
+
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch intelligence brief');
+  }
+
+  return response.json();
+}
+
 export async function generatePersonas(companyId?: string, model?: string) {
   const response = await fetch(`${API_BASE_URL}/personas/generate`, {
     method: 'POST',
@@ -137,6 +203,22 @@ export async function getOpportunityCustomers(opportunityId: string) {
 
   if (!response.ok) {
     throw new Error('Failed to fetch opportunity details');
+  }
+
+  return response.json();
+}
+
+export async function createOpportunityFromGoal(goal: string, companyId?: string, model?: string) {
+  const response = await fetch(`${API_BASE_URL}/opportunities/create-from-goal`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ goal, companyId, model }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to create opportunity from goal');
   }
 
   return response.json();
@@ -258,6 +340,98 @@ export async function launchCampaign(campaignId: string) {
 
   if (!response.ok) {
     throw new Error('Failed to launch campaign');
+  }
+
+  return response.json();
+}
+
+// ============================================
+// AI AGENTS
+// ============================================
+
+export async function createAgent(companyId: string, goal: string, guardrails?: any) {
+  const response = await fetch(`${API_BASE_URL}/agents`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ companyId, goal, guardrails }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to create agent');
+  }
+
+  return response.json();
+}
+
+export async function getAgents(companyId?: string) {
+  const url = new URL(`${API_BASE_URL}/agents`);
+  if (companyId) {
+    url.searchParams.set('companyId', companyId);
+  }
+
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch agents');
+  }
+
+  return response.json();
+}
+
+export async function getAgent(agentId: string) {
+  const response = await fetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch agent');
+  }
+
+  return response.json();
+}
+
+export async function runAgent(agentId: string) {
+  const response = await fetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to run agent');
+  }
+
+  return response.json();
+}
+
+export async function updateAgent(agentId: string, updates: { status?: string; guardrails?: any }) {
+  const response = await fetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update agent');
+  }
+
+  return response.json();
+}
+
+export async function getActivityStream(companyId: string, limit?: number) {
+  const url = new URL(`${API_BASE_URL}/activity-stream`);
+  url.searchParams.set('companyId', companyId);
+  if (limit) {
+    url.searchParams.set('limit', limit.toString());
+  }
+
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch activity stream');
   }
 
   return response.json();
