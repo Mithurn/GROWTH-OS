@@ -95,6 +95,7 @@ export async function processWebhook(
     await supabase
       .from('processed_webhook_events')
       .insert({
+        id: crypto.randomUUID(),
         event_id: event.eventId,
         communication_id: event.communicationId,
       });
@@ -131,6 +132,7 @@ export async function processWebhook(
   const { error: eventError } = await supabase
     .from('communication_events')
     .insert({
+      id: crypto.randomUUID(),
       communication_id: event.communicationId,
       event_type: event.status,
       event_timestamp: event.timestamp,
@@ -147,6 +149,7 @@ export async function processWebhook(
   const { error: processedError } = await supabase
     .from('processed_webhook_events')
     .insert({
+      id: crypto.randomUUID(),
       event_id: event.eventId,
       communication_id: event.communicationId,
     });

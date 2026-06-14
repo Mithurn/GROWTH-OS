@@ -44,7 +44,8 @@ export default function LoadingPage() {
     // Poll for ingestion status
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/ingestion-status/${sessionId}`);
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+        const response = await fetch(`${API_BASE}/ingestion-status/${sessionId}`);
         if (!response.ok) return;
 
         const status = await response.json();
