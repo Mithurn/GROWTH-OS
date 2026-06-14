@@ -3,501 +3,450 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowRight,
-  TrendingUp,
-  Users,
-  Activity,
-  Zap,
   Sparkles,
-  BrainCircuit,
-  Lightbulb,
-  X,
-  Target,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
+  ArrowRight,
+  RotateCcw,
+  ShieldAlert,
+  TrendingUp,
+  Star,
+  LayoutGrid,
+  Loader2,
 } from 'lucide-react';
-import { generateOpportunities, getOpportunityDashboard, createOpportunityFromGoal, getActivityStream, getIntelligenceBrief } from '@/lib/api';
+import {
+  generateOpportunities,
+  getOpportunityDashboard,
+  createOpportunityFromGoal,
+} from '@/lib/api';
 
-interface OpportunityDistributionRow {
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
+interface Opportunity {
   opportunity_id: string;
-  opportunity_key: string;
-  opportunity_type: string;
+  id?: string;
   title: string;
+  opportunity_type: string;
   description: string;
+  trigger_reason: string;
+  ai_summary: string;
   audience_size: number;
   potential_revenue: number;
   confidence_score: number;
   priority_score: number;
-  supporting_customer_segment: string;
   recommended_action: string;
-  audience_definition: Record<string, unknown>;
-  trigger_reason: string;
-  ai_summary: string;
+  supporting_customer_segment: string;
   status: string;
-  customer_count: number;
-  average_spend: number;
-  average_orders: number;
-  revenue_share: number;
+  customer_count?: number;
 }
 
 interface OpportunityReport {
-  companyId: string;
-  totalCustomers: number;
   totalOpportunities: number;
   totalRevenuePotential: number;
-  opportunityDistribution: OpportunityDistributionRow[];
-  topOpportunities: OpportunityDistributionRow[];
+  totalCustomers: number;
+  topOpportunities: Opportunity[];
+  opportunityDistribution: Opportunity[];
 }
 
-type OpportunityCardItem = OpportunityDistributionRow;
+// ─────────────────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────────────────
+const formatCurrency = (amount: number) => {
+  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
+  if (amount >= 1000) return `₹${(amount / 1000).toFixed(0)}K`;
+  return `₹${amount}`;
+};
 
-function formatCurrency(value: number) {
-  return `₹${Math.round(value).toLocaleString('en-IN')}`;
-}
+const parseChannel = (action: string): string => {
+  if (!action) return 'WhatsApp';
+  if (action.toLowerCase().includes('whatsapp')) return 'WhatsApp';
+  if (action.toLowerCase().includes('email')) return 'Email';
+  if (action.toLowerCase().includes('sms')) return 'SMS';
+  return 'WhatsApp';
+};
 
-function normalizeStatus(status: string, index: number) {
-  if (status) return status;
-  return 'Detected';
-}
+const getCategoryForType = (type: string): string => {
+  const t = (type ?? '').toLowerCase();
+  if (t.includes('recov') || t.includes('churn') || t.includes('dormant') || t.includes('winback')) return 'Recovery';
+  if (t.includes('retention') || t.includes('retain') || t.includes('at-risk') || t.includes('risk')) return 'Retention';
+  if (t.includes('expansion') || t.includes('growth') || t.includes('revenue') || t.includes('upsell') || t.includes('cross')) return 'Expansion';
+  if (t.includes('loyalty') || t.includes('vip') || t.includes('reward') || t.includes('tier')) return 'Loyalty';
+  return 'Expansion';
+};
 
-function getAudienceSize(opportunity: OpportunityCardItem) {
-  return 'customer_count' in opportunity && opportunity.customer_count
-    ? opportunity.customer_count
-    : opportunity.audience_size;
-}
+const normalizeStatus = (status: string): string => {
+  if (!status) return 'new';
+  return status.toLowerCase();
+};
 
-interface ActivityItem {
-  id: string;
-  timestamp: string;
-  action_type: string;
-  description: string;
-  details?: Record<string, unknown>;
-}
+const CATEGORY_FILTERS = [
+  { key: 'Recovery', icon: RotateCcw, color: 'text-blue-500' },
+  { key: 'Retention', icon: ShieldAlert, color: 'text-amber-500' },
+  { key: 'Expansion', icon: TrendingUp, color: 'text-emerald-500' },
+  { key: 'Loyalty', icon: Star, color: 'text-purple-500' },
+];
 
+const STATUS_FILTERS = [
+  { key: 'new', label: 'New' },
+  { key: 'awaiting_review', label: 'Awaiting Review' },
+  { key: 'running', label: 'Running' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'custom', label: 'Custom' },
+];
+
+const SUGGESTIONS = [
+  'Find customers likely to churn',
+  'Find dormant VIP customers',
+  'Increase denim sales',
+];
+
+// ─────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────
 export default function OpportunitiesPage() {
   const router = useRouter();
   const [companyId, setCompanyId] = useState<string | undefined>(undefined);
   const [companyIdLoaded, setCompanyIdLoaded] = useState(false);
   const [report, setReport] = useState<OpportunityReport | null>(null);
-  const [customGoal, setCustomGoal] = useState('');
   const [loading, setLoading] = useState(true);
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [goal, setGoal] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeStatus, setActiveStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedCompanyId = window.localStorage.getItem('xeno_company_id') ?? undefined;
-    setCompanyId(storedCompanyId);
+    const id = window.localStorage.getItem('xeno_company_id') ?? undefined;
+    setCompanyId(id);
     setCompanyIdLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!companyIdLoaded) return;
-
     let mounted = true;
-
-    async function loadDashboard() {
+    async function load() {
       try {
         setLoading(true);
         setError(null);
-
-        const response = await getOpportunityDashboard(companyId);
-        const data = response.data as OpportunityReport;
-
+        const res = await getOpportunityDashboard(companyId);
+        const data = res.data as OpportunityReport;
         if (!mounted) return;
-
         if (data.totalOpportunities > 0) {
           setReport(data);
-          return;
+        } else {
+          const gen = await generateOpportunities(companyId);
+          if (!mounted) return;
+          setReport(gen.data as OpportunityReport);
         }
-
-        const generated = await generateOpportunities(companyId);
-        const generatedReport = generated.data as OpportunityReport;
-
+      } catch (e) {
         if (!mounted) return;
-        setReport(generatedReport);
-      } catch (err) {
-        if (!mounted) return;
-        setError(err instanceof Error ? err.message : 'Failed to load opportunities');
+        setError(e instanceof Error ? e.message : 'Failed to load opportunities');
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
     }
-
-    loadDashboard();
-
-    return () => {
-      mounted = false;
-    };
+    load();
+    return () => { mounted = false; };
   }, [companyId, companyIdLoaded]);
 
-  // Load real activity feed
-  useEffect(() => {
-    if (!companyId) return;
-
-    let mounted = true;
-
-    async function loadActivities() {
-      try {
-        const response = await getActivityStream(companyId as string, 5);
-        if (!mounted) return;
-        setActivities(Array.isArray(response.data) ? response.data : []);
-      } catch (err) {
-        console.error('Failed to load activities:', err);
-      }
-    }
-
-    loadActivities();
-
-    // Refresh activities every 30 seconds
-    const interval = setInterval(loadActivities, 30000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [companyId]);
-
-  // Removed currentActivityIndex rotation
-
-  const opportunities = useMemo<OpportunityCardItem[]>(() => {
-    const realOpportunities = report?.opportunityDistribution ?? [];
-    return realOpportunities.slice(0, 4);
+  const allOpportunities = useMemo<Opportunity[]>(() => {
+    const dist = report?.opportunityDistribution ?? [];
+    const top = report?.topOpportunities ?? [];
+    const merged = [...dist, ...top];
+    const seen = new Set<string>();
+    return merged.filter(o => {
+      const key = o.opportunity_id || o.id || o.title;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [report]);
 
-  const totalOpportunities = report?.totalOpportunities ?? 0;
-  const totalRevenue = report?.totalRevenuePotential ?? 0;
-  const totalCustomers = report?.totalCustomers ?? 0;
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, { count: number; revenue: number }> = {};
+    allOpportunities.forEach(o => {
+      const cat = getCategoryForType(o.opportunity_type);
+      if (!counts[cat]) counts[cat] = { count: 0, revenue: 0 };
+      counts[cat].count++;
+      counts[cat].revenue += o.potential_revenue ?? 0;
+    });
+    return counts;
+  }, [allOpportunities]);
 
-  async function handleCustomGoalSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const goal = customGoal.trim();
-    if (!goal || creatingGoal) return;
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allOpportunities.forEach(o => {
+      const s = normalizeStatus(o.status);
+      counts[s] = (counts[s] ?? 0) + 1;
+    });
+    return counts;
+  }, [allOpportunities]);
 
+  const filtered = useMemo(() => {
+    return allOpportunities.filter(o => {
+      if (activeCategory && getCategoryForType(o.opportunity_type) !== activeCategory) return false;
+      if (activeStatus) {
+        const s = normalizeStatus(o.status);
+        if (activeStatus === 'new' && s !== 'new' && s !== '' && s !== 'detected') return false;
+        if (activeStatus !== 'new' && s !== activeStatus) return false;
+      }
+      return true;
+    });
+  }, [allOpportunities, activeCategory, activeStatus]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = goal.trim();
+    if (!trimmed || creatingGoal) return;
     try {
       setCreatingGoal(true);
-      setCustomGoal('');
-
-      await createOpportunityFromGoal(goal, companyId);
-
-      const dashboardResponse = await getOpportunityDashboard(companyId);
-      const data = dashboardResponse.data as OpportunityReport;
-      setReport(data);
-    } catch (err) {
-      console.error('Error creating opportunity from goal:', err);
-      setError(err instanceof Error ? err.message : 'Failed to create opportunity from goal');
+      setGoal('');
+      await createOpportunityFromGoal(trimmed, companyId);
+      const res = await getOpportunityDashboard(companyId);
+      setReport(res.data as OpportunityReport);
+    } catch {
+      setError('Failed to create opportunity. Try again.');
     } finally {
       setCreatingGoal(false);
     }
   }
 
-  if (loading && !report) {
+  if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex gap-2">
-            <div className="h-3 w-3 rounded-full bg-[#5B4FFF] dot-pulse"></div>
-            <div className="h-3 w-3 rounded-full bg-[#5B4FFF] dot-pulse"></div>
-            <div className="h-3 w-3 rounded-full bg-[#5B4FFF] dot-pulse"></div>
-          </div>
-          <div className="text-sm font-medium text-[#71717A]">Loading AI insights...</div>
+      <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+          <p className="text-sm text-gray-500">Loading opportunities…</p>
         </div>
-      </main>
+      </div>
     );
   }
 
-  // Helper to format time ago
-  const getTimeAgo = (timestamp: string) => {
-    const now = new Date();
-    const then = new Date(timestamp);
-    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
-
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
-
   return (
-    <main className="flex h-screen flex-col bg-[#FAFAFA] text-[#1A1A1A]">
-      {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-8">
-        <div className="mx-auto flex max-w-[1000px] flex-col gap-8">
-          {/* Header */}
-          <header className="flex items-center justify-between border-b border-[#E4E4E7] pb-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#5B4FFF] shadow-sm">
-                <BrainCircuit className="h-5 w-5 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-[#1A1A1A]">Active Agents</h1>
-            </div>
-            <button className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-[#5B4FFF] shadow-sm border border-[#E4E4E7] transition hover:border-[#5B4FFF]/30 hover:shadow-md">
-              + Create Agent
+    <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
+      {/* ── Left Sidebar ── */}
+      <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
+        <div className="p-5 space-y-6">
+          {/* All Opportunities */}
+          <div>
+            <button
+              onClick={() => { setActiveCategory(null); setActiveStatus(null); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                !activeCategory && !activeStatus
+                  ? 'bg-indigo-500 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              All Opportunities
             </button>
-          </header>
+          </div>
 
+          {/* Categories */}
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">Categories</p>
+            <div className="space-y-0.5">
+              {CATEGORY_FILTERS.map(({ key, icon: Icon, color }) => {
+                const data = categoryCounts[key];
+                const isActive = activeCategory === key && !activeStatus;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => { setActiveCategory(key); setActiveStatus(null); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
+                      isActive ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-indigo-500' : color}`} />
+                      {key}
+                    </div>
+                    {data && (
+                      <span className="text-[11px] text-gray-400">
+                        {data.count} · {formatCurrency(data.revenue)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">Status</p>
+            <div className="space-y-0.5">
+              {STATUS_FILTERS.map(({ key, label }) => {
+                const count = key === 'new'
+                  ? (statusCounts['new'] ?? 0) + (statusCounts[''] ?? 0) + (statusCounts['detected'] ?? 0)
+                  : statusCounts[key] ?? 0;
+                const isActive = activeStatus === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => { setActiveStatus(key); setActiveCategory(null); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
+                      isActive ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {count > 0 && (
+                      <span className="text-[11px] text-gray-400">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main Content ── */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+
+          {/* ── AI Command Bar — hero element ── */}
+          <div className="mb-12">
+            <form onSubmit={handleSubmit}>
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md focus-within:border-indigo-300 focus-within:shadow-md transition-all">
+                <div className="flex items-center gap-4 px-8 py-7">
+                  <Sparkles className="h-7 w-7 text-indigo-400 shrink-0" />
+                  <input
+                    value={goal}
+                    onChange={e => setGoal(e.target.value)}
+                    placeholder="Ask Xeno to discover an opportunity..."
+                    disabled={creatingGoal}
+                    className="flex-1 bg-transparent text-2xl font-medium text-gray-800 placeholder:text-gray-300 outline-none"
+                  />
+                  <span className="text-xs font-medium text-gray-300 border border-gray-200 rounded px-2 py-1 shrink-0">⌘ K</span>
+                </div>
+              </div>
+            </form>
+
+            {/* Suggestions */}
+            <div className="flex items-center gap-2 mt-4 px-2">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest shrink-0">TRY:</span>
+              {SUGGESTIONS.map((s, i) => (
+                <span key={s} className="flex items-center gap-2">
+                  {i > 0 && <span className="text-gray-300">·</span>}
+                  <button
+                    onClick={() => setGoal(s)}
+                    className="text-sm text-gray-400 hover:text-indigo-500 transition-colors"
+                  >
+                    {s}
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {/* Generating state */}
+            {creatingGoal && (
+              <div className="mt-4 flex items-center gap-4 bg-white border border-gray-100 rounded-xl px-6 py-4 shadow-sm">
+                <Loader2 className="h-5 w-5 text-indigo-400 animate-spin shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Analyzing purchase patterns…</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Building audience &amp; estimating impact</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Error */}
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
               {error}
             </div>
           )}
 
-          {/* Agent Cards - 1 Column Stack */}
-          <section className="flex flex-col gap-4">
-            {opportunities.map((opportunity, index) => (
-              <OpportunityCard
-                key={opportunity.opportunity_id}
-                opportunity={opportunity}
-                index={index}
-                globalActivities={activities}
+          {/* Opportunity Rows */}
+          <div className="space-y-4">
+            {filtered.length === 0 && (
+              <div className="text-center py-16 text-gray-400 text-sm">
+                No opportunities match the current filter.
+              </div>
+            )}
+            {filtered.map(opp => (
+              <OpportunityRow
+                key={opp.opportunity_id || opp.id || opp.title}
+                opportunity={opp}
+                onClick={() => router.push(`/opportunities/${opp.opportunity_id || opp.id}`)}
               />
             ))}
-
-            {totalOpportunities > 4 && (
-              <button
-                onClick={() => router.push('/opportunities')}
-                className="mt-4 self-center rounded-full border border-[#E4E4E7] bg-white px-6 py-2 text-sm font-semibold text-[#5B4FFF] transition-all hover:border-[#5B4FFF]/30 hover:shadow-sm"
-              >
-                View all {totalOpportunities} agents →
-              </button>
-            )}
-          </section>
+          </div>
         </div>
-      </div>
-
-      {/* Fixed Bottom Command Bar */}
-      <div className="shrink-0 border-t border-[#E4E4E7] bg-white/80 px-8 py-4 backdrop-blur-xl">
-        <form onSubmit={handleCustomGoalSubmit} className="mx-auto max-w-[1200px]">
-          {/* Suggestion Chips */}
-          <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#5B4FFF] mr-2">
-              <Sparkles className="h-3.5 w-3.5" /> Suggestions:
-            </span>
-            {['Reduce churn risk', 'Boost repeat purchases', 'Recover dormant VIPs'].map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => setCustomGoal(suggestion)}
-                className="whitespace-nowrap rounded-full border border-[#E4E4E7] bg-white px-3 py-1.5 text-xs font-medium text-[#52525B] transition-colors hover:border-[#5B4FFF] hover:text-[#5B4FFF]"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-
-          <div className="group relative rounded-2xl border-2 border-[#E4E4E7] bg-white p-4 shadow-sm transition-all focus-within:border-[#5B4FFF] focus-within:shadow-lg focus-within:shadow-[#5B4FFF]/10">
-            <input
-              value={customGoal}
-              onChange={(event) => setCustomGoal(event.target.value)}
-              placeholder="What do you want to achieve? Ask your AI Growth Copilot..."
-              disabled={creatingGoal}
-              className="w-full bg-transparent text-base font-medium outline-none placeholder:text-[#A1A1AA] disabled:opacity-50"
-            />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-              <button
-                type="submit"
-                disabled={!customGoal.trim() || creatingGoal}
-                className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#5B4FFF] text-white transition-all hover:bg-[#4B3FE5] hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {creatingGoal ? (
-                  <div className="flex gap-1">
-                    <div className="h-1.5 w-1.5 rounded-full bg-white dot-pulse"></div>
-                    <div className="h-1.5 w-1.5 rounded-full bg-white dot-pulse"></div>
-                    <div className="h-1.5 w-1.5 rounded-full bg-white dot-pulse"></div>
-                  </div>
-                ) : (
-                  <ArrowRight className="h-5 w-5" />
-                )}
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-
-    </main>
+      </main>
+    </div>
   );
 }
 
-function OpportunityCard({
-  opportunity,
-  index,
-  globalActivities,
+// ─────────────────────────────────────────────────────────────
+// Opportunity Row
+// ─────────────────────────────────────────────────────────────
+function OpportunityRow({
+  opportunity: opp,
+  onClick,
 }: {
-  opportunity: OpportunityCardItem;
-  index: number;
-  globalActivities: ActivityItem[];
+  opportunity: Opportunity;
+  onClick: () => void;
 }) {
-  const router = useRouter();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const status = normalizeStatus(opportunity.status, index);
+  const channel = parseChannel(opp.recommended_action);
+  const status = normalizeStatus(opp.status);
+  const isNew = !opp.status || status === 'new' || status === 'detected' || status === '';
 
-  const getStatusIndicator = () => {
-    if (status === 'Needs Input' || status === 'Review') {
-      return (
-        <div className="flex items-center gap-1.5 rounded-full bg-[#FEF3C7] px-2.5 py-0.5">
-          <div className="h-1.5 w-1.5 rounded-full bg-[#EAB308] animate-pulse-glow"></div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#A16207]">Needs approval</span>
-        </div>
-      );
+  const statusBadge = () => {
+    if (status === 'running' || status === 'launched') {
+      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 rounded">Running</span>;
     }
-    if (status === 'Launched' || status === 'Running') {
-      return (
-        <div className="flex items-center gap-1.5 rounded-full bg-[#DCFCE7] px-2.5 py-0.5">
-          <div className="h-1.5 w-1.5 rounded-full bg-[#22C55E] animate-pulse-success"></div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#166534]">Running</span>
-        </div>
-      );
+    if (status === 'awaiting_review' || status === 'review') {
+      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 rounded">Awaiting Review</span>;
     }
-    if (status === 'Detected') {
-      return (
-        <div className="flex items-center gap-1.5 rounded-full bg-[#F0EEFF] px-2.5 py-0.5">
-          <Sparkles className="h-3 w-3 text-[#5B4FFF]" />
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B4FFF]">New Insight</span>
-        </div>
-      );
+    if (status === 'monitoring') {
+      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 rounded">Monitoring</span>;
     }
-    return (
-      <div className="flex items-center gap-1.5 rounded-full bg-[#F4F4F5] px-2.5 py-0.5">
-        <div className="h-1.5 w-1.5 rounded-full bg-[#71717A]"></div>
-        <span className="text-[11px] font-bold uppercase tracking-wider text-[#52525B]">{status}</span>
-      </div>
-    );
+    if (status === 'completed') {
+      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 rounded">Completed</span>;
+    }
+    return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 rounded">AI Generated</span>;
   };
 
-  // Mocking execution data based on audience size
-  const targetAudience = getAudienceSize(opportunity);
-  const executed = Math.floor(targetAudience * 0.45); // Fake 45% completion
-  const progressPercent = targetAudience > 0 ? Math.round((executed / targetAudience) * 100) : 0;
-
-  // Mocking recent actions specifically for this opportunity
-  const recentActions = [
-    { id: '1', time: '2 mins ago', desc: `Targeting segment built for ${opportunity.title.toLowerCase()}`, type: 'DATA' },
-    { id: '2', time: '15 mins ago', desc: `Analyzed past performance. Recommends focusing on ${opportunity.recommended_action || 'cross-channel'} to maximize engagement.`, type: 'DECISION' }
-  ];
-
   return (
-    <article
-      className={`group flex flex-col rounded-2xl border border-[#E4E4E7] bg-white p-6 transition-all duration-300 animate-fade-in-up ${isExpanded ? 'ring-2 ring-[#5B4FFF]/20 shadow-lg' : 'hover:border-[#5B4FFF]/40 hover:shadow-md cursor-pointer'}`}
-      style={{ animationDelay: `${index * 100}ms` }}
+    <div
+      onClick={onClick}
+      className="group relative flex items-center justify-between bg-white rounded-xl border border-gray-200 pl-5 pr-6 py-5 hover:shadow-lg hover:border-indigo-100 cursor-pointer transition-all duration-200 overflow-hidden"
     >
-      <div 
-        className="flex items-center justify-between"
-        onClick={() => !isExpanded && setIsExpanded(true)}
-      >
-        <div className="flex items-center gap-5">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3 mb-1.5">
-              <h3 className="text-lg font-bold text-[#1A1A1A] group-hover:text-[#5B4FFF] transition-colors">
-                {opportunity.title}
-              </h3>
-              {getStatusIndicator()}
-            </div>
-            <p className="text-sm font-medium text-[#71717A]">
-              Optimizing for <span className="text-[#1A1A1A] font-semibold">Conversion</span> • {opportunity.recommended_action || 'Cross-channel'}
-            </p>
-          </div>
-        </div>
+      {/* Left accent border */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l-xl" />
 
-        <div className="flex items-center gap-8">
-          <div className="text-right">
-            <div className="text-[11px] font-bold text-[#A1A1AA] uppercase tracking-wider mb-1">Potential Lift</div>
-            <div className="text-xl font-bold text-[#22C55E]">
-              +{formatCurrency(opportunity.potential_revenue)}
-            </div>
-          </div>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F4F5] text-[#71717A] transition hover:bg-[#E4E4E7] hover:text-[#1A1A1A]"
-          >
-            {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-          </button>
+      {/* Left content */}
+      <div className="min-w-0 flex-1 pl-4 pr-8">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <span className="text-[15px] font-bold text-gray-900 group-hover:text-indigo-600 transition-colors leading-snug">
+            {opp.title}
+          </span>
+          <span className="text-gray-300">|</span>
+          <span className="text-sm text-gray-500 font-medium">
+            {formatCurrency(opp.potential_revenue)} · {(opp.customer_count ?? opp.audience_size).toLocaleString()} customers · {opp.confidence_score}%
+          </span>
         </div>
+        <p className="text-xs text-gray-400 mt-1.5 leading-relaxed line-clamp-1">
+          {opp.trigger_reason || opp.description}
+        </p>
       </div>
 
-      {isExpanded && (
-        <div className="mt-6 border-t border-[#F4F4F5] pt-6 grid grid-cols-2 gap-8 animate-fade-in-up">
-          {/* Left Side: Execution Progress & AI Reasoning */}
-          <div className="flex flex-col gap-6">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="h-2 w-2 rounded-full bg-[#5B4FFF] animate-pulse"></div>
-                <h4 className="text-sm font-bold text-[#1A1A1A]">Execution Progress</h4>
-              </div>
-              <div className="rounded-xl border border-[#E4E4E7] bg-[#FAFAFA] p-5 shadow-inner">
-                <div className="mb-1 flex items-end gap-2">
-                  <span className="text-3xl font-black tracking-tight text-[#1A1A1A]">{executed.toLocaleString()}</span>
-                  <span className="text-sm font-bold text-[#A1A1AA] mb-1.5">/ {targetAudience.toLocaleString()}</span>
-                </div>
-                <p className="text-xs font-medium text-[#71717A] mb-5">Planned actions executed</p>
-                
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#E4E4E7]">
-                  <div 
-                    className="h-full bg-gradient-to-r from-[#5B4FFF] to-[#3B2FD5] transition-all duration-1000 ease-out" 
-                    style={{ width: `${progressPercent}%` }}
-                  ></div>
-                </div>
-                <div className="mt-2 text-xs font-bold text-[#5B4FFF]">{progressPercent}% complete</div>
-              </div>
-            </div>
-
-            {opportunity.ai_summary && (
-              <div className="rounded-xl bg-[#F0EEFF] p-4 text-sm text-[#4B3FE5] border border-[#5B4FFF]/20">
-                <div className="flex items-center gap-2 font-bold mb-2 tracking-wide">
-                  <Sparkles className="h-4 w-4" /> WHY THIS DECISION?
-                </div>
-                <p className="leading-relaxed font-medium">
-                  {opportunity.ai_summary}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Right Side: Recent Actions */}
-          <div className="flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-[#EAB308]"></div>
-                <h4 className="text-sm font-bold text-[#1A1A1A]">Recent actions by agent</h4>
-              </div>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/opportunities/${opportunity.opportunity_id}`);
-                }}
-                className="text-xs font-bold text-[#5B4FFF] hover:underline"
-              >
-                View Decisions & Insights →
-              </button>
-            </div>
-            
-            <div className="flex-1 rounded-xl border border-[#E4E4E7] bg-white p-5 shadow-sm">
-              <div className="space-y-6">
-                {recentActions.map((action, idx) => (
-                  <div key={action.id} className="relative pl-5 before:absolute before:left-0 before:top-2 before:h-2 before:w-2 before:rounded-full before:bg-[#E4E4E7]">
-                    {idx !== recentActions.length - 1 && (
-                      <div className="absolute left-[3px] top-4 bottom-[-24px] w-0.5 bg-[#F4F4F5]"></div>
-                    )}
-                    <div className="flex justify-between items-start mb-1.5">
-                      <span className="text-sm font-bold text-[#1A1A1A] leading-snug pr-4">{action.desc}</span>
-                      <span className="text-[11px] font-semibold text-[#A1A1AA] whitespace-nowrap pt-0.5">{action.time}</span>
-                    </div>
-                    <div className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider">{action.type}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+      {/* Right content */}
+      <div className="flex flex-col items-end gap-2 shrink-0 min-w-[140px]">
+        <div className="flex items-center gap-1.5">
+          {statusBadge()}
+          {isNew && (
+            <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 rounded">New</span>
+          )}
         </div>
-      )}
-    </article>
+        <button
+          onClick={e => { e.stopPropagation(); onClick(); }}
+          className="text-xs font-bold text-indigo-500 hover:text-indigo-700 transition-colors"
+        >
+          {channel} → Review
+        </button>
+      </div>
+    </div>
   );
 }
