@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -17,34 +17,40 @@ import {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
 const ACCENT = '#5B4FFF';
 const GREEN  = '#10B981';
-const PIE_COLORS = ['#6366F1', '#10B981', '#3B82F6', '#8B5CF6'];
+const PIE_COLORS = ['#6366F1', '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'];
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types matching the real /analytics API ───────────────────────────────────
 
-interface Campaign {
-  id: string;
-  name: string;
-  objective: string;
-  channel: string;
-  status: string;
-  launched_at: string | null;
-  opportunities: {
-    title: string;
-    audience_size: number;
+interface AnalyticsData {
+  campaign: {
+    id: string;
+    name: string;
+    objective: string;
+    channel: string;
+    status: string;
+    launched_at: string | null;
     potential_revenue: number;
-  } | null;
-}
-
-interface TimelinePt {
-  t: string;
-  Delivered: number;
-  Opened: number;
-  Clicked: number;
-}
-
-interface Persona {
-  name: string;
-  value: number;
+    confidence_score: number;
+  };
+  funnel: {
+    targeted: number;
+    sent: number;
+    delivered: number;
+    read: number;
+    clicked: number;
+    failed: number;
+  };
+  personaBreakdown: { persona_name: string; count: number; percentage: number }[];
+  timeline: { hour: number; sent: number; delivered: number; read: number; clicked: number }[];
+  insights: {
+    learnings: string[];
+    nextAction: {
+      title: string;
+      description: string;
+      potentialRevenue: number;
+      confidence: number;
+    };
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -62,27 +68,25 @@ function channelMeta(ch: string) {
   return { Icon: Smartphone, color: '#8B5CF6' };
 }
 
-function buildTimeline(delivered: number, opened: number, clicked: number): TimelinePt[] {
-  const pts: [number, number][] = [
-    [0, 0], [1, 0.02], [2, 0.06], [3, 0.13], [4, 0.22],
-    [5, 0.34], [6, 0.50], [7, 0.65], [8, 0.78], [9, 0.88],
-    [10, 0.94], [12, 0.97], [15, 0.985], [18, 0.993], [24, 1.0],
-  ];
-  return pts.map(([h, w]) => ({
-    t: h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`,
-    Delivered: Math.round(delivered * w),
-    Opened: Math.round(opened * w),
-    Clicked: Math.round(clicked * w),
+function hourLabel(h: number) {
+  if (h < 0)  return 'Start';
+  if (h === 0) return '12a';
+  if (h < 12)  return `${h}a`;
+  if (h === 12) return '12p';
+  return `${h - 12}p`;
+}
+
+function toChartTimeline(timeline: AnalyticsData['timeline']) {
+  return timeline.map(({ hour, delivered, read, clicked }) => ({
+    t: hourLabel(hour),
+    Delivered: delivered,
+    Opened: read,
+    Clicked: clicked,
   }));
 }
 
-function buildPersonas(targeted: number): Persona[] {
-  return [
-    { name: 'Premium Loyalist', value: Math.round(targeted * 0.38) },
-    { name: 'Dormant VIP',      value: Math.round(targeted * 0.28) },
-    { name: 'Impulse Buyer',    value: Math.round(targeted * 0.20) },
-    { name: 'Discount Seeker',  value: Math.round(targeted * 0.14) },
-  ];
+function toChartPersonas(breakdown: AnalyticsData['personaBreakdown']) {
+  return breakdown.map(p => ({ name: p.persona_name, value: p.count }));
 }
 
 // ─── Count-up hook ────────────────────────────────────────────────────────────
@@ -143,90 +147,120 @@ function AnimStat({ label, n, color, Icon, sub }: {
 
 // ─── Engagement Timeline ──────────────────────────────────────────────────────
 
-function TimelineCard({ data }: { data: TimelinePt[] }) {
+function TimelineCard({ data, isLive }: { data: ReturnType<typeof toChartTimeline>; isLive: boolean }) {
+  const empty = data.length === 0 || data.every(d => d.Delivered === 0);
+
   return (
     <Card className="p-6 h-full" glow>
-      <SLabel>Engagement Timeline · 24h</SLabel>
-      <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="gDel" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={GREEN}   stopOpacity={0.35} />
-              <stop offset="95%" stopColor={GREEN}   stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gOpn" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={ACCENT}  stopOpacity={0.35} />
-              <stop offset="95%" stopColor={ACCENT}  stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gClk" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#F59E0B" stopOpacity={0.35} />
-              <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-          <XAxis dataKey="t" tick={{ fill: '#4B5069', fontSize: 10 }} axisLine={false} tickLine={false} />
-          <YAxis hide />
-          <Tooltip contentStyle={{ background: '#0F1225', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff', fontSize: 11 }} />
-          <Area type="monotone" dataKey="Delivered" stroke={GREEN}   strokeWidth={2} fill="url(#gDel)" dot={false} />
-          <Area type="monotone" dataKey="Opened"    stroke={ACCENT}  strokeWidth={2} fill="url(#gOpn)" dot={false} />
-          <Area type="monotone" dataKey="Clicked"   stroke="#F59E0B" strokeWidth={2} fill="url(#gClk)" dot={false} />
-        </AreaChart>
-      </ResponsiveContainer>
-      <div className="flex gap-5 mt-3 justify-center">
-        {([['Delivered', GREEN], ['Opened', ACCENT], ['Clicked', '#F59E0B']] as [string, string][]).map(([l, c]) => (
-          <div key={l} className="flex items-center gap-1.5 text-xs text-[#8B92A5]">
-            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c }} />{l}
-          </div>
-        ))}
+      <div className="flex items-center justify-between mb-1">
+        <SLabel>Engagement Timeline · Live</SLabel>
+        {isLive && (
+          <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold mb-4">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            LIVE
+          </span>
+        )}
       </div>
+      {empty ? (
+        <div className="flex flex-col items-center justify-center h-[200px] gap-3">
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="h-2 w-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
+          </div>
+          <p className="text-[#4B5069] text-xs">Waiting for webhook events…</p>
+        </div>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gDel" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={GREEN}   stopOpacity={0.35} />
+                  <stop offset="95%" stopColor={GREEN}   stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gOpn" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={ACCENT}  stopOpacity={0.35} />
+                  <stop offset="95%" stopColor={ACCENT}  stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gClk" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#F59E0B" stopOpacity={0.35} />
+                  <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="t" tick={{ fill: '#4B5069', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip contentStyle={{ background: '#0F1225', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff', fontSize: 11 }} />
+              <Area type="monotone" dataKey="Delivered" stroke={GREEN}   strokeWidth={2} fill="url(#gDel)" dot={false} />
+              <Area type="monotone" dataKey="Opened"    stroke={ACCENT}  strokeWidth={2} fill="url(#gOpn)" dot={false} />
+              <Area type="monotone" dataKey="Clicked"   stroke="#F59E0B" strokeWidth={2} fill="url(#gClk)" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <div className="flex gap-5 mt-3 justify-center">
+            {([['Delivered', GREEN], ['Opened', ACCENT], ['Clicked', '#F59E0B']] as [string, string][]).map(([l, c]) => (
+              <div key={l} className="flex items-center gap-1.5 text-xs text-[#8B92A5]">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c }} />{l}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Card>
   );
 }
 
 // ─── Persona Pie ──────────────────────────────────────────────────────────────
 
-function PersonaCard({ personas, total }: { personas: Persona[]; total: number }) {
+function PersonaCard({ personas, total }: { personas: { name: string; value: number }[]; total: number }) {
+  const empty = personas.length === 0;
   return (
     <Card className="p-6 h-full" glow>
       <SLabel>Persona Breakdown</SLabel>
-      <div className="relative flex items-center justify-center mb-4">
-        <ResponsiveContainer width="100%" height={160}>
-          <PieChart>
-            <Pie data={personas} dataKey="value" nameKey="name" innerRadius={50} outerRadius={72} cx="50%" cy="50%" paddingAngle={2}>
-              {personas.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />)}
-            </Pie>
-            <Tooltip contentStyle={{ background: '#0F1225', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff', fontSize: 11 }} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-2xl font-extrabold text-white">{fmtNum(total)}</span>
-          <span className="text-[10px] text-[#4B5069]">Total</span>
+      {empty ? (
+        <div className="flex flex-col items-center justify-center h-[200px]">
+          <p className="text-[#4B5069] text-xs">No persona data yet.</p>
         </div>
-      </div>
-      <div className="space-y-2">
-        {personas.map((p, i) => (
-          <div key={p.name} className="flex items-center gap-2 text-xs">
-            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-            <span className="text-[#8B92A5] flex-1 truncate">{p.name}</span>
-            <span className="text-white font-semibold">{fmtNum(p.value)}</span>
-            <span className="text-[#4B5069] w-8 text-right">{Math.round((p.value / total) * 100)}%</span>
+      ) : (
+        <>
+          <div className="relative flex items-center justify-center mb-4">
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={personas} dataKey="value" nameKey="name" innerRadius={50} outerRadius={72} cx="50%" cy="50%" paddingAngle={2}>
+                  {personas.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#0F1225', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#fff', fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-2xl font-extrabold text-white">{fmtNum(total)}</span>
+              <span className="text-[10px] text-[#4B5069]">Total</span>
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="space-y-2">
+            {personas.map((p, i) => (
+              <div key={p.name} className="flex items-center gap-2 text-xs">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                <span className="text-[#8B92A5] flex-1 truncate">{p.name}</span>
+                <span className="text-white font-semibold">{fmtNum(p.value)}</span>
+                <span className="text-[#4B5069] w-8 text-right">{total > 0 ? Math.round((p.value / total) * 100) : 0}%</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Card>
   );
 }
 
 // ─── Next Best Action ─────────────────────────────────────────────────────────
 
-function NextActionCard({ campaign, opened, clicked, targeted }: {
-  campaign: Campaign; opened: number; clicked: number; targeted: number;
+function NextActionCard({ nextAction, channel }: {
+  nextAction: AnalyticsData['insights']['nextAction'];
+  channel: string;
 }) {
   const router = useRouter();
-  const nonConverters = opened - clicked;
-  const pct = targeted > 0 ? Math.round((nonConverters / targeted) * 100) : 0;
-  const potRev = Math.round((campaign.opportunities?.potential_revenue ?? 0) * 0.25);
-
+  if (!nextAction?.title) return null;
   return (
     <div
       className="rounded-2xl p-6 shadow-2xl"
@@ -247,16 +281,8 @@ function NextActionCard({ campaign, opened, clicked, targeted }: {
               Next Best Action · AI Recommendation
             </span>
           </div>
-
-          <h3 className="text-xl font-extrabold text-white mb-2">
-            Retarget the {pct}% who opened but didn't click
-          </h3>
-          <p className="text-[#8B92A5] text-sm leading-relaxed max-w-xl">
-            {fmtNum(nonConverters)} recipients opened your {campaign.channel} message but haven't converted yet.
-            A targeted follow-up within 24 hours with urgency messaging could recover an estimated{' '}
-            <span className="text-white font-semibold">{fmtRev(potRev)}</span> in additional revenue.
-          </p>
-
+          <h3 className="text-xl font-extrabold text-white mb-2">{nextAction.title}</h3>
+          <p className="text-[#8B92A5] text-sm leading-relaxed max-w-xl">{nextAction.description}</p>
           <div className="flex gap-3 mt-4 flex-wrap">
             <div className="rounded-xl px-3 py-1.5 text-xs font-semibold"
               style={{ background: `${ACCENT}18`, border: `1px solid ${ACCENT}35`, color: ACCENT }}>
@@ -265,17 +291,20 @@ function NextActionCard({ campaign, opened, clicked, targeted }: {
             <div className="rounded-xl px-3 py-1.5 text-xs text-[#8B92A5] border border-white/10 bg-white/5">
               Window: Next 24h
             </div>
-            <div className="rounded-xl px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              89% Confidence
-            </div>
+            {nextAction.confidence > 0 && (
+              <div className="rounded-xl px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                {nextAction.confidence}% Confidence
+              </div>
+            )}
           </div>
         </div>
-
         <div className="flex flex-col items-end gap-4 shrink-0">
-          <div className="text-right">
-            <div className="text-3xl font-black text-white">{fmtRev(potRev)}</div>
-            <div className="text-[10px] text-[#4B5069] uppercase tracking-widest mt-0.5">Est. Recovery</div>
-          </div>
+          {nextAction.potentialRevenue > 0 && (
+            <div className="text-right">
+              <div className="text-3xl font-black text-white">{fmtRev(nextAction.potentialRevenue)}</div>
+              <div className="text-[10px] text-[#4B5069] uppercase tracking-widest mt-0.5">Est. Recovery</div>
+            </div>
+          )}
           <button
             onClick={() => router.push('/opportunities')}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90 hover:scale-105"
@@ -289,29 +318,43 @@ function NextActionCard({ campaign, opened, clicked, targeted }: {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main analytics content ───────────────────────────────────────────────────
 
 function AnalyticsContent() {
   const router = useRouter();
   const params = useSearchParams();
   const campaignId = params.get('campaignId');
 
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [aiInput, setAiInput] = useState('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchAnalytics = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/campaigns/${id}/analytics`);
+      const j = await res.json();
+      if (j.success && j.data) setData(j.data);
+      else setError(j.error ?? 'Campaign not found');
+    } catch {
+      setError('Failed to load analytics');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!campaignId) { setLoading(false); return; }
-    fetch(`${API_BASE}/campaigns/${campaignId}`)
-      .then(r => r.json())
-      .then(j => {
-        if (j.success && j.data) setCampaign(j.data);
-        else setError('Campaign not found');
-      })
-      .catch(() => setError('Failed to load campaign'))
-      .finally(() => setLoading(false));
-  }, [campaignId]);
+    fetchAnalytics(campaignId);
+  }, [campaignId, fetchAnalytics]);
+
+  // Poll every 5s while campaign is live
+  useEffect(() => {
+    if (!campaignId || data?.campaign.status !== 'Launched') return;
+    intervalRef.current = setInterval(() => fetchAnalytics(campaignId), 5000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [campaignId, data?.campaign.status, fetchAnalytics]);
 
   if (loading) {
     return (
@@ -321,7 +364,7 @@ function AnalyticsContent() {
     );
   }
 
-  if (!campaignId || !campaign) {
+  if (!campaignId || !data) {
     return (
       <div className="min-h-screen bg-[#0A0E1A] flex flex-col items-center justify-center gap-4 px-6">
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-8 max-w-md w-full text-center">
@@ -339,20 +382,20 @@ function AnalyticsContent() {
     );
   }
 
-  // ── Simulated metrics derived from real campaign data ──────────────────────
-  const targeted  = campaign.opportunities?.audience_size ?? 0;
-  const delivered = Math.round(targeted * 0.98);
-  const opened    = Math.round(delivered * 0.68);
-  const clicked   = Math.round(opened * 0.42);
-  const revenue   = Math.round((campaign.opportunities?.potential_revenue ?? 0) * 0.85);
+  const { campaign, funnel, personaBreakdown, timeline, insights } = data;
+  const isLive = campaign.status === 'Launched';
 
-  const deliveryRate = targeted > 0 ? Math.round((delivered / targeted) * 100) : 0;
-  const openRate     = delivered > 0 ? Math.round((opened / delivered) * 100) : 0;
-  const clickRate    = opened > 0 ? Math.round((clicked / opened) * 100) : 0;
-  const convRate     = targeted > 0 ? ((clicked / targeted) * 100).toFixed(1) : '0';
+  // Derived display values from real funnel
+  const revenue = funnel.targeted > 0
+    ? Math.round((funnel.clicked / funnel.targeted) * campaign.potential_revenue)
+    : 0;
+  const deliveryRate = funnel.targeted > 0 ? Math.round((funnel.delivered / funnel.targeted) * 100) : 0;
+  const openRate     = funnel.delivered > 0 ? Math.round((funnel.read / funnel.delivered) * 100) : 0;
+  const clickRate    = funnel.read > 0 ? Math.round((funnel.clicked / funnel.read) * 100) : 0;
+  const convRate     = funnel.targeted > 0 ? ((funnel.clicked / funnel.targeted) * 100).toFixed(1) : '0';
 
-  const timeline = buildTimeline(delivered, opened, clicked);
-  const personas = buildPersonas(targeted);
+  const chartTimeline = toChartTimeline(timeline);
+  const chartPersonas = toChartPersonas(personaBreakdown);
   const { Icon: ChIcon, color: chColor } = channelMeta(campaign.channel);
 
   return (
@@ -369,11 +412,11 @@ function AnalyticsContent() {
             <span className="text-white font-medium truncate max-w-xs">{campaign.name}</span>
           </div>
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${
-            campaign.status === 'Launched'
+            isLive
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
               : 'bg-white/5 text-[#8B92A5] border-white/10'
           }`}>
-            {campaign.status === 'Launched' && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+            {isLive && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />}
             {campaign.status}
           </span>
         </div>
@@ -382,7 +425,7 @@ function AnalyticsContent() {
           <h1 className="text-2xl font-extrabold text-white tracking-tight leading-snug">{campaign.name}</h1>
           <p className="text-[#8B92A5] text-sm mt-1 flex items-center gap-2">
             <ChIcon className="h-3.5 w-3.5 shrink-0" style={{ color: chColor }} />
-            {campaign.channel} · {fmtNum(targeted)} customers targeted
+            {campaign.channel} · {fmtNum(funnel.targeted)} customers targeted
           </p>
         </div>
 
@@ -398,7 +441,7 @@ function AnalyticsContent() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#8B92A5] mb-1">Estimated Revenue Generated</p>
             <div className="text-5xl font-black text-white">{fmtRev(revenue)}</div>
             <p className="text-[#8B92A5] text-sm mt-1.5">
-              85% of {fmtRev(campaign.opportunities?.potential_revenue ?? 0)} opportunity potential
+              of {fmtRev(campaign.potential_revenue)} opportunity potential
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3 shrink-0">
@@ -415,21 +458,21 @@ function AnalyticsContent() {
           </div>
         </div>
 
-        {/* 4 metric cards */}
+        {/* 4 real funnel metric cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <AnimStat label="Targeted"  n={targeted}  color={ACCENT}    Icon={Users}             sub="Real audience size" />
-          <AnimStat label="Delivered" n={delivered} color={GREEN}     Icon={Send}              sub="98% delivery rate" />
-          <AnimStat label="Opened"    n={opened}    color="#3B82F6"   Icon={MailOpen}          sub="68% of delivered" />
-          <AnimStat label="Clicked"   n={clicked}   color="#F59E0B"   Icon={MousePointerClick} sub="42% of opened" />
+          <AnimStat label="Targeted"  n={funnel.targeted}  color={ACCENT}    Icon={Users}             sub="From opportunity audience" />
+          <AnimStat label="Delivered" n={funnel.delivered} color={GREEN}     Icon={Send}              sub={`${deliveryRate}% delivery rate`} />
+          <AnimStat label="Opened"    n={funnel.read}      color="#3B82F6"   Icon={MailOpen}          sub={`${openRate}% of delivered`} />
+          <AnimStat label="Clicked"   n={funnel.clicked}   color="#F59E0B"   Icon={MousePointerClick} sub={`${clickRate}% of opened`} />
         </div>
 
         {/* Charts row */}
         <div className="grid grid-cols-5 gap-6 mb-6">
           <div className="col-span-3">
-            <TimelineCard data={timeline} />
+            <TimelineCard data={chartTimeline} isLive={isLive} />
           </div>
           <div className="col-span-2">
-            <PersonaCard personas={personas} total={targeted} />
+            <PersonaCard personas={chartPersonas} total={funnel.targeted} />
           </div>
         </div>
 
@@ -459,31 +502,33 @@ function AnalyticsContent() {
         </Card>
 
         {/* Intelligence learnings */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-4 w-4 text-indigo-400" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#8B92A5]">Intelligence Learnings</span>
+        {insights.learnings.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-4 w-4 text-indigo-400" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#8B92A5]">Intelligence Learnings</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {insights.learnings.slice(0, 3).map((text, i) => {
+                const iconColor = [GREEN, ACCENT, '#F59E0B'][i % 3];
+                const IconComp = [Send, MailOpen, MousePointerClick][i % 3];
+                return (
+                  <div key={i} className="rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 p-5"
+                    style={{ borderLeft: `2px solid ${iconColor}` }}>
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
+                      style={{ background: `${iconColor}20`, border: `1px solid ${iconColor}30` }}>
+                      <IconComp className="h-4 w-4" style={{ color: iconColor }} />
+                    </div>
+                    <p className="text-[#8B92A5] text-xs leading-relaxed">{text}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { Icon: Send,              color: GREEN,     text: `${deliveryRate}% delivery rate — ${fmtNum(delivered)} of ${fmtNum(targeted)} messages delivered via ${campaign.channel}.` },
-              { Icon: MailOpen,          color: ACCENT,    text: `${openRate}% open rate — ${fmtNum(opened)} recipients read the message, exceeding industry benchmarks.` },
-              { Icon: MousePointerClick, color: '#F59E0B', text: `${clickRate}% click-through — ${fmtNum(clicked)} customers engaged with the call-to-action.` },
-            ].map(({ Icon, color, text }) => (
-              <div key={text} className="rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 p-5"
-                style={{ borderLeft: `2px solid ${color}` }}>
-                <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
-                  style={{ background: `${color}20`, border: `1px solid ${color}30` }}>
-                  <Icon className="h-4 w-4" style={{ color }} />
-                </div>
-                <p className="text-[#8B92A5] text-xs leading-relaxed">{text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Next Best Action */}
-        <NextActionCard campaign={campaign} opened={opened} clicked={clicked} targeted={targeted} />
+        <NextActionCard nextAction={insights.nextAction} channel={campaign.channel} />
       </div>
 
       {/* Bottom bar */}
