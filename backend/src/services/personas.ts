@@ -506,7 +506,7 @@ async function upsertPersonaRows(
 ): Promise<void> {
   const { error } = await supabase
     .from('personas')
-    .upsert(records, { onConflict: 'company_id,customer_id' });
+    .upsert(records, { onConflict: 'customer_id' });
 
   if (error) {
     throw new Error(`Failed to upsert personas: ${error.message}`);

@@ -1,23 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  AreaChart, Area, PieChart, Pie, Cell,
+  CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts';
+import {
+  AlertTriangle, ArrowLeft, Brain, Clock, Loader2,
+  Mail, MailOpen, MessageSquare, MousePointerClick,
+  Send, ShoppingCart, Smartphone, Sparkles, Target,
+  TrendingUp, Users, Zap,
+} from 'lucide-react';
 
-// ============================================
-// TYPES
-// ============================================
+// ─── Config ──────────────────────────────────────────────────────────────────
 
-interface IntelligenceBrief {
-  generatedAt: string;
-  summary: string[];
-  keyInsights: string[];
-  recommendation: {
-    action: string;
-    potentialRevenue: number;
-  };
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+const PERSONA_COLORS = ['#6366F1', '#10B981', '#3B82F6', '#8B5CF6', '#F59E0B'];
+const LEARNING_ICONS = [Brain, Clock, ShoppingCart];
 
-interface CampaignFunnelData {
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface Funnel {
+  targeted: number;
   sent: number;
   delivered: number;
   read: number;
@@ -25,484 +30,596 @@ interface CampaignFunnelData {
   failed: number;
 }
 
-interface OpportunityPipelineData {
-  detected: number;
-  reviewed: number;
-  campaignCreated: number;
-  launched: number;
-  completed: number;
+interface PersonaBreakdown {
+  persona_name: string;
+  count: number;
+  percentage: number;
 }
 
-interface ChannelPerformance {
-  channel: string;
+interface TimelinePoint {
+  hour: number;
   sent: number;
   delivered: number;
   read: number;
   clicked: number;
-  deliveryRate: number;
-  readRate: number;
-  clickRate: number;
 }
 
-interface OpportunityDistribution {
-  opportunityType: string;
-  count: number;
+interface NextAction {
+  title: string;
+  description: string;
   potentialRevenue: number;
+  confidence: number;
 }
 
-interface OpportunityTrendPoint {
-  date: string;
-  count: number;
-}
-
-interface ActivityFeedItem {
-  id: string;
-  type: string;
-  message: string;
-  timestamp: string;
-}
-
-interface RecommendedAction {
-  action: string;
-  audience: string;
-  potentialRevenue: number;
-  opportunityId?: string;
-}
-
-// ============================================
-// MAIN COMPONENT
-// ============================================
-
-export default function AnalyticsPage() {
-  const [intelligenceBrief, setIntelligenceBrief] = useState<IntelligenceBrief | null>(null);
-  const [campaignFunnel, setCampaignFunnel] = useState<CampaignFunnelData | null>(null);
-  const [opportunityPipeline, setOpportunityPipeline] = useState<OpportunityPipelineData | null>(null);
-  const [channelPerformance, setChannelPerformance] = useState<ChannelPerformance[]>([]);
-  const [opportunityDistribution, setOpportunityDistribution] = useState<OpportunityDistribution[]>([]);
-  const [opportunityTrend, setOpportunityTrend] = useState<OpportunityTrendPoint[]>([]);
-  const [activityFeed, setActivityFeed] = useState<ActivityFeedItem[]>([]);
-  const [recommendedActions, setRecommendedActions] = useState<RecommendedAction[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [aiAnalystQuery, setAiAnalystQuery] = useState('');
-
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
-  async function loadAllData() {
-    setLoading(true);
-
-    try {
-      const [
-        briefRes,
-        funnelRes,
-        pipelineRes,
-        channelRes,
-        distRes,
-        trendRes,
-        feedRes,
-        actionsRes,
-      ] = await Promise.all([
-        fetch('http://localhost:3001/api/analytics/intelligence-brief'),
-        fetch('http://localhost:3001/api/analytics/campaign-funnel'),
-        fetch('http://localhost:3001/api/analytics/opportunity-pipeline'),
-        fetch('http://localhost:3001/api/analytics/channel-performance'),
-        fetch('http://localhost:3001/api/analytics/opportunity-distribution'),
-        fetch('http://localhost:3001/api/analytics/opportunity-trend'),
-        fetch('http://localhost:3001/api/analytics/activity-feed'),
-        fetch('http://localhost:3001/api/analytics/recommended-actions'),
-      ]);
-
-      const [brief, funnel, pipeline, channel, dist, trend, feed, actions] = await Promise.all([
-        briefRes.json(),
-        funnelRes.json(),
-        pipelineRes.json(),
-        channelRes.json(),
-        distRes.json(),
-        trendRes.json(),
-        feedRes.json(),
-        actionsRes.json(),
-      ]);
-
-      setIntelligenceBrief(brief.data);
-      setCampaignFunnel(funnel.data);
-      setOpportunityPipeline(pipeline.data);
-      setChannelPerformance(channel.data);
-      setOpportunityDistribution(dist.data);
-      setOpportunityTrend(trend.data);
-      setActivityFeed(feed.data);
-      setRecommendedActions(actions.data);
-    } catch (error) {
-      console.error('Error loading analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.15),_transparent_35%),linear-gradient(180deg,#fff9ed_0%,#ffffff_40%,#fffdf8_100%)] flex items-center justify-center">
-        <div className="text-stone-600 text-xl">Loading Analytics...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.15),_transparent_35%),linear-gradient(180deg,#fff9ed_0%,#ffffff_40%,#fffdf8_100%)] p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Page Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-stone-900">AI Growth Intelligence</h1>
-            <p className="text-stone-600 mt-1">Real-time insights from your growth agents</p>
-          </div>
-          <button
-            onClick={loadAllData}
-            className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {/* 1. AI GROWTH INTELLIGENCE BRIEF */}
-        <IntelligenceBriefSection brief={intelligenceBrief} />
-
-        {/* 2. CAMPAIGN FUNNEL + OPPORTUNITY PIPELINE */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <CampaignFunnelSection funnel={campaignFunnel} />
-          <OpportunityPipelineSection pipeline={opportunityPipeline} />
-        </div>
-
-        {/* 3. CHANNEL PERFORMANCE + OPPORTUNITY DISTRIBUTION */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ChannelPerformanceSection channels={channelPerformance} />
-          <OpportunityDistributionSection distribution={opportunityDistribution} />
-        </div>
-
-        {/* 4. OPPORTUNITY TREND */}
-        <OpportunityTrendSection trend={opportunityTrend} />
-
-        {/* 5. ACTIVITY FEED + AI ANALYST */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ActivityFeedSection feed={activityFeed} />
-          <AIAnalystSection query={aiAnalystQuery} setQuery={setAiAnalystQuery} />
-        </div>
-
-        {/* 6. RECOMMENDED NEXT ACTIONS */}
-        <RecommendedActionsSection actions={recommendedActions} />
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// SECTION COMPONENTS
-// ============================================
-
-function IntelligenceBriefSection({ brief }: { brief: IntelligenceBrief | null }) {
-  if (!brief) return null;
-
-  return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-8 shadow-sm">
-      <div className="flex items-start justify-between mb-6">
-        <h2 className="text-2xl font-bold text-stone-900">AI Growth Intelligence Brief</h2>
-        <span className="text-sm text-stone-500">
-          {new Date(brief.generatedAt).toLocaleString()}
-        </span>
-      </div>
-
-      <div className="space-y-6">
-        {/* Summary */}
-        <div>
-          <h3 className="text-lg font-semibold text-stone-900 mb-3">What Happened</h3>
-          <ul className="space-y-2">
-            {brief.summary.map((point, i) => (
-              <li key={i} className="text-stone-700 flex items-start">
-                <span className="mr-2 text-amber-600">•</span>
-                <span>{point}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Key Insights */}
-        <div>
-          <h3 className="text-lg font-semibold text-stone-900 mb-3">What Matters</h3>
-          <ul className="space-y-2">
-            {brief.keyInsights.map((insight, i) => (
-              <li key={i} className="text-stone-700 flex items-start">
-                <span className="mr-2">💡</span>
-                <span>{insight}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Recommendation */}
-        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-          <h3 className="text-lg font-semibold text-stone-900 mb-2">Recommended Next Action</h3>
-          <p className="text-stone-700 mb-3">{brief.recommendation.action}</p>
-          <div className="text-2xl font-bold text-stone-900">
-            Potential Revenue: ₹{Math.round(brief.recommendation.potentialRevenue).toLocaleString('en-IN')}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CampaignFunnelSection({ funnel }: { funnel: CampaignFunnelData | null }) {
-  if (!funnel) return null;
-
-  const data = [
-    { name: 'Sent', value: funnel.sent },
-    { name: 'Delivered', value: funnel.delivered },
-    { name: 'Read', value: funnel.read },
-    { name: 'Clicked', value: funnel.clicked },
-  ];
-
-  return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Campaign Funnel</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-          <XAxis dataKey="name" stroke="#78716c" />
-          <YAxis stroke="#78716c" />
-          <Tooltip
-            contentStyle={{ backgroundColor: '#fff', border: '1px solid #fbbf24', borderRadius: '8px' }}
-            labelStyle={{ color: '#1c1917' }}
-          />
-          <Bar dataKey="value" fill="#f59e0b" />
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="mt-4 text-sm text-stone-600">
-        {funnel.failed > 0 && <p>Failed: {funnel.failed}</p>}
-      </div>
-    </div>
-  );
-}
-
-function OpportunityPipelineSection({ pipeline }: { pipeline: OpportunityPipelineData | null }) {
-  if (!pipeline) return null;
-
-  const data = [
-    { name: 'Detected', value: pipeline.detected },
-    { name: 'Reviewed', value: pipeline.reviewed },
-    { name: 'Campaign Created', value: pipeline.campaignCreated },
-    { name: 'Launched', value: pipeline.launched },
-    { name: 'Completed', value: pipeline.completed },
-  ];
-
-  return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Opportunity Pipeline</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-          <XAxis dataKey="name" stroke="#78716c" fontSize={12} />
-          <YAxis stroke="#78716c" />
-          <Tooltip
-            contentStyle={{ backgroundColor: '#fff', border: '1px solid #fbbf24', borderRadius: '8px' }}
-            labelStyle={{ color: '#1c1917' }}
-          />
-          <Bar dataKey="value" fill="#fbbf24" />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function ChannelPerformanceSection({ channels }: { channels: ChannelPerformance[] }) {
-  if (!channels.length) return null;
-
-  return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Channel Performance</h3>
-      <div className="space-y-4">
-        {channels.map((channel) => (
-          <div key={channel.channel} className="border border-stone-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-stone-900">{channel.channel}</h4>
-              <span className="text-sm text-stone-600">Sent: {channel.sent}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-stone-500">Delivery Rate</p>
-                <p className="font-semibold text-stone-900">{Math.round(channel.deliveryRate)}%</p>
-              </div>
-              <div>
-                <p className="text-stone-500">Read Rate</p>
-                <p className="font-semibold text-stone-900">{Math.round(channel.readRate)}%</p>
-              </div>
-              <div>
-                <p className="text-stone-500">Click Rate</p>
-                <p className="font-semibold text-stone-900">{Math.round(channel.clickRate)}%</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function OpportunityDistributionSection({ distribution }: { distribution: OpportunityDistribution[] }) {
-  if (!distribution.length) return null;
-
-  const COLORS = ['#f59e0b', '#fbbf24', '#fcd34d', '#fde68a'];
-
-  return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Opportunity Distribution</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <PieChart>
-          <Pie
-            data={distribution}
-            dataKey="potentialRevenue"
-            nameKey="opportunityType"
-            cx="50%"
-            cy="50%"
-            outerRadius={100}
-            label={(entry) => entry.opportunityType}
-          >
-            {distribution.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip
-            contentStyle={{ backgroundColor: '#fff', border: '1px solid #fbbf24', borderRadius: '8px' }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function OpportunityTrendSection({ trend }: { trend: OpportunityTrendPoint[] }) {
-  if (!trend.length) return null;
-
-  return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Opportunity Trend</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={trend}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
-          <XAxis dataKey="date" stroke="#78716c" />
-          <YAxis stroke="#78716c" />
-          <Tooltip
-            contentStyle={{ backgroundColor: '#fff', border: '1px solid #fbbf24', borderRadius: '8px' }}
-            labelStyle={{ color: '#1c1917' }}
-          />
-          <Line type="monotone" dataKey="count" stroke="#f59e0b" strokeWidth={2} dot={{ fill: '#f59e0b' }} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function ActivityFeedSection({ feed }: { feed: ActivityFeedItem[] }) {
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'opportunity_detected': return '🎯';
-      case 'campaign_launched': return '🚀';
-      case 'campaign_completed': return '✅';
-      case 'customer_analyzed': return '💬';
-      default: return '📊';
-    }
+interface CampaignAnalyticsData {
+  campaign: {
+    id: string;
+    name: string;
+    objective: string;
+    channel: string;
+    status: string;
+    reasoning: string;
+    launched_at: string | null;
+    opportunity_title: string;
+    potential_revenue: number;
+    confidence_score: number;
   };
+  funnel: Funnel;
+  personaBreakdown: PersonaBreakdown[];
+  timeline: TimelinePoint[];
+  insights: {
+    learnings: string[];
+    nextAction: NextAction;
+  };
+}
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatRevenue(v: number): string {
+  if (v >= 100000) return `₹${(v / 100000).toFixed(2)}L`;
+  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}K`;
+  return `₹${Math.round(v)}`;
+}
+
+function dropPct(from: number, to: number): string {
+  if (!from) return '';
+  const d = Math.round((1 - to / from) * 100);
+  return d > 0 ? `-${d}%` : '—';
+}
+
+function channelIcon(channel: string) {
+  if (channel === 'WhatsApp') return { Icon: MessageSquare, color: '#10B981' };
+  if (channel === 'Email') return { Icon: Mail, color: '#3B82F6' };
+  return { Icon: Smartphone, color: '#8B5CF6' };
+}
+
+// ─── Primitive components ─────────────────────────────────────────────────────
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Agent Activity Feed</h3>
-      <div className="space-y-3 max-h-96 overflow-y-auto">
-        {feed.map((item) => (
-          <div key={item.id} className="flex items-start gap-3 pb-3 border-b border-stone-100 last:border-0">
-            <span className="text-2xl">{getIcon(item.type)}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-stone-700">{item.message}</p>
-              <p className="text-xs text-amber-600 mt-1">{new Date(item.timestamp).toLocaleTimeString()}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className={`rounded-2xl border border-[#1E2545] bg-[#141929] p-6 ${className}`}>
+      {children}
     </div>
   );
 }
 
-function AIAnalystSection({ query, setQuery }: { query: string; setQuery: (q: string) => void }) {
-  const suggestedQuestions = [
-    'Why did WhatsApp outperform Email?',
-    'Which opportunity should I launch next?',
-    'Show me high-value dormant customers',
-    'What caused the delivery failures?',
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-bold uppercase tracking-widest text-[#8B92A5] mb-4">{children}</p>;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const live = status === 'Launched';
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${
+      live ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-[#1E2545] text-[#8B92A5] border-[#1E2545]'
+    }`}>
+      {live && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+      {status}
+    </span>
+  );
+}
+
+// ─── Section 1: Campaign Summary ──────────────────────────────────────────────
+
+function CampaignSummaryCard({ campaign, funnel }: { campaign: CampaignAnalyticsData['campaign']; funnel: Funnel }) {
+  const targeted = funnel.targeted || 1;
+  const revenue = funnel.clicked * (campaign.potential_revenue / targeted);
+  const convRate = ((funnel.clicked / targeted) * 100).toFixed(1);
+  const roi = revenue > 0 ? (revenue / (targeted * 10)).toFixed(1) : '—';
+
+  return (
+    <Card>
+      <SectionLabel>Campaign Summary</SectionLabel>
+      <div className="flex items-start justify-between mb-2">
+        <h2 className="text-base font-bold text-white leading-snug pr-3">{campaign.name}</h2>
+        <StatusBadge status={campaign.status} />
+      </div>
+      <p className="text-[#8B92A5] text-xs mb-5 line-clamp-2">{campaign.objective}</p>
+      <div className="text-3xl font-extrabold text-white mb-0.5">{formatRevenue(revenue)}</div>
+      <p className="text-[10px] text-[#4B5069] uppercase tracking-widest mb-5">Estimated Revenue</p>
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Orders', value: funnel.clicked },
+          { label: 'Conv Rate', value: `${convRate}%` },
+          { label: 'ROI', value: `${roi}x` },
+        ].map(s => (
+          <div key={s.label} className="rounded-xl bg-[#0A0E1A] border border-[#1E2545] p-3 text-center">
+            <div className="text-base font-bold text-white">{s.value}</div>
+            <div className="text-[10px] text-[#4B5069] mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Section 1: Conversion Funnel ────────────────────────────────────────────
+
+function ConversionFunnelCard({ funnel }: { funnel: Funnel }) {
+  const rows = [
+    { icon: Users, label: 'Targeted', count: funnel.targeted, from: null },
+    { icon: Send, label: 'Delivered', count: funnel.delivered, from: funnel.targeted },
+    { icon: MailOpen, label: 'Opened', count: funnel.read, from: funnel.delivered },
+    { icon: MousePointerClick, label: 'Clicked', count: funnel.clicked, from: funnel.read },
+    { icon: AlertTriangle, label: 'Failed', count: funnel.failed, from: null, red: true },
   ];
 
   return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">AI Growth Analyst</h3>
-      <div className="space-y-4">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ask anything about your growth data..."
-          className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-stone-900"
-        />
-        <div>
-          <p className="text-sm text-stone-600 mb-2">Suggested questions:</p>
-          <div className="space-y-2">
-            {suggestedQuestions.map((question, i) => (
-              <button
-                key={i}
-                onClick={() => setQuery(question)}
-                className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-amber-50 rounded-lg transition"
-              >
-                {question}
-              </button>
+    <Card>
+      <SectionLabel>Conversion Funnel</SectionLabel>
+      {funnel.targeted === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 gap-3">
+          <Zap className="h-6 w-6 text-indigo-400 animate-pulse" />
+          <p className="text-[#8B92A5] text-sm text-center">No communications yet.<br />Campaign may still be processing.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map(({ icon: Icon, label, count, from, red }) => (
+            <div key={label} className="flex items-center gap-3">
+              <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                red ? 'bg-red-500/10 border-red-500/20' : 'bg-[#0A0E1A] border-[#1E2545]'
+              }`}>
+                <Icon className={`h-3.5 w-3.5 ${red ? 'text-red-400' : 'text-[#8B92A5]'}`} />
+              </div>
+              <span className="text-sm text-[#8B92A5] flex-1">{label}</span>
+              <span className={`rounded-lg px-3 py-1 text-sm font-bold ${
+                red ? 'bg-red-500/10 text-red-400' : 'bg-[#1E2545] text-white'
+              }`}>{count}</span>
+              {from !== null ? (
+                <span className="text-[10px] text-red-400 w-10 text-right shrink-0">{dropPct(from, count)}</span>
+              ) : (
+                <span className="w-10" />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Section 1: Event Timeline ────────────────────────────────────────────────
+
+function TimelineCard({ timeline, isLive }: { timeline: TimelinePoint[]; isLive: boolean }) {
+  const chartData = timeline.map(t => ({ ...t, label: `H${t.hour}` }));
+  const empty = timeline.length === 0;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <SectionLabel>Event Timeline</SectionLabel>
+        {isLive && (
+          <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            LIVE
+          </span>
+        )}
+      </div>
+      {empty ? (
+        <div className="flex flex-col items-center justify-center h-36 gap-3">
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="h-2 w-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
+          <p className="text-[#4B5069] text-xs">Waiting for events…</p>
         </div>
-        {query && (
-          <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
-            <p className="text-sm text-stone-600">✨ AI is analyzing your question...</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={150}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              {[
+                { id: 'gDelivered', color: '#10B981' },
+                { id: 'gRead', color: '#3B82F6' },
+                { id: 'gClicked', color: '#6366F1' },
+              ].map(g => (
+                <linearGradient key={g.id} id={g.id} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={g.color} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={g.color} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1E2545" />
+            <XAxis dataKey="label" tick={{ fill: '#4B5069', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis hide />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#141929', border: '1px solid #1E2545', borderRadius: '8px', color: '#fff', fontSize: 11 }}
+            />
+            <Area type="monotone" dataKey="delivered" stroke="#10B981" strokeWidth={2} fill="url(#gDelivered)" dot={false} name="Delivered" />
+            <Area type="monotone" dataKey="read" stroke="#3B82F6" strokeWidth={2} fill="url(#gRead)" dot={false} name="Opened" />
+            <Area type="monotone" dataKey="clicked" stroke="#6366F1" strokeWidth={2} fill="url(#gClicked)" dot={false} name="Clicked" />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+    </Card>
+  );
+}
+
+// ─── Section 2: Channel Card ──────────────────────────────────────────────────
+
+function ChannelCard({ campaign, funnel }: { campaign: CampaignAnalyticsData['campaign']; funnel: Funnel }) {
+  const { Icon, color } = channelIcon(campaign.channel);
+  const targeted = funnel.targeted || 1;
+  const deliveryRate = Math.round((funnel.delivered / targeted) * 100);
+  const openRate = funnel.delivered > 0 ? Math.round((funnel.read / funnel.delivered) * 100) : 0;
+  const clickRate = funnel.read > 0 ? Math.round((funnel.clicked / funnel.read) * 100) : 0;
+
+  return (
+    <Card>
+      <SectionLabel>Channel Performance</SectionLabel>
+      <div className="flex flex-col items-center justify-center py-4 mb-5">
+        <div className="h-16 w-16 rounded-2xl flex items-center justify-center mb-3" style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30` }}>
+          <Icon className="h-8 w-8" style={{ color }} />
+        </div>
+        <span className="text-white font-bold text-base">{campaign.channel}</span>
+      </div>
+      <div className="space-y-3">
+        {[
+          { label: 'Delivery Rate', value: `${deliveryRate}%`, color: '#10B981' },
+          { label: 'Open Rate', value: `${openRate}%`, color: '#3B82F6' },
+          { label: 'Click Rate', value: `${clickRate}%`, color: '#6366F1' },
+        ].map(s => (
+          <div key={s.label} className="flex items-center justify-between">
+            <span className="text-sm text-[#8B92A5]">{s.label}</span>
+            <span className="text-sm font-bold" style={{ color: s.color }}>{s.value}</span>
           </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Section 2: Persona Pie ───────────────────────────────────────────────────
+
+function PersonaPieCard({ personas }: { personas: PersonaBreakdown[] }) {
+  const total = personas.reduce((s, p) => s + p.count, 0);
+
+  return (
+    <Card>
+      <SectionLabel>Audience Persona Mix</SectionLabel>
+      {personas.length === 0 ? (
+        <p className="text-[#4B5069] text-sm text-center py-8">No persona data yet.</p>
+      ) : (
+        <>
+          <div className="relative flex items-center justify-center mb-4">
+            <ResponsiveContainer width="100%" height={150}>
+              <PieChart>
+                <Pie data={personas} dataKey="count" nameKey="persona_name" innerRadius={45} outerRadius={65} cx="50%" cy="50%">
+                  {personas.map((_, i) => <Cell key={i} fill={PERSONA_COLORS[i % PERSONA_COLORS.length]} />)}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#141929', border: '1px solid #1E2545', borderRadius: '8px', color: '#fff', fontSize: 11 }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-xl font-extrabold text-white">{total}</span>
+              <span className="text-[10px] text-[#4B5069]">Total</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {personas.slice(0, 4).map((p, i) => (
+              <div key={p.persona_name} className="flex items-center gap-2 text-xs">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: PERSONA_COLORS[i % PERSONA_COLORS.length] }} />
+                <span className="text-[#8B92A5] flex-1 truncate">{p.persona_name}</span>
+                <span className="text-white font-semibold">{p.count}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ─── Section 2: Persona Bars ──────────────────────────────────────────────────
+
+function PersonaBarsCard({ personas }: { personas: PersonaBreakdown[] }) {
+  const maxCount = Math.max(...personas.map(p => p.count), 1);
+
+  return (
+    <Card>
+      <SectionLabel>Persona Performance</SectionLabel>
+      {personas.length === 0 ? (
+        <p className="text-[#4B5069] text-sm text-center py-8">No persona data yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {personas.map((p, i) => (
+            <div key={p.persona_name}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-[#8B92A5] truncate pr-2">{p.persona_name}</span>
+                <span className="text-xs font-bold text-white shrink-0">{p.count}</span>
+              </div>
+              <div className="h-1.5 w-full bg-[#1E2545] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${(p.count / maxCount) * 100}%`,
+                    background: `linear-gradient(90deg, ${PERSONA_COLORS[i % PERSONA_COLORS.length]}, ${PERSONA_COLORS[(i + 1) % PERSONA_COLORS.length]})`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Campaign Selector ────────────────────────────────────────────────────────
+
+function CampaignSelector({ campaigns, onSelect }: { campaigns: any[]; onSelect: (id: string) => void }) {
+  const launched = campaigns.filter(c => c.status === 'Launched' || c.status === 'Completed');
+
+  return (
+    <div className="min-h-screen bg-[#0A0E1A] text-white flex flex-col items-center justify-center px-6 py-12">
+      <Sparkles className="h-8 w-8 text-indigo-400 mb-4" />
+      <h2 className="text-2xl font-extrabold mb-1">Campaign Analytics</h2>
+      <p className="text-[#8B92A5] text-sm mb-8">Select a launched campaign to view its performance</p>
+      <div className="w-full max-w-md space-y-3">
+        {launched.map(c => (
+          <button
+            key={c.id}
+            onClick={() => onSelect(c.id)}
+            className="w-full rounded-2xl border border-[#1E2545] bg-[#141929] hover:border-indigo-500/50 hover:bg-[#1A1F35] p-5 text-left transition-all"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-white text-sm">{c.name}</span>
+              <StatusBadge status={c.status} />
+            </div>
+            <span className="text-[#4B5069] text-xs">{c.channel} · {c.audience_size ?? 0} customers</span>
+          </button>
+        ))}
+        {launched.length === 0 && (
+          <p className="text-center text-[#4B5069] text-sm py-8">No launched campaigns yet. Launch one from Opportunities.</p>
         )}
       </div>
     </div>
   );
 }
 
-function RecommendedActionsSection({ actions }: { actions: RecommendedAction[] }) {
-  if (!actions.length) return null;
+// ─── Main page content ────────────────────────────────────────────────────────
+
+function AnalyticsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const campaignId = searchParams.get('campaignId');
+
+  const [data, setData] = useState<CampaignAnalyticsData | null>(null);
+  const [allCampaigns, setAllCampaigns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [aiInput, setAiInput] = useState('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchAnalytics = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/campaigns/${id}/analytics`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.success) setData(json.data);
+      else throw new Error(json.error || 'API error');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load analytics');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!campaignId) {
+      const cid = window.localStorage.getItem('xeno_company_id') ?? '';
+      fetch(`${API_BASE}/campaigns?companyId=${cid}`)
+        .then(r => r.json())
+        .then(j => { if (j.success) setAllCampaigns(j.data ?? []); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+      return;
+    }
+    fetchAnalytics(campaignId);
+  }, [campaignId, fetchAnalytics]);
+
+  useEffect(() => {
+    if (!campaignId || data?.campaign.status !== 'Launched') return;
+    intervalRef.current = setInterval(() => fetchAnalytics(campaignId), 5000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [campaignId, data?.campaign.status, fetchAnalytics]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+      </div>
+    );
+  }
+
+  if (!campaignId) {
+    return <CampaignSelector campaigns={allCampaigns} onSelect={id => router.push(`/analytics?campaignId=${id}`)} />;
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-[#0A0E1A] flex flex-col items-center justify-center gap-4 px-6">
+        <div className="rounded-2xl border border-red-500/20 bg-[#141929] p-8 max-w-md w-full text-center">
+          <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-3" />
+          <h2 className="text-white font-bold mb-2">Failed to load analytics</h2>
+          <p className="text-red-400 text-sm mb-5">{error}</p>
+          <button onClick={() => { setError(null); setLoading(true); fetchAnalytics(campaignId!); }}
+            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const { campaign, funnel, personaBreakdown, timeline, insights } = data;
+  const isLive = campaign.status === 'Launched';
 
   return (
-    <div className="bg-white border border-amber-200/80 rounded-2xl p-6 shadow-sm">
-      <h3 className="text-xl font-bold text-stone-900 mb-4">Recommended Next Actions</h3>
-      <div className="space-y-3">
-        {actions.map((action, index) => (
-          <div key={index} className="border border-stone-200 rounded-lg p-4 hover:border-amber-300 transition">
-            <div className="flex items-start justify-between">
+    <div className="min-h-screen bg-[#0A0E1A] text-white pb-24">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-[#8B92A5] mb-5">
+          <button onClick={() => router.push('/analytics')} className="hover:text-white transition-colors">Analytics</button>
+          <span>/</span>
+          <span>Campaigns</span>
+          <span>/</span>
+          <span className="text-white font-medium truncate max-w-xs">{campaign.name}</span>
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">{campaign.name}</h1>
+            <p className="text-[#8B92A5] text-sm mt-0.5">{campaign.channel} · {funnel.targeted} customers targeted</p>
+          </div>
+          <button onClick={() => router.push('/opportunities')}
+            className="flex items-center gap-1.5 text-sm text-[#8B92A5] hover:text-white transition-colors">
+            <ArrowLeft className="h-4 w-4" /> Opportunities
+          </button>
+        </div>
+
+        {/* Empty state — no comms yet */}
+        {funnel.targeted === 0 && (
+          <div className="mb-6 rounded-2xl border border-indigo-500/20 bg-[#141929] p-6 text-center">
+            <Zap className="h-6 w-6 text-indigo-400 mx-auto mb-2 animate-pulse" />
+            <p className="text-[#8B92A5] text-sm">No communications yet. Campaign may still be processing.</p>
+          </div>
+        )}
+
+        {/* Section 1: Top row */}
+        <div className="grid grid-cols-3 gap-6 mb-6">
+          <CampaignSummaryCard campaign={campaign} funnel={funnel} />
+          <ConversionFunnelCard funnel={funnel} />
+          <TimelineCard timeline={timeline} isLive={isLive} />
+        </div>
+
+        {/* Section 2: Middle row */}
+        <div className="grid grid-cols-3 gap-6 mb-6">
+          <ChannelCard campaign={campaign} funnel={funnel} />
+          <PersonaPieCard personas={personaBreakdown} />
+          <PersonaBarsCard personas={personaBreakdown} />
+        </div>
+
+        {/* Section 3: Intelligence Learnings */}
+        {insights.learnings.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-4 w-4 text-indigo-400" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#8B92A5]">Intelligence Learnings</span>
+            </div>
+            <div className="grid grid-cols-3 gap-6">
+              {insights.learnings.slice(0, 3).map((learning, i) => {
+                const Icon = LEARNING_ICONS[i % LEARNING_ICONS.length];
+                return (
+                  <div key={i} className="rounded-2xl bg-[#141929] p-5" style={{ border: '1px solid #1E2545', borderLeft: '2px solid #6366F1' }}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                        <Icon className="h-4 w-4 text-indigo-400" />
+                      </div>
+                    </div>
+                    <p className="text-[#8B92A5] text-xs leading-relaxed">{learning}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Section 4: AI-detected next action */}
+        {insights.nextAction?.title && (
+          <div
+            className="rounded-2xl p-6 shadow-lg shadow-indigo-500/10"
+            style={{ border: '1px solid rgba(99,102,241,0.3)', background: 'linear-gradient(135deg, #141929 0%, #1A1040 100%)' }}
+          >
+            <div className="flex items-center justify-between gap-6">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-100 text-amber-700 text-sm font-semibold">
-                    {index + 1}
-                  </span>
-                  <h4 className="font-semibold text-stone-900">{action.action}</h4>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Zap className="h-3 w-3 text-indigo-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">AI-Detected Next Action</span>
                 </div>
-                <p className="text-sm text-stone-600">Target {action.audience}</p>
+                <h3 className="text-xl font-extrabold text-white mb-2">{insights.nextAction.title}</h3>
+                <p className="text-[#8B92A5] text-sm max-w-lg leading-relaxed">{insights.nextAction.description}</p>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-stone-500">Potential Revenue</p>
-                <p className="text-lg font-bold text-stone-900">
-                  ₹{Math.round(action.potentialRevenue).toLocaleString('en-IN')}
-                </p>
+              <div className="flex flex-col items-end gap-4 shrink-0">
+                <div className="text-right">
+                  <div className="text-2xl font-extrabold text-white">{formatRevenue(insights.nextAction.potentialRevenue)}</div>
+                  <div className="text-[10px] text-[#4B5069] uppercase tracking-widest">Potential Revenue</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xl font-bold text-emerald-400">{insights.nextAction.confidence}%</div>
+                  <div className="text-[10px] text-[#4B5069] uppercase tracking-widest">Confidence</div>
+                </div>
+                <button onClick={() => router.push('/opportunities')}
+                  className="bg-[#10B981] hover:bg-emerald-600 text-white font-bold rounded-xl px-5 py-2.5 text-sm transition-colors">
+                  Create Campaign →
+                </button>
               </div>
             </div>
           </div>
-        ))}
+        )}
+      </div>
+
+      {/* Fixed bottom bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0F1225] border-t border-[#1E2545] z-40">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#141929] border border-[#1E2545] text-[#8B92A5] text-xs font-medium hover:border-indigo-500/40 transition-colors">
+              <TrendingUp className="h-3 w-3" /> Compare to last month
+            </button>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#141929] border border-[#1E2545] text-[#8B92A5] text-xs font-medium hover:border-indigo-500/40 transition-colors">
+              Export Report
+            </button>
+          </div>
+          <div className="flex items-center gap-2 bg-[#141929] border border-[#1E2545] rounded-xl px-4 py-2 max-w-sm w-full">
+            <Sparkles className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+            <input
+              value={aiInput}
+              onChange={e => setAiInput(e.target.value)}
+              placeholder="Ask AI about campaign performance…"
+              className="flex-1 bg-transparent text-xs text-white placeholder:text-[#4B5069] outline-none"
+            />
+            <button className="h-6 w-6 rounded-lg bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center shrink-0 transition-colors">
+              <Send className="h-3 w-3 text-white" />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+      </div>
+    }>
+      <AnalyticsContent />
+    </Suspense>
   );
 }

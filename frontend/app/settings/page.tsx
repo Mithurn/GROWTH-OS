@@ -86,7 +86,8 @@ export default function SettingsPage() {
       }
 
       // Fetch company data from backend
-      const response = await fetch(`http://localhost:3001/api/companies/${companyId}`);
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+      const response = await fetch(`${API_BASE}/companies/${companyId}`);
       if (!response.ok) throw new Error('Failed to load settings');
 
       const data = await response.json();
@@ -139,7 +140,8 @@ export default function SettingsPage() {
         },
       };
 
-      const response = await fetch('http://localhost:3001/api/onboarding/profile', {
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+      const response = await fetch(`${API_BASE}/onboarding/profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, profile }),

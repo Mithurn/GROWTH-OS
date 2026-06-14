@@ -31,7 +31,7 @@ services:
       - key: PORT
         value: 5001
       - key: CRM_WEBHOOK_URL
-        value: "https://xeno-crm-backend.onrender.com/api/webhooks/channel-status"
+        value: "https://xeno-crm-backend-n6d8.onrender.com/api/webhooks/channel-status"
       - key: WEBHOOK_SECRET
         value: "xeno-webhook-secret-prod-1234"
       - key: FAILURE_RATE

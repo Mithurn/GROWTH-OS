@@ -126,6 +126,8 @@ function CampaignsContent() {
   // Shared
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLaunched, setIsLaunched] = useState(false);
+  const [launchBarWidth, setLaunchBarWidth] = useState(0);
 
   // ── Load company ID ──
   useEffect(() => {
@@ -250,11 +252,40 @@ function CampaignsContent() {
     try {
       await approveCampaign(savedCampaign.id);
       await launchCampaign(savedCampaign.id);
-      router.push('/opportunities');
+      setIsLaunching(false);
+      setIsLaunched(true);
+      setTimeout(() => setLaunchBarWidth(100), 50);
+      setTimeout(() => router.push(`/analytics?campaignId=${savedCampaign.id}`), 2300);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to launch campaign');
       setIsLaunching(false);
     }
+  }
+
+  // ── Render: launch success overlay ──
+  if (isLaunched) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E1A]">
+        <div className="bg-[#141929] border border-[#1E2545] rounded-2xl p-10 text-center max-w-md w-full mx-6 shadow-2xl">
+          <div className="relative h-20 w-20 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+            <div className="relative h-20 w-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center">
+              <Rocket className="h-9 w-9 text-emerald-400" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-extrabold text-white mb-2">Campaign Launched!</h2>
+          <p className="text-[#8B92A5] text-sm mb-1 font-medium">{savedCampaign?.name}</p>
+          <p className="text-[#4B5069] text-xs mb-8">Messages are being dispatched to your audience</p>
+          <div className="h-1 w-full bg-[#1E2545] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-500 rounded-full transition-all ease-linear"
+              style={{ width: `${launchBarWidth}%`, transitionDuration: '2.2s' }}
+            />
+          </div>
+          <p className="text-[#4B5069] text-xs mt-3">Redirecting to Analytics…</p>
+        </div>
+      </div>
+    );
   }
 
   // ── Render: generating ──
@@ -302,7 +333,6 @@ function CampaignsContent() {
   // ── Render: builder mode ──
   if (opportunityId && savedCampaign && opportunity) {
     const conv = opportunity.predicted_conversion_rate ?? Math.round((opportunity.confidence_score ?? 75) * 0.16);
-    const offerText = savedCampaign.offer ?? '₹500 Voucher';
 
     return (
       <div className="min-h-screen bg-[#FAFAFA] pb-32">
@@ -334,7 +364,6 @@ function CampaignsContent() {
             <MetricChip icon={Users} label={`${opportunity.audience_size} Customers`} />
             <MetricChip icon={TrendingUp} label={`${formatCurrency(opportunity.potential_revenue)} Projected Rev`} />
             <MetricChip icon={Zap} label={`${conv}% Conversion`} accent />
-            <MetricChip icon={CheckCircle2} label={offerText} />
           </div>
 
           {/* 3-col layout: left strategy (2), right mockup (1) */}

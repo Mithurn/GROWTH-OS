@@ -510,3 +510,172 @@ export async function getRecommendedActions(
 
   return actions;
 }
+
+// ============================================
+// 8. CAMPAIGN ANALYTICS (per-campaign, real data)
+// ============================================
+
+export async function getCampaignAnalytics(supabase: SupabaseClient, campaignId: string) {
+  // 1. Campaign + opportunity join
+  const { data: campaign } = await supabase
+    .from('campaigns')
+    .select('*, opportunities(id, title, audience_size, potential_revenue, confidence_score, opportunity_type)')
+    .eq('id', campaignId)
+    .single();
+  if (!campaign) throw new Error('Campaign not found');
+
+  // 2. All communications for this campaign
+  const { data: communications } = await supabase
+    .from('communications')
+    .select('id, customer_id, status, channel')
+    .eq('campaign_id', campaignId);
+  const commIds = (communications || []).map((c: any) => c.id);
+  const targeted = commIds.length;
+
+  // 3. All events for these communications
+  const { data: events } = await supabase
+    .from('communication_events')
+    .select('communication_id, event_type, event_timestamp')
+    .in('communication_id', commIds.length > 0 ? commIds : ['none']);
+
+  // 4. Funnel counts
+  const funnel = { targeted, sent: 0, delivered: 0, read: 0, clicked: 0, failed: 0 };
+  (events || []).forEach((e: any) => {
+    if (e.event_type === 'SENT') funnel.sent++;
+    else if (e.event_type === 'DELIVERED') funnel.delivered++;
+    else if (e.event_type === 'READ') funnel.read++;
+    else if (e.event_type === 'CLICKED') funnel.clicked++;
+    else if (e.event_type === 'FAILED') funnel.failed++;
+  });
+
+  // 5. Persona breakdown — try campaign customers first, fall back to company-wide
+  const customerIds = (communications || []).map((c: any) => c.customer_id).filter(Boolean);
+  let personaBreakdown: any[] = [];
+  const buildBreakdown = (personas: any[]) => {
+    const counts = new Map<string, number>();
+    personas.forEach((p: any) => counts.set(p.persona_name, (counts.get(p.persona_name) || 0) + 1));
+    const total = Array.from(counts.values()).reduce((a, b) => a + b, 0) || 1;
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ persona_name: name, count, percentage: Math.round((count / total) * 100) }))
+      .sort((a, b) => b.count - a.count);
+  };
+  if (customerIds.length > 0) {
+    // Supabase .in() supports up to 1000 items — chunk if needed
+    const chunks: string[][] = [];
+    for (let i = 0; i < customerIds.length; i += 500) chunks.push(customerIds.slice(i, i + 500));
+    const allPersonas: any[] = [];
+    for (const chunk of chunks) {
+      const { data } = await supabase.from('personas').select('persona_name, customer_id').in('customer_id', chunk);
+      if (data) allPersonas.push(...data);
+    }
+    if (allPersonas.length > 0) {
+      personaBreakdown = buildBreakdown(allPersonas);
+    } else {
+      // Fall back to company-wide persona distribution
+      const { data: companyPersonas } = await supabase
+        .from('personas')
+        .select('persona_name')
+        .eq('company_id', campaign.company_id)
+        .limit(500);
+      if (companyPersonas && companyPersonas.length > 0) personaBreakdown = buildBreakdown(companyPersonas);
+    }
+  }
+
+  // 6. Event timeline — grouped by hour since launch
+  const launchTime = campaign.launched_at ? new Date(campaign.launched_at).getTime() : Date.now();
+  const hourBuckets = new Map<number, { sent: number; delivered: number; read: number; clicked: number }>();
+  (events || []).forEach((e: any) => {
+    const hour = Math.max(0, Math.floor((new Date(e.event_timestamp).getTime() - launchTime) / 3_600_000));
+    if (!hourBuckets.has(hour)) hourBuckets.set(hour, { sent: 0, delivered: 0, read: 0, clicked: 0 });
+    const b = hourBuckets.get(hour)!;
+    if (e.event_type === 'SENT') b.sent++;
+    else if (e.event_type === 'DELIVERED') b.delivered++;
+    else if (e.event_type === 'READ') b.read++;
+    else if (e.event_type === 'CLICKED') b.clicked++;
+  });
+  const timeline = Array.from(hourBuckets.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([hour, data]) => ({ hour, ...data }));
+    
+  if (timeline.length > 0 && timeline[0].hour === 0) {
+    timeline.unshift({ hour: -1, sent: 0, delivered: 0, read: 0, clicked: 0 });
+  }
+
+  // 7. AI insights
+  const insightContext = {
+    campaignName: campaign.name,
+    channel: campaign.channel,
+    objective: campaign.objective,
+    funnel,
+    personaBreakdown: personaBreakdown.slice(0, 5),
+    opportunityType: campaign.opportunities?.opportunity_type,
+    potentialRevenue: campaign.opportunities?.potential_revenue,
+  };
+  let insights = {
+    learnings: [] as string[],
+    nextAction: { title: '', description: '', potentialRevenue: 0, confidence: 0 },
+  };
+  try {
+    const client = new OpenAI({
+      apiKey: openRouterConfig.apiKey,
+      baseURL: openRouterConfig.baseUrl,
+      defaultHeaders: {
+        'HTTP-Referer': openRouterConfig.httpReferer,
+        'X-Title': openRouterConfig.appName,
+      },
+    });
+    const response = await client.chat.completions.create({
+      model: openRouterConfig.defaultModel,
+      temperature: 0.7,
+      max_tokens: 500,
+      messages: [
+        { role: 'system', content: 'You are a marketing analytics AI. Output only valid JSON.' },
+        {
+          role: 'user',
+          content: `Analyze this campaign and generate insights.\n\n${JSON.stringify(insightContext)}\n\nReturn JSON:\n{ "learnings": ["insight1", "insight2", "insight3"], "nextAction": { "title": "...", "description": "...", "potentialRevenue": 48000, "confidence": 89 } }\n\n3 learnings max. Be specific with the numbers from the data.`,
+        },
+      ],
+    });
+    let raw = (response.choices[0]?.message?.content || '{}').trim();
+    if (raw.startsWith('```')) raw = raw.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    insights = JSON.parse(raw);
+  } catch {
+    const deliveryRate = targeted > 0 ? ((funnel.delivered / targeted) * 100).toFixed(1) : '0';
+    const openRate = funnel.delivered > 0 ? ((funnel.read / funnel.delivered) * 100).toFixed(1) : '0';
+    const clickRate = funnel.read > 0 ? ((funnel.clicked / funnel.read) * 100).toFixed(1) : '0';
+    insights = {
+      learnings: [
+        `${deliveryRate}% delivery rate — ${funnel.delivered} of ${targeted} messages delivered successfully.`,
+        `${openRate}% open rate among delivered messages, with ${funnel.read} recipients reading the message.`,
+        `${clickRate}% click-through rate — ${funnel.clicked} recipients engaged with the call-to-action.`,
+      ],
+      nextAction: {
+        title: 'Retarget Engaged Non-Converters',
+        description: `${funnel.clicked} users clicked but may not have purchased. Consider a follow-up campaign.`,
+        potentialRevenue: Math.round((campaign.opportunities?.potential_revenue || 0) * 0.3),
+        confidence: campaign.opportunities?.confidence_score || 75,
+      },
+    };
+  }
+
+  return {
+    campaign: {
+      id: campaign.id,
+      name: campaign.name,
+      objective: campaign.objective,
+      channel: campaign.channel,
+      status: campaign.status,
+      reasoning: campaign.reasoning,
+      launched_at: campaign.launched_at,
+      opportunity_id: campaign.opportunity_id,
+      opportunity_title: campaign.opportunities?.title,
+      opportunity_type: campaign.opportunities?.opportunity_type,
+      potential_revenue: campaign.opportunities?.potential_revenue || 0,
+      confidence_score: campaign.opportunities?.confidence_score || 0,
+    },
+    funnel,
+    personaBreakdown,
+    timeline,
+    insights,
+  };
+}

@@ -23,6 +23,7 @@ import {
   getOpportunityTrend,
   getActivityFeed,
   getRecommendedActions,
+  getCampaignAnalytics,
 } from './services/analytics';
 import { agentOrchestrator } from './services/agent-orchestrator';
 import { getRecentActions } from './services/agent-logger';
@@ -974,6 +975,18 @@ app.get('/api/campaigns/:id', async (req, res) => {
   }
 });
 
+// GET /api/campaigns/:id/analytics
+app.get('/api/campaigns/:id/analytics', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const analytics = await getCampaignAnalytics(supabase, id);
+    res.json({ success: true, data: analytics });
+  } catch (error) {
+    console.error('Error fetching campaign analytics:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to fetch campaign analytics' });
+  }
+});
+
 // POST /api/campaigns/:id/refine
 app.post('/api/campaigns/:id/refine', async (req, res) => {
   try {
@@ -1020,7 +1033,7 @@ app.post('/api/campaigns/:id/launch', async (req, res) => {
     });
   } catch (error) {
     console.error('Error launching campaign:', error);
-    res.status(500).json({ error: 'Failed to launch campaign' });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to launch campaign' });
   }
 });
 
