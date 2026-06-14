@@ -436,3 +436,21 @@ export async function getActivityStream(companyId: string, limit?: number) {
 
   return response.json();
 }
+
+export async function refineCampaignMessage(
+  currentMessage: string,
+  instruction: string,
+  offer: string = '',
+) {
+  const response = await fetch(`${API_BASE_URL}/campaigns/refine-message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentMessage, instruction, offer }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to refine message');
+  }
+
+  return response.json();
+}
