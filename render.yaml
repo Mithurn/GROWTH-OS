@@ -2,6 +2,7 @@ services:
   - type: web
     name: xeno-crm-backend
     env: node
+    plan: free
     buildCommand: cd backend && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js
     startCommand: cd backend && node dist/server.js
     envVars:
@@ -23,6 +24,7 @@ services:
   - type: web
     name: xeno-channel-service
     env: node
+    plan: free
     buildCommand: cd channel-service && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js
     startCommand: cd channel-service && node dist/server.js
     envVars:
