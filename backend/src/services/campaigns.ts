@@ -637,7 +637,7 @@ export async function getCampaignById(
     .from('campaigns')
     .select(`
       *,
-      opportunities(audience_size, title, description)
+      opportunities(audience_size, potential_revenue, title, description)
     `)
     .eq('id', campaignId)
     .single();
