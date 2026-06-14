@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -25,14 +26,8 @@ export function NavHeader() {
       <div className="max-w-[1600px] mx-auto px-6 h-16 grid grid-cols-3 items-center">
 
         {/* Left: Logo */}
-        <Link href="/" className="flex items-center gap-1.5">
-          <div className="flex flex-wrap w-5 h-5 gap-0.5">
-            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
-            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
-            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
-            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
-          </div>
-          <span className={`text-[22px] font-semibold tracking-tight leading-none ${dark ? 'text-white' : 'text-[#3B82F6]'}`}>xeno</span>
+        <Link href="/" className="flex items-center">
+          <Image src="/logo.png" alt="Xeno" width={80} height={32} className="object-contain" />
         </Link>
 
         {/* Center: Navigation */}
