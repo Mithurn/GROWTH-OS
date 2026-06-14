@@ -121,7 +121,7 @@ export default function CampaignsPage() {
           const data = await response.json();
           if (data.success && data.data.companyId) {
             storedCompanyId = data.data.companyId;
-            window.localStorage.setItem('xeno_company_id', storedCompanyId);
+            window.localStorage.setItem('xeno_company_id', storedCompanyId as string);
             console.log('Auto-set companyId:', storedCompanyId);
           }
         } catch (err) {
