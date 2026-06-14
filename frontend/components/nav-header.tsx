@@ -15,18 +15,18 @@ export function NavHeader() {
   const [mode, setMode] = useState<'operator' | 'autonomous'>('operator');
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-[#E5E7EB]">
+    <header className="sticky top-0 z-50 border-b" style={{ background: 'rgba(10,14,26,0.92)', borderColor: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)' }}>
       <div className="max-w-[1600px] mx-auto px-6 h-16 grid grid-cols-3 items-center">
 
         {/* Left: Logo */}
         <Link href="/" className="flex items-center gap-1.5">
           <div className="flex flex-wrap w-5 h-5 gap-0.5">
-            <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-            <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-            <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-            <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
+            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
+            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
+            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
+            <div className="w-[9px] h-[9px] rounded-full bg-[#5B4FFF]" />
           </div>
-          <span className="text-[22px] font-semibold text-[#3B82F6] tracking-tight leading-none">xeno</span>
+          <span className="text-[22px] font-semibold text-white tracking-tight leading-none">xeno</span>
         </Link>
 
         {/* Center: Navigation */}
@@ -43,9 +43,10 @@ export function NavHeader() {
                 href={item.href}
                 className={`px-4 py-1.5 text-[13px] font-medium transition-all rounded-full ${
                   isActive
-                    ? 'bg-[#EEF2FF] text-[#5B4FFF]'
-                    : 'text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#F3F4F6]'
+                    ? 'text-white'
+                    : 'text-[#8B92A5] hover:text-white hover:bg-white/5'
                 }`}
+                style={isActive ? { background: 'rgba(91,79,255,0.18)', color: '#A89DFF' } : {}}
               >
                 {item.label}
               </Link>
@@ -55,14 +56,15 @@ export function NavHeader() {
 
         {/* Right: Mode Toggle + Avatar */}
         <div className="flex items-center justify-end gap-4">
-          <div className="flex bg-[#FAFAFA] border border-[#E5E7EB] rounded-full p-0.5">
+          <div className="flex rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <button
               onClick={() => setMode('operator')}
               className={`text-xs px-4 py-1.5 rounded-full font-medium transition-all ${
                 mode === 'operator'
-                  ? 'bg-[#1A1A1A] text-white shadow-sm'
-                  : 'text-[#6B7280] hover:text-[#1A1A1A]'
+                  ? 'text-white shadow-sm'
+                  : 'text-[#8B92A5] hover:text-white'
               }`}
+              style={mode === 'operator' ? { background: 'linear-gradient(135deg, #5B4FFF, #7C6FFF)' } : {}}
             >
               Operator
             </button>
@@ -70,14 +72,15 @@ export function NavHeader() {
               onClick={() => setMode('autonomous')}
               className={`text-xs px-4 py-1.5 rounded-full font-medium transition-all ${
                 mode === 'autonomous'
-                  ? 'bg-[#1A1A1A] text-white shadow-sm'
-                  : 'text-[#6B7280] hover:text-[#1A1A1A]'
+                  ? 'text-white shadow-sm'
+                  : 'text-[#8B92A5] hover:text-white'
               }`}
+              style={mode === 'autonomous' ? { background: 'linear-gradient(135deg, #5B4FFF, #7C6FFF)' } : {}}
             >
               Autonomous
             </button>
           </div>
-          <div className="h-8 w-8 rounded-full bg-[#5B4FFF] flex items-center justify-center text-white text-sm font-medium shadow-sm ring-2 ring-white">
+          <div className="h-8 w-8 rounded-full bg-[#5B4FFF] flex items-center justify-center text-white text-sm font-medium shadow-sm ring-2 ring-white/10">
             U
           </div>
         </div>
