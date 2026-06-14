@@ -10,7 +10,7 @@ import 'dotenv/config';
 import { fashionProducts, seedProducts } from './data-generator/products';
 import { generateCustomerAttributes } from './services/customer-attributes';
 import { generateCustomerMetrics } from './services/customer-metrics';
-import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard, createOpportunityFromGoal } from './services/opportunities';
+import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard, createOpportunityFromGoal, refineOpportunity } from './services/opportunities';
 import { generatePersonas, getPersonaCustomers, getPersonaDistribution } from './services/personas';
 import { generateCampaign, saveCampaign, approveCampaign, launchCampaign, getCampaigns, getCampaignById } from './services/campaigns';
 import { verifySignature, processWebhook, type WebhookEvent } from './services/webhooks';
@@ -813,6 +813,30 @@ app.get('/api/opportunities/:opportunityId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching opportunity details:', error);
     res.status(500).json({ error: 'Failed to fetch opportunity details' });
+  }
+});
+
+app.post('/api/opportunities/:id/refine', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { modifier } = req.body;
+
+    if (!modifier || typeof modifier !== 'string' || modifier.trim().length === 0) {
+      return res.status(400).json({ error: 'modifier is required and must be a non-empty string' });
+    }
+
+    const opportunity = await refineOpportunity(supabase, id, modifier.trim());
+
+    res.json({
+      success: true,
+      data: opportunity,
+    });
+  } catch (error) {
+    console.error('Error refining opportunity:', error);
+    res.status(500).json({
+      error: 'Failed to refine opportunity',
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

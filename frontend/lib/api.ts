@@ -437,6 +437,20 @@ export async function getActivityStream(companyId: string, limit?: number) {
   return response.json();
 }
 
+export async function refineOpportunity(opportunityId: string, modifier: string) {
+  const response = await fetch(`${API_BASE_URL}/opportunities/${encodeURIComponent(opportunityId)}/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modifier }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to refine opportunity');
+  }
+
+  return response.json();
+}
+
 export async function refineCampaignMessage(
   currentMessage: string,
   instruction: string,

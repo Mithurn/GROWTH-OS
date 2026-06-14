@@ -32,6 +32,9 @@ export interface OpportunityRecord {
   audience_definition: Record<string, unknown>;
   trigger_reason: string;
   ai_summary: string;
+  predicted_conversion_rate?: number | null;
+  alternative_strategies?: unknown[] | null;
+  opportunity_personas?: unknown[] | null;
   status: OpportunityStatus;
   updated_at?: string;
 }
@@ -75,6 +78,9 @@ export interface OpportunityDistributionRow {
   audience_definition: Record<string, unknown>;
   trigger_reason: string;
   ai_summary: string;
+  predicted_conversion_rate?: number | null;
+  alternative_strategies?: Array<{ title: string; conversion_rate: number; note: string }> | null;
+  opportunity_personas?: Array<{ name: string; description: string }> | null;
   status: OpportunityStatus;
   customer_count: number;
   average_spend: number;
@@ -197,6 +203,9 @@ interface OpportunityDraft {
   audience_definition: Record<string, unknown>;
   trigger_reason: string;
   ai_summary: string;
+  predicted_conversion_rate?: number;
+  alternative_strategies?: Array<{ title: string; conversion_rate: number; note: string }>;
+  opportunity_personas?: Array<{ name: string; description: string }>;
   status: OpportunityStatus;
   audience_customer_ids: string[];
 }
@@ -209,6 +218,9 @@ interface GenerateOpportunityOptions {
 
 interface AIOpportunitySummary {
   ai_summary: string;
+  predicted_conversion_rate?: number;
+  alternative_strategies?: Array<{ title: string; conversion_rate: number; note: string }>;
+  opportunity_personas?: Array<{ name: string; description: string }>;
 }
 
 const defaultLogger: OpportunityLogger = {
@@ -736,10 +748,12 @@ function assignPriorityScores(opportunities: OpportunityDraft[]): OpportunityDra
 
 function buildOpportunityPrompt(opportunity: OpportunityDraft, sampleCustomers: OpportunityCustomerDetail[]): string {
   return [
-    'You are a retail CRM strategist.',
-    'Write a concise marketer-friendly AI summary for a deterministic opportunity.',
-    'Do not discover new opportunities. Only explain the one provided.',
-    'Return JSON only with key ai_summary.',
+    'You are a retail CRM strategist. Analyze the opportunity below and return a single JSON object with exactly these keys:',
+    '- ai_summary: 2-3 sentence marketer-friendly explanation of why this opportunity matters.',
+    '- predicted_conversion_rate: A realistic number (e.g. 14.5) representing expected conversion percentage for the recommended action.',
+    '- alternative_strategies: Array of exactly 2 objects, each with {title: string, conversion_rate: number, note: string} describing alternative approaches and their expected conversion rates.',
+    '- opportunity_personas: Array of up to 3 objects {name: string, description: string} describing the customer personas most relevant to this opportunity.',
+    'Return JSON only. No markdown fences.',
     '',
     `Opportunity Type: ${opportunity.opportunity_type}`,
     `Title: ${opportunity.title}`,
@@ -755,16 +769,16 @@ function buildOpportunityPrompt(opportunity: OpportunityDraft, sampleCustomers: 
   ].join('\n');
 }
 
-async function generateAiSummary(
+async function generateAiEnrichment(
   client: OpenAI,
   model: string,
   opportunity: OpportunityDraft,
   sampleCustomers: OpportunityCustomerDetail[],
-): Promise<string> {
+): Promise<AIOpportunitySummary> {
   const response = await client.chat.completions.create({
     model,
     temperature: 0.2,
-    max_tokens: 180,
+    max_tokens: 600,
     messages: [
       {
         role: 'system',
@@ -783,7 +797,12 @@ async function generateAiSummary(
     if (!parsed.ai_summary?.trim()) {
       throw new Error('Missing ai_summary');
     }
-    return parsed.ai_summary.trim();
+    return {
+      ai_summary: parsed.ai_summary.trim(),
+      predicted_conversion_rate: typeof parsed.predicted_conversion_rate === 'number' ? parsed.predicted_conversion_rate : undefined,
+      alternative_strategies: Array.isArray(parsed.alternative_strategies) ? parsed.alternative_strategies : undefined,
+      opportunity_personas: Array.isArray(parsed.opportunity_personas) ? parsed.opportunity_personas : undefined,
+    };
   } catch {
     throw new Error('Opportunity model returned invalid JSON');
   }
@@ -819,6 +838,9 @@ function buildDistribution(
         audience_definition: opportunity.audience_definition,
         trigger_reason: opportunity.trigger_reason,
         ai_summary: opportunity.ai_summary,
+        predicted_conversion_rate: (opportunity.predicted_conversion_rate ?? null) as number | null,
+        alternative_strategies: (opportunity.alternative_strategies ?? null) as Array<{ title: string; conversion_rate: number; note: string }> | null,
+        opportunity_personas: (opportunity.opportunity_personas ?? null) as Array<{ name: string; description: string }> | null,
         status: opportunity.status,
         customer_count: audience.length,
         average_spend: roundToTwo(avgSpend),
@@ -851,9 +873,9 @@ async function enrichWithAiSummaries(
   for (const opportunity of opportunities) {
     const sampleCustomers = customerDetailsByOpportunity.get(opportunity.opportunity_key) ?? [];
     try {
-      const aiSummary = await generateAiSummary(client, model, opportunity, sampleCustomers);
-      enriched.push({ ...opportunity, ai_summary: aiSummary });
-      logger.info(`[opportunities] AI summary generated for ${opportunity.title}`);
+      const enrichment = await generateAiEnrichment(client, model, opportunity, sampleCustomers);
+      enriched.push({ ...opportunity, ...enrichment });
+      logger.info(`[opportunities] AI enrichment generated for ${opportunity.title}`);
     } catch (error) {
       logger.warn(`[opportunities] Falling back to deterministic summary for ${opportunity.title}`, error);
       enriched.push({ ...opportunity, ai_summary: fallbackAiSummary(opportunity) });
@@ -986,6 +1008,9 @@ async function upsertOpportunities(
     audience_definition: opportunity.audience_definition,
     trigger_reason: opportunity.trigger_reason,
     ai_summary: opportunity.ai_summary,
+    predicted_conversion_rate: opportunity.predicted_conversion_rate ?? null,
+    alternative_strategies: opportunity.alternative_strategies ?? null,
+    opportunity_personas: opportunity.opportunity_personas ?? null,
     status: statusByKey.get(opportunity.opportunity_key) ?? opportunity.status,
     updated_at: new Date().toISOString(),
   }));
@@ -993,7 +1018,7 @@ async function upsertOpportunities(
   const { data, error } = await supabase
     .from('opportunities')
     .upsert(payload, { onConflict: 'company_id,opportunity_key' })
-    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, status');
+    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status');
 
   if (error) {
     throw new Error(`Failed to persist opportunities: ${error.message}`);
@@ -1142,7 +1167,7 @@ export async function getOpportunityDashboard(
     fetchCustomers(supabase),
     supabase
       .from('opportunities')
-      .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, status')
+      .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
       .eq('company_id', company.id)
       .order('priority_score', { ascending: false }),
   ]);
@@ -1245,7 +1270,7 @@ export async function getOpportunityCustomers(
 ): Promise<{ opportunity: OpportunityDistributionRow | null; customers: OpportunityCustomerDetail[] }> {
   const { data: opportunityRow, error: opportunityError } = await supabase
     .from('opportunities')
-    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, status')
+    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
     .eq('id', opportunityId)
     .maybeSingle();
 
@@ -1325,6 +1350,132 @@ export async function getOpportunityCustomers(
     : [];
 
   return { opportunity, customers };
+}
+
+/**
+ * Refine an existing opportunity based on a marketer's modifier instruction
+ */
+export async function refineOpportunity(
+  supabase: SupabaseClient,
+  opportunityId: string,
+  modifier: string,
+  options: { model?: string } = {},
+): Promise<OpportunityDistributionRow> {
+  const { data: row, error: fetchError } = await supabase
+    .from('opportunities')
+    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
+    .eq('id', opportunityId)
+    .maybeSingle();
+
+  if (fetchError) throw new Error(`Failed to load opportunity: ${fetchError.message}`);
+  if (!row) throw new Error(`Opportunity ${opportunityId} not found`);
+
+  const model = options.model ?? openRouterConfig.defaultModel;
+  const client = new OpenAI({
+    apiKey: openRouterConfig.apiKey,
+    baseURL: openRouterConfig.baseUrl,
+    defaultHeaders: {
+      'HTTP-Referer': openRouterConfig.httpReferer,
+      'X-Title': openRouterConfig.appName,
+    },
+  });
+
+  const currentRevenue = toNumber(row.potential_revenue);
+  const prompt = [
+    'You are a marketing co-pilot for a retail CRM. A marketer wants to modify an existing opportunity.',
+    '',
+    'Current Opportunity:',
+    `- Title: ${row.title}`,
+    `- Type: ${row.opportunity_type}`,
+    `- Description: ${row.description}`,
+    `- Audience Size: ${row.audience_size} customers`,
+    `- Potential Revenue: ${formatCurrency(currentRevenue)}`,
+    `- Recommended Action: ${row.recommended_action}`,
+    `- AI Summary: ${row.ai_summary}`,
+    `- Predicted Conversion Rate: ${row.predicted_conversion_rate ?? 'Unknown'}%`,
+    '',
+    `Marketer's Request: "${modifier}"`,
+    '',
+    'Evaluate the requested change and return a JSON object with exactly these keys:',
+    '{',
+    '  "ai_summary": "Updated 2-3 sentence summary reflecting the modification",',
+    '  "predicted_conversion_rate": number (updated realistic conversion %, e.g. 12.5),',
+    '  "recommended_action": "Updated recommended action if channel/approach changed",',
+    '  "alternative_strategies": [',
+    '    {"title": "string", "conversion_rate": number, "note": "string"},',
+    '    {"title": "string", "conversion_rate": number, "note": "string"}',
+    '  ],',
+    '  "opportunity_personas": [{"name": "string", "description": "string"}, ...up to 3],',
+    `  "potential_revenue": number (updated revenue estimate; current is ${Math.round(currentRevenue)}),`,
+    `  "audience_size": number (updated if modifier narrows or broadens audience; current is ${row.audience_size})`,
+    '}',
+    'Return JSON only. No markdown.',
+  ].join('\n');
+
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0.3,
+    max_tokens: 700,
+    messages: [
+      { role: 'system', content: 'You output only valid JSON and never include markdown.' },
+      { role: 'user', content: prompt },
+    ],
+  });
+
+  const raw = response.choices[0]?.message?.content ?? '';
+  const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  let aiResponse: Record<string, unknown>;
+  try {
+    aiResponse = JSON.parse(jsonStr);
+  } catch {
+    throw new Error('Refine model returned invalid JSON');
+  }
+
+  const updatedRevenue = typeof aiResponse.potential_revenue === 'number' ? aiResponse.potential_revenue : currentRevenue;
+  const updatedAudienceSize = typeof aiResponse.audience_size === 'number' ? aiResponse.audience_size : row.audience_size;
+
+  const { data: updated, error: updateError } = await supabase
+    .from('opportunities')
+    .update({
+      ai_summary: typeof aiResponse.ai_summary === 'string' ? aiResponse.ai_summary : row.ai_summary,
+      predicted_conversion_rate: typeof aiResponse.predicted_conversion_rate === 'number' ? aiResponse.predicted_conversion_rate : row.predicted_conversion_rate,
+      recommended_action: typeof aiResponse.recommended_action === 'string' ? aiResponse.recommended_action : row.recommended_action,
+      alternative_strategies: Array.isArray(aiResponse.alternative_strategies) ? aiResponse.alternative_strategies : row.alternative_strategies,
+      opportunity_personas: Array.isArray(aiResponse.opportunity_personas) ? aiResponse.opportunity_personas : row.opportunity_personas,
+      potential_revenue: updatedRevenue,
+      audience_size: updatedAudienceSize,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', opportunityId)
+    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
+    .single();
+
+  if (updateError) throw new Error(`Failed to update opportunity: ${updateError.message}`);
+
+  return {
+    opportunity_id: updated.id,
+    opportunity_key: updated.opportunity_key,
+    opportunity_type: updated.opportunity_type,
+    title: updated.title,
+    description: updated.description,
+    audience_size: updated.audience_size,
+    potential_revenue: roundToTwo(toNumber(updated.potential_revenue)),
+    confidence_score: roundToTwo(toNumber(updated.confidence_score)),
+    priority_score: roundToTwo(toNumber(updated.priority_score)),
+    supporting_customer_segment: updated.supporting_customer_segment,
+    recommended_action: updated.recommended_action,
+    audience_definition: updated.audience_definition,
+    trigger_reason: updated.trigger_reason,
+    ai_summary: updated.ai_summary,
+    predicted_conversion_rate: updated.predicted_conversion_rate ?? null,
+    alternative_strategies: (updated.alternative_strategies ?? null) as Array<{ title: string; conversion_rate: number; note: string }> | null,
+    opportunity_personas: (updated.opportunity_personas ?? null) as Array<{ name: string; description: string }> | null,
+    status: updated.status,
+    customer_count: row.audience_size,
+    average_spend: 0,
+    average_orders: 0,
+    revenue_share: 0,
+  };
 }
 
 /**
@@ -1412,7 +1563,16 @@ Create a specific, actionable marketing opportunity that helps achieve this goal
   "confidence_score": number (60-95, how confident you are this will work),
   "trigger_reason": "string (why this opportunity exists based on the goal)",
   "recommended_action": "string (specific next step)",
-  "ai_summary": "string (2-3 sentences on why this is a good opportunity)"
+  "ai_summary": "string (2-3 sentences on why this is a good opportunity)",
+  "predicted_conversion_rate": number (realistic conversion %, e.g. 14.5),
+  "alternative_strategies": [
+    {"title": "string", "conversion_rate": number, "note": "string explaining the alternative"},
+    {"title": "string", "conversion_rate": number, "note": "string"}
+  ],
+  "opportunity_personas": [
+    {"name": "string", "description": "string"},
+    {"name": "string", "description": "string"}
+  ]
 }
 
 Be realistic - don't promise impossible results. Base estimates on the business context provided.`;
@@ -1470,6 +1630,9 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     audience_definition: aiResponse.audience_criteria || {},
     trigger_reason: aiResponse.trigger_reason || `Generated from marketer goal: "${goal}"`,
     ai_summary: aiResponse.ai_summary || `AI-generated opportunity to help achieve: ${goal}`,
+    predicted_conversion_rate: typeof aiResponse.predicted_conversion_rate === 'number' ? aiResponse.predicted_conversion_rate : null,
+    alternative_strategies: Array.isArray(aiResponse.alternative_strategies) ? aiResponse.alternative_strategies : null,
+    opportunity_personas: Array.isArray(aiResponse.opportunity_personas) ? aiResponse.opportunity_personas : null,
     status: 'Detected',
   };
 
@@ -1525,6 +1688,9 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     audience_definition: opportunityRecord.audience_definition,
     trigger_reason: opportunityRecord.trigger_reason,
     ai_summary: opportunityRecord.ai_summary,
+    predicted_conversion_rate: opportunityRecord.predicted_conversion_rate ?? null,
+    alternative_strategies: (opportunityRecord.alternative_strategies ?? null) as Array<{ title: string; conversion_rate: number; note: string }> | null,
+    opportunity_personas: (opportunityRecord.opportunity_personas ?? null) as Array<{ name: string; description: string }> | null,
     status: opportunityRecord.status,
     customer_count: audienceSize,
     average_spend: Math.round(avgSpend),

@@ -182,6 +182,9 @@ model Opportunity {
   triggerReason             String   @map("trigger_reason")
   aiSummary                 String   @map("ai_summary")
   aiReasoning               String?  @map("ai_reasoning") // Why AI discovered this
+  predictedConversionRate   Float?   @map("predicted_conversion_rate")
+  alternativeStrategies     Json?    @map("alternative_strategies")
+  opportunityPersonas       Json?    @map("opportunity_personas")
   status                    String   @default("Detected")
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
