@@ -75,20 +75,25 @@ function hourLabel(h: number) {
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-function useCountUp(target: number, ms = 1200) {
-  const [val, setVal] = useState(0);
+function useCountUp(target: number, ms = 900) {
+  const [val, setVal] = useState(target);
+  const fromRef = useRef(target);
+  const rafRef  = useRef<number>(0);
+
   useEffect(() => {
-    setVal(0);
-    if (!target) return;
+    if (target === fromRef.current) return;
+    const from = fromRef.current;
+    fromRef.current = target;
+    cancelAnimationFrame(rafRef.current);
     const t0 = performance.now();
-    let raf: number;
     const tick = (now: number) => {
       const p = Math.min((now - t0) / ms, 1);
-      setVal(Math.round(target * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) raf = requestAnimationFrame(tick);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(from + (target - from) * eased));
+      if (p < 1) rafRef.current = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
   }, [target, ms]);
   return val;
 }
