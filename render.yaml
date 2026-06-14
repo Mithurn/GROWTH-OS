@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: xeno-crm-backend
+    env: node
+    buildCommand: cd backend && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js
+    startCommand: cd backend && node dist/server.js
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CHANNEL_SERVICE_URL
+        value: "https://xeno-channel-service.onrender.com"
+      - key: WEBHOOK_SECRET
+        value: "xeno-webhook-secret-prod-1234"
+
+  - type: web
+    name: xeno-channel-service
+    env: node
+    buildCommand: cd channel-service && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js
+    startCommand: cd channel-service && node dist/server.js
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: CRM_WEBHOOK_URL
+        value: "https://xeno-crm-backend.onrender.com/api/webhooks/channel-status"
+      - key: WEBHOOK_SECRET
+        value: "xeno-webhook-secret-prod-1234"
+      - key: FAILURE_RATE
+        value: 10
