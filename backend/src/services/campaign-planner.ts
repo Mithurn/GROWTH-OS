@@ -1,10 +1,14 @@
 import { prisma } from '../lib/prisma';
 import OpenAI from 'openai';
+import { openRouterConfig } from '../config/openrouter';
 
-// Initialize OpenAI client with OpenRouter
 const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: openRouterConfig.apiKey,
+  baseURL: openRouterConfig.baseUrl,
+  defaultHeaders: {
+    'HTTP-Referer': openRouterConfig.httpReferer,
+    'X-Title': openRouterConfig.appName,
+  },
 });
 
 /**
@@ -142,7 +146,7 @@ Example format:
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'anthropic/claude-3.5-sonnet',
+      model: openRouterConfig.defaultModel,
       messages: [
         {
           role: 'user',

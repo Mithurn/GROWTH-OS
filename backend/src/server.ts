@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
@@ -607,89 +608,94 @@ async function importCustomers(customers: any[]) {
 }
 
 async function importOrders(orders: any[], customerMap: Map<string, string>) {
-  // Get all products
-  const { data: products } = await supabase
-    .from('products')
-    .select('id, sku');
-
+  const { data: products } = await supabase.from('products').select('id, sku');
   const productMap = new Map(products?.map(p => [p.sku, p.id]) || []);
 
   if (productMap.size === 0) {
     throw new Error('No products available for order item import');
   }
 
-  // Group orders by order_id
+  // Group CSV rows by order_id
   const orderGroups = new Map<string, any[]>();
   orders.forEach(o => {
-    if (!orderGroups.has(o.order_id)) {
-      orderGroups.set(o.order_id, []);
-    }
+    if (!orderGroups.has(o.order_id)) orderGroups.set(o.order_id, []);
     orderGroups.get(o.order_id)!.push(o);
   });
 
-  let ordersInserted = 0;
-  let orderItemsInserted = 0;
+  // Build both arrays in memory using pre-generated UUIDs so we can bulk-insert
+  // orders and order_items without any round-trips to retrieve DB-generated IDs.
+  const ordersToInsert: Array<{
+    id: string;
+    external_order_id: string;
+    customer_id: string;
+    order_date: string;
+    total_amount: number;
+    channel: string;
+  }> = [];
+
+  const orderItemsToInsert: Array<{
+    order_id: string;
+    product_id: string;
+    quantity: number;
+    unit_price: number;
+  }> = [];
+
   let skippedOrders = 0;
   let skippedItems = 0;
 
-  // Insert orders and order items
-  for (const [orderId, orderItems] of Array.from(orderGroups.entries())) {
-    const firstItem = orderItems[0];
-    const customerId = customerMap.get(firstItem.customer_id);
+  for (const [orderId, items] of orderGroups) {
+    const customerId = customerMap.get(items[0].customer_id);
+    if (!customerId) { skippedOrders++; continue; }
 
-    if (!customerId) continue;
+    const generatedOrderId = randomUUID();
+    const totalAmount = items.reduce((sum: number, item: any) => sum + parseFloat(item.amount), 0);
 
-    const totalAmount = orderItems.reduce((sum, item) => sum + parseFloat(item.amount), 0);
+    ordersToInsert.push({
+      id: generatedOrderId,
+      external_order_id: orderId,
+      customer_id: customerId,
+      order_date: items[0].order_date,
+      total_amount: totalAmount,
+      channel: items[0].channel || 'Website',
+    });
 
-    // Insert order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        customer_id: customerId,
-        order_date: firstItem.order_date,
-        total_amount: totalAmount,
-        channel: firstItem.channel || 'Website'
-      })
-      .select('id')
-      .single();
-
-    if (orderError) {
-      console.error('Order insert error:', orderError);
-      skippedOrders += 1;
-      continue;
-    }
-    ordersInserted += 1;
-
-    // Insert order items
-    const items = orderItems.map(item => {
+    for (const item of items) {
       const productId = productMap.get(item.product_sku);
       if (!productId) {
-        console.warn(
-          `[order_items] Missing product mapping for SKU ${item.product_sku} in order ${orderId}`,
-        );
-        skippedItems += 1;
-        return null;
+        console.warn(`[order_items] Unknown SKU ${item.product_sku} in order ${orderId}`);
+        skippedItems++;
+        continue;
       }
-
-      return {
-        order_id: order.id,
+      orderItemsToInsert.push({
+        order_id: generatedOrderId,
         product_id: productId,
         quantity: parseInt(item.quantity) || 1,
-        unit_price: parseFloat(item.amount) / (parseInt(item.quantity) || 1)
-      };
-    }).filter((item): item is NonNullable<typeof item> => item !== null);
-
-    if (orderItems.length > 0 && items.length === 0) {
-      throw new Error(`No order_items could be created for order ${orderId}`);
+        unit_price: parseFloat(item.amount) / (parseInt(item.quantity) || 1),
+      });
     }
+  }
 
-    if (items.length > 0) {
-      const { error: orderItemsError } = await supabase.from('order_items').insert(items);
-      if (orderItemsError) {
-        console.error('[order_items] Insert error:', orderItemsError);
-      } else {
-        orderItemsInserted += items.length;
-      }
+  // Bulk insert in chunks of 1000 (Supabase payload limit)
+  const CHUNK = 1000;
+  let ordersInserted = 0;
+  let orderItemsInserted = 0;
+
+  for (let i = 0; i < ordersToInsert.length; i += CHUNK) {
+    const { error } = await supabase.from('orders').insert(ordersToInsert.slice(i, i + CHUNK));
+    if (error) {
+      console.error(`[orders] Bulk insert error (chunk ${i / CHUNK}):`, error);
+      skippedOrders += Math.min(CHUNK, ordersToInsert.length - i);
+    } else {
+      ordersInserted += Math.min(CHUNK, ordersToInsert.length - i);
+    }
+  }
+
+  for (let i = 0; i < orderItemsToInsert.length; i += CHUNK) {
+    const { error } = await supabase.from('order_items').insert(orderItemsToInsert.slice(i, i + CHUNK));
+    if (error) {
+      console.error(`[order_items] Bulk insert error (chunk ${i / CHUNK}):`, error);
+    } else {
+      orderItemsInserted += Math.min(CHUNK, orderItemsToInsert.length - i);
     }
   }
 
@@ -698,12 +704,7 @@ async function importOrders(orders: any[], customerMap: Map<string, string>) {
       `Skipped ${skippedOrders} orders and ${skippedItems} line items.`,
   );
 
-  return {
-    ordersInserted,
-    orderItemsInserted,
-    skippedOrders,
-    skippedItems,
-  };
+  return { ordersInserted, orderItemsInserted, skippedOrders, skippedItems };
 }
 
 // GET /api/intelligence-preview

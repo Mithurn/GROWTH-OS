@@ -765,7 +765,6 @@ async function generateAiSummary(
     model,
     temperature: 0.2,
     max_tokens: 180,
-    response_format: { type: 'json_object' },
     messages: [
       {
         role: 'system',
@@ -1423,10 +1422,11 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,
     max_tokens: 2000,
-    response_format: { type: 'json_object' },
   });
 
-  const aiResponse = JSON.parse(response.choices[0]?.message?.content || '{}');
+  const content = response.choices[0]?.message?.content || '{}';
+  const jsonString = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  const aiResponse = JSON.parse(jsonString);
   console.log('[createOpportunityFromGoal] AI Response:', aiResponse);
 
   // Apply audience criteria to find matching customers

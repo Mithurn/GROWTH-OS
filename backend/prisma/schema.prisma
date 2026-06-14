@@ -73,12 +73,13 @@ model Product {
 }
 
 model Order {
-  id          String   @id @default(uuid())
-  customerId  String   @map("customer_id")
-  orderDate   DateTime @map("order_date")
-  totalAmount Decimal  @map("total_amount") @db.Decimal(10, 2)
-  channel     String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid())
+  externalOrderId String?  @map("external_order_id")
+  customerId      String   @map("customer_id")
+  orderDate       DateTime @map("order_date")
+  totalAmount     Decimal  @map("total_amount") @db.Decimal(10, 2)
+  channel         String?
+  createdAt       DateTime @default(now()) @map("created_at")
 
   customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]

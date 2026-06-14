@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://xeno-crm-backend-n6d8.onrender.com/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
 
 export async function saveBusinessInfo(companyName: string, industry: string) {
   const response = await fetch(`${API_BASE_URL}/onboarding/business`, {
@@ -145,7 +145,7 @@ export async function getIntelligenceBrief(companyId?: string) {
   const response = await fetch(url.toString());
 
   if (!response.ok) {
-    throw new Error('Failed to fetch intelligence brief');
+    return null;
   }
 
   return response.json();

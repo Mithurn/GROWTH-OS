@@ -164,7 +164,6 @@ Be specific with numbers. Use Indian Rupee format (₹). Keep it concise and act
     model: openRouterConfig.defaultModel,
     temperature: 0.7,
     max_tokens: 600,
-    response_format: { type: 'json_object' },
     messages: [
       {
         role: 'system',

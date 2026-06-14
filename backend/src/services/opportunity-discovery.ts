@@ -1,11 +1,29 @@
 import { prisma } from '../lib/prisma';
 import OpenAI from 'openai';
+import { openRouterConfig } from '../config/openrouter';
 
-// Initialize OpenAI client with OpenRouter
+// ── OpenRouter client with required headers ───────────────────────────────────
 const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: openRouterConfig.apiKey,
+  baseURL: openRouterConfig.baseUrl,
+  defaultHeaders: {
+    'HTTP-Referer': openRouterConfig.httpReferer,
+    'X-Title': openRouterConfig.appName,
+  },
 });
+
+// ── Strict enum — every value must have a matching branch below ───────────────
+// Adding or changing a type here REQUIRES updating getAudienceSize and
+// getAudienceCustomers to match. Never add a catch-all default that targets
+// all customers.
+type OpportunityType = 'Retention-Churn' | 'Retention-VIP' | 'Upsell' | 'Reactivation';
+
+const OPPORTUNITY_TYPE_ENUM: OpportunityType[] = [
+  'Retention-Churn',
+  'Retention-VIP',
+  'Upsell',
+  'Reactivation',
+];
 
 interface DiscoveredOpportunity {
   id: string;
@@ -14,18 +32,16 @@ interface DiscoveredOpportunity {
 }
 
 /**
- * Discover new revenue opportunities by analyzing customer data
- * This is the AI brain that finds patterns and segments
+ * Discover new revenue opportunities by analyzing customer data.
  */
 export async function discoverOpportunities(
   companyId: string,
   agentId: string,
-  goal: string
+  goal: string,
 ): Promise<DiscoveredOpportunity[]> {
   console.log(`🔍 Discovering opportunities for company ${companyId}`);
 
   try {
-    // Get customer analytics data
     const analytics = await getCustomerAnalytics(companyId);
 
     if (!analytics || analytics.totalCustomers === 0) {
@@ -33,103 +49,74 @@ export async function discoverOpportunities(
       return [];
     }
 
-    // Use AI to analyze patterns and discover opportunities
-    const opportunities = await analyzeWithAI(companyId, agentId, goal, analytics);
-
-    return opportunities;
+    return await analyzeWithAI(companyId, agentId, goal, analytics);
   } catch (error) {
     console.error('Error in opportunity discovery:', error);
     return [];
   }
 }
 
-/**
- * Get customer analytics for AI analysis
- */
+// ── Analytics snapshot for the AI prompt ──────────────────────────────────────
 async function getCustomerAnalytics(companyId: string) {
   try {
-    // Get total customers
     const totalCustomers = await prisma.customer.count();
 
-    if (totalCustomers === 0) {
-      return null;
-    }
+    if (totalCustomers === 0) return null;
 
-    // Get customer segments data
     const [
       churnRiskCustomers,
       vipCustomers,
+      dormantCustomers,
       lowEngagementCustomers,
       categoryAffinityData,
       averageMetrics,
-      personaData
+      personaData,
     ] = await Promise.all([
-      // Churn risk: customers who haven't ordered in 30+ days
+      // Retention-Churn: inactive 30–59 days
       prisma.customerMetrics.count({
-        where: {
-          daysSinceLastOrder: { gte: 30 }
-        }
+        where: { daysSinceLastOrder: { gte: 30, lt: 60 } },
       }),
 
-      // VIP customers: high spenders (top 20%)
+      // Retention-VIP: high spenders inactive 15+ days
       prisma.customerMetrics.count({
-        where: {
-          totalSpent: { gte: 5000 }
-        }
+        where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
       }),
 
-      // Low engagement: customers with low engagement score
+      // Reactivation: dormant 60+ days
       prisma.customerMetrics.count({
-        where: {
-          engagementScore: { lte: 30 }
-        }
+        where: { daysSinceLastOrder: { gte: 60 } },
       }),
 
-      // Category affinity analysis
+      // Upsell: repeat buyers with low AOV
+      prisma.customerMetrics.count({
+        where: { totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
+      }),
+
       prisma.customerAttributes.groupBy({
         by: ['favoriteCategory'],
-        _count: {
-          id: true
-        },
-        orderBy: {
-          _count: {
-            id: 'desc'
-          }
-        },
-        take: 10
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
       }),
 
-      // Average metrics
       prisma.customerMetrics.aggregate({
-        _avg: {
-          totalSpent: true,
-          avgOrderValue: true,
-          totalOrders: true
-        }
+        _avg: { totalSpent: true, avgOrderValue: true, totalOrders: true },
       }),
 
-      // Persona distribution
       prisma.persona.groupBy({
         by: ['personaName', 'personaDescription'],
-        where: {
-          companyId
-        },
-        _count: {
-          id: true
-        },
-        orderBy: {
-          _count: {
-            id: 'desc'
-          }
-        },
-        take: 5
-      })
+        where: { companyId },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 5,
+      }),
     ]);
 
     return {
       totalCustomers,
       churnRiskCustomers,
       vipCustomers,
+      dormantCustomers,
       lowEngagementCustomers,
       topCategories: categoryAffinityData,
       avgSpend: averageMetrics._avg.totalSpent || 0,
@@ -138,8 +125,8 @@ async function getCustomerAnalytics(companyId: string) {
       personas: personaData.map(p => ({
         name: p.personaName,
         description: p.personaDescription,
-        count: p._count.id
-      }))
+        count: p._count.id,
+      })),
     };
   } catch (error) {
     console.error('Error getting customer analytics:', error);
@@ -147,85 +134,63 @@ async function getCustomerAnalytics(companyId: string) {
   }
 }
 
-/**
- * Use AI to analyze customer data and discover opportunities
- */
+// ── AI analysis ───────────────────────────────────────────────────────────────
 async function analyzeWithAI(
   companyId: string,
   agentId: string,
   goal: string,
-  analytics: any
+  analytics: any,
 ): Promise<DiscoveredOpportunity[]> {
   try {
     const prompt = `You are an AI growth agent analyzing customer data to discover revenue opportunities.
 
 AGENT GOAL: ${goal}
 
-CUSTOMER DATA ANALYSIS:
+CUSTOMER DATA:
 - Total Customers: ${analytics.totalCustomers}
-- Customers at Churn Risk (30+ days inactive): ${analytics.churnRiskCustomers}
-- VIP Customers (₹5000+ spent): ${analytics.vipCustomers}
-- Low Engagement Customers: ${analytics.lowEngagementCustomers}
+- At Churn Risk (30–59 days inactive): ${analytics.churnRiskCustomers}
+- VIP Customers (₹5000+ spent, inactive 15+ days): ${analytics.vipCustomers}
+- Dormant Customers (60+ days inactive): ${analytics.dormantCustomers}
+- Upsell Candidates (3+ orders, AOV ≤ ₹2000): ${analytics.lowEngagementCustomers}
 - Average Customer Spend: ₹${Math.round(analytics.avgSpend)}
 - Average Order Value: ₹${Math.round(analytics.avgOrderValue)}
-- Average Orders per Customer: ${analytics.avgOrders?.toFixed(1)}
+- Average Orders per Customer: ${Number(analytics.avgOrders).toFixed(1)}
 
 Top Product Categories:
 ${analytics.topCategories.map((c: any) => `- ${c.favoriteCategory}: ${c._count.id} customers`).join('\n')}
 
-${analytics.personas && analytics.personas.length > 0 ? `
-Customer Personas (AI-generated segments):
-${analytics.personas.map((p: any) => `- ${p.name} (${p.count} customers): ${p.description}`).join('\n')}
-` : ''}
+${analytics.personas && analytics.personas.length > 0 ? `Customer Personas:\n${analytics.personas.map((p: any) => `- ${p.name} (${p.count} customers): ${p.description}`).join('\n')}` : ''}
 
-Based on this data, identify 2-3 HIGH-IMPACT revenue opportunities that align with the goal. Use the persona data to create more targeted and personalized opportunities.
+Identify 2–3 high-impact opportunities aligned with the goal.
 
-For each opportunity, provide:
-1. opportunity_key: unique identifier (e.g., "vip_winback_2024")
-2. opportunity_type: category (e.g., "Retention", "Upsell", "Reactivation")
-3. title: clear, action-oriented title (e.g., "Re-engage VIP Customers")
-4. description: 2-3 sentences explaining the opportunity
-5. audience_size: estimated number of customers (be realistic based on data)
-6. potential_revenue: estimated revenue in rupees (be conservative)
-7. confidence_score: 0-100 based on data strength
-8. priority_score: 0-100 based on impact vs effort
-9. supporting_customer_segment: description of target segment
-10. recommended_action: specific action to take
+CRITICAL RULE: opportunity_type MUST be EXACTLY one of these four strings — no variations, no synonyms:
+- "Retention-Churn"  → targets customers inactive 30–59 days
+- "Retention-VIP"    → targets VIP customers (₹5000+ spent) inactive 15+ days
+- "Upsell"           → targets repeat buyers (3+ orders) with low average order value
+- "Reactivation"     → targets dormant customers inactive 60+ days
+
+For each opportunity provide:
+1. opportunity_key: unique snake_case identifier
+2. opportunity_type: MUST be one of the four strings above, exactly
+3. title: action-oriented title
+4. description: 2–3 sentences explaining the opportunity
+5. audience_size: realistic estimate based on the data above
+6. potential_revenue: conservative rupee estimate
+7. confidence_score: 0–100
+8. priority_score: 0–100
+9. supporting_customer_segment: short label for the target segment
+10. recommended_action: specific action (mention channel: WhatsApp / Email / SMS)
 11. trigger_reason: why this opportunity exists now
-12. ai_summary: 1 sentence summary of the opportunity
-13. ai_reasoning: why you discovered this opportunity
+12. ai_summary: one-sentence summary
+13. ai_reasoning: why you prioritised this
 
-Respond ONLY with valid JSON array. No markdown, no explanation.
-
-Example format:
-[
-  {
-    "opportunity_key": "churn_prevention_high_value",
-    "opportunity_type": "Retention",
-    "title": "Prevent VIP Customer Churn",
-    "description": "Identify and re-engage high-value customers showing early churn signals.",
-    "audience_size": 150,
-    "potential_revenue": 75000,
-    "confidence_score": 85,
-    "priority_score": 92,
-    "supporting_customer_segment": "VIP customers (₹5000+ spend) inactive for 15-30 days",
-    "recommended_action": "Send personalized win-back offer via WhatsApp",
-    "trigger_reason": "Detected ${analytics.churnRiskCustomers} customers at churn risk",
-    "ai_summary": "Re-engage high-value customers before they churn completely",
-    "ai_reasoning": "Early intervention with VIPs has higher success rate and prevents significant revenue loss"
-  }
-]`;
+Respond ONLY with a valid JSON array. No markdown, no explanation outside the JSON.`;
 
     const response = await openai.chat.completions.create({
-      model: 'anthropic/claude-3.5-sonnet',
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
+      model: openRouterConfig.defaultModel,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+      max_tokens: 2000,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -234,20 +199,24 @@ Example format:
       return [];
     }
 
-    // Parse AI response
-    const opportunitiesData = JSON.parse(content);
+    // Strip markdown fences if the model wraps in ```json
+    const jsonString = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const opportunitiesData = JSON.parse(jsonString);
 
-    // Create opportunities in database
     const createdOpportunities: DiscoveredOpportunity[] = [];
 
     for (const oppData of opportunitiesData) {
       try {
-        // Check if opportunity already exists
+        // Reject any type that isn't in the enum — never fall through to a blast
+        if (!OPPORTUNITY_TYPE_ENUM.includes(oppData.opportunity_type as OpportunityType)) {
+          console.warn(
+            `⚠️  AI returned unknown opportunity_type "${oppData.opportunity_type}" for key "${oppData.opportunity_key}" — skipping to avoid audience blast`,
+          );
+          continue;
+        }
+
         const existing = await prisma.opportunity.findFirst({
-          where: {
-            companyId,
-            opportunityKey: oppData.opportunity_key
-          }
+          where: { companyId, opportunityKey: oppData.opportunity_key },
         });
 
         if (existing) {
@@ -255,8 +224,7 @@ Example format:
           continue;
         }
 
-        // Get actual customer count for the segment
-        const audienceSize = await getAudienceSize(oppData.opportunity_type, oppData.supporting_customer_segment);
+        const audienceSize = await getAudienceSize(oppData.opportunity_type as OpportunityType);
 
         const opportunity = await prisma.opportunity.create({
           data: {
@@ -266,7 +234,7 @@ Example format:
             opportunityType: oppData.opportunity_type,
             title: oppData.title,
             description: oppData.description,
-            audienceSize: audienceSize || oppData.audience_size,
+            audienceSize: audienceSize > 0 ? audienceSize : oppData.audience_size,
             potentialRevenue: oppData.potential_revenue,
             confidenceScore: oppData.confidence_score,
             priorityScore: oppData.priority_score,
@@ -274,39 +242,39 @@ Example format:
             recommendedAction: oppData.recommended_action,
             audienceDefinition: {
               type: oppData.opportunity_type,
-              segment: oppData.supporting_customer_segment
+              segment: oppData.supporting_customer_segment,
             },
             triggerReason: oppData.trigger_reason,
             aiSummary: oppData.ai_summary,
             aiReasoning: oppData.ai_reasoning,
-            status: 'Detected'
-          }
+            status: 'Detected',
+          },
         });
 
-        // Create audience mapping
-        const audienceCustomers = await getAudienceCustomers(
-          oppData.opportunity_type,
-          oppData.supporting_customer_segment,
-          audienceSize || oppData.audience_size
+        const audienceCustomerIds = await getAudienceCustomers(
+          oppData.opportunity_type as OpportunityType,
+          audienceSize > 0 ? audienceSize : oppData.audience_size,
         );
 
-        if (audienceCustomers.length > 0) {
+        if (audienceCustomerIds.length > 0) {
           await prisma.opportunityCustomer.createMany({
-            data: audienceCustomers.map(customerId => ({
+            data: audienceCustomerIds.map(customerId => ({
               opportunityId: opportunity.id,
-              customerId
+              customerId,
             })),
-            skipDuplicates: true
+            skipDuplicates: true,
           });
         }
 
         createdOpportunities.push({
           id: opportunity.id,
           potentialRevenue: Number(opportunity.potentialRevenue),
-          audienceSize: opportunity.audienceSize
+          audienceSize: opportunity.audienceSize,
         });
 
-        console.log(`✅ Created opportunity: ${oppData.title} (${audienceSize} customers, ₹${oppData.potential_revenue})`);
+        console.log(
+          `✅ Created opportunity: ${oppData.title} (${audienceCustomerIds.length} customers, ₹${oppData.potential_revenue})`,
+        );
       } catch (error) {
         console.error(`Error creating opportunity ${oppData.opportunity_key}:`, error);
       }
@@ -319,106 +287,93 @@ Example format:
   }
 }
 
-/**
- * Get actual audience size based on segment criteria
- */
-async function getAudienceSize(opportunityType: string, segment: string): Promise<number> {
+// ── Audience sizing — every branch is explicit, no dangerous default ───────────
+async function getAudienceSize(opportunityType: OpportunityType): Promise<number> {
   try {
-    if (opportunityType === 'Retention' && segment.includes('churn')) {
-      return await prisma.customerMetrics.count({
-        where: {
-          daysSinceLastOrder: { gte: 30 }
-        }
-      });
-    }
+    switch (opportunityType) {
+      case 'Retention-Churn':
+        return prisma.customerMetrics.count({
+          where: { daysSinceLastOrder: { gte: 30, lt: 60 } },
+        });
 
-    if (opportunityType === 'Retention' && segment.includes('VIP')) {
-      return await prisma.customerMetrics.count({
-        where: {
-          totalSpent: { gte: 5000 },
-          daysSinceLastOrder: { gte: 15 }
-        }
-      });
-    }
+      case 'Retention-VIP':
+        return prisma.customerMetrics.count({
+          where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
+        });
 
-    if (opportunityType === 'Upsell') {
-      return await prisma.customerMetrics.count({
-        where: {
-          totalOrders: { gte: 3 },
-          avgOrderValue: { lte: 2000 }
-        }
-      });
-    }
+      case 'Upsell':
+        return prisma.customerMetrics.count({
+          where: { totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
+        });
 
-    // Default: return all customers with orders
-    return await prisma.customerMetrics.count({
-      where: {
-        totalOrders: { gte: 1 }
+      case 'Reactivation':
+        return prisma.customerMetrics.count({
+          where: { daysSinceLastOrder: { gte: 60 } },
+        });
+
+      default: {
+        // TypeScript exhaustiveness check — this branch is unreachable if the
+        // enum is complete, but we log and return 0 rather than blast all customers.
+        const exhaustive: never = opportunityType;
+        console.error(`[opportunity-discovery] Unhandled opportunity type: ${exhaustive}`);
+        return 0;
       }
-    });
+    }
   } catch (error) {
     console.error('Error getting audience size:', error);
     return 0;
   }
 }
 
-/**
- * Get customer IDs for the audience segment
- */
+// ── Customer ID fetch — mirrors getAudienceSize exactly ───────────────────────
 async function getAudienceCustomers(
-  opportunityType: string,
-  segment: string,
-  limit: number
+  opportunityType: OpportunityType,
+  limit: number,
 ): Promise<string[]> {
   try {
-    let customers: Array<{ customerId: string }> = [];
+    let rows: Array<{ customerId: string }> = [];
 
-    if (opportunityType === 'Retention' && segment.includes('churn')) {
-      customers = await prisma.customerMetrics.findMany({
-        where: {
-          daysSinceLastOrder: { gte: 30 }
-        },
-        select: {
-          customerId: true
-        },
-        take: limit
-      });
-    } else if (opportunityType === 'Retention' && segment.includes('VIP')) {
-      customers = await prisma.customerMetrics.findMany({
-        where: {
-          totalSpent: { gte: 5000 },
-          daysSinceLastOrder: { gte: 15 }
-        },
-        select: {
-          customerId: true
-        },
-        take: limit
-      });
-    } else if (opportunityType === 'Upsell') {
-      customers = await prisma.customerMetrics.findMany({
-        where: {
-          totalOrders: { gte: 3 },
-          avgOrderValue: { lte: 2000 }
-        },
-        select: {
-          customerId: true
-        },
-        take: limit
-      });
-    } else {
-      // Default: get active customers
-      customers = await prisma.customerMetrics.findMany({
-        where: {
-          totalOrders: { gte: 1 }
-        },
-        select: {
-          customerId: true
-        },
-        take: limit
-      });
+    switch (opportunityType) {
+      case 'Retention-Churn':
+        rows = await prisma.customerMetrics.findMany({
+          where: { daysSinceLastOrder: { gte: 30, lt: 60 } },
+          select: { customerId: true },
+          take: limit,
+        });
+        break;
+
+      case 'Retention-VIP':
+        rows = await prisma.customerMetrics.findMany({
+          where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
+          select: { customerId: true },
+          take: limit,
+        });
+        break;
+
+      case 'Upsell':
+        rows = await prisma.customerMetrics.findMany({
+          where: { totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
+          select: { customerId: true },
+          take: limit,
+        });
+        break;
+
+      case 'Reactivation':
+        rows = await prisma.customerMetrics.findMany({
+          where: { daysSinceLastOrder: { gte: 60 } },
+          select: { customerId: true },
+          take: limit,
+        });
+        break;
+
+      default: {
+        const exhaustive: never = opportunityType;
+        console.error(`[opportunity-discovery] Unhandled opportunity type: ${exhaustive}`);
+        return [];
+      }
     }
 
-    return customers.map(c => c.customerId);
+    return rows.map(r => r.customerId);
   } catch (error) {
     console.error('Error getting audience customers:', error);
     return [];

@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { createClient } from '@supabase/supabase-js';
 import { discoverOpportunities } from './opportunity-discovery';
 import { createCampaignForOpportunity } from './campaign-planner';
 import { logAgentAction } from './agent-logger';
@@ -20,6 +21,7 @@ interface AgentExecutionContext {
  */
 export class AgentOrchestrator {
   private isRunning = false;
+  private isProcessingAgents = false;
   private runInterval: NodeJS.Timeout | null = null;
 
   /**
@@ -59,6 +61,11 @@ export class AgentOrchestrator {
    * Run all active agents
    */
   private async runAllAgents() {
+    if (this.isProcessingAgents) {
+      console.log('⏭️  Agent run skipped — previous run still in progress');
+      return;
+    }
+    this.isProcessingAgents = true;
     try {
       // Get all agents that are in 'discovering' or 'running' status
       const agents = await prisma.agent.findMany({
@@ -88,6 +95,8 @@ export class AgentOrchestrator {
       }
     } catch (error) {
       console.error('Error in runAllAgents:', error);
+    } finally {
+      this.isProcessingAgents = false;
     }
   }
 
@@ -102,25 +111,41 @@ export class AgentOrchestrator {
     // Get involvement preference from guardrails
     const involvement = (guardrails as any).involvement || 'review every campaign';
 
-    // Step 1: Discover new opportunities
-    const opportunities = await discoverOpportunities(companyId, agentId, goal);
+    // Step 1: Discover new opportunities via AI
+    const newOpportunities = await discoverOpportunities(companyId, agentId, goal);
 
-    if (opportunities.length > 0) {
-      console.log(`✨ Agent discovered ${opportunities.length} opportunities`);
-
+    if (newOpportunities.length > 0) {
+      console.log(`✨ Agent discovered ${newOpportunities.length} new opportunities`);
       await logAgentAction({
         agentId,
         actionType: 'discovered_opportunity',
-        description: `Discovered ${opportunities.length} new opportunities worth ₹${opportunities.reduce((sum, opp) => sum + Number(opp.potentialRevenue), 0).toLocaleString('en-IN')}`,
-        details: {
-          opportunityIds: opportunities.map(o => o.id),
-          count: opportunities.length
-        }
+        description: `Discovered ${newOpportunities.length} new opportunities worth ₹${newOpportunities.reduce((sum, opp) => sum + Number(opp.potentialRevenue), 0).toLocaleString('en-IN')}`,
+        details: { opportunityIds: newOpportunities.map(o => o.id), count: newOpportunities.length }
       });
     }
 
-    // Step 2: For each opportunity, check if we should launch a campaign
-    for (const opportunity of opportunities) {
+    // Step 2: Also pick up any existing opportunities for this company that have no campaign yet
+    const existingUncampaigned = await prisma.opportunity.findMany({
+      where: {
+        companyId,
+        campaigns: { none: { status: { in: ['Draft', 'Approved', 'Running', 'Launched'] } } },
+      },
+      select: { id: true, potentialRevenue: true, audienceSize: true },
+    });
+
+    // Merge: existing without campaigns + newly discovered (dedup by id)
+    const seenIds = new Set(newOpportunities.map(o => o.id));
+    const allOpportunities = [
+      ...newOpportunities,
+      ...existingUncampaigned
+        .filter(o => !seenIds.has(o.id))
+        .map(o => ({ id: o.id, potentialRevenue: Number(o.potentialRevenue), audienceSize: o.audienceSize })),
+    ];
+
+    console.log(`📋 Total opportunities to process: ${allOpportunities.length} (${newOpportunities.length} new + ${existingUncampaigned.length - (allOpportunities.length - newOpportunities.length)} existing)`);
+
+    // Step 3: For each opportunity, create a campaign if one doesn't exist
+    for (const opportunity of allOpportunities) {
       // Check if we already have a campaign for this opportunity
       const existingCampaign = await prisma.campaign.findFirst({
         where: {
@@ -168,8 +193,6 @@ export class AgentOrchestrator {
       if (shouldAutoLaunch) {
         console.log(`🚀 Auto-launching campaign ${campaign.id} (${involvement} mode)`);
 
-        // Import and use the launchCampaign from campaign-planner
-        const { SupabaseClient, createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -213,7 +236,7 @@ export class AgentOrchestrator {
       where: { id: agentId },
       data: {
         lastRunAt: new Date(),
-        status: opportunities.length > 0 ? 'running' : 'discovering'
+        status: allOpportunities.length > 0 ? 'running' : 'discovering'
       }
     });
   }
