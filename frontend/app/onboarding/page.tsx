@@ -22,7 +22,7 @@ import {
   Bot,
   ShieldCheck,
 } from 'lucide-react';
-import { uploadCustomerCSV, uploadOrderCSV, saveOnboardingProfile, startIngestion } from '@/lib/api';
+import { uploadCustomerCSV, uploadOrderCSV, saveOnboardingProfile } from '@/lib/api';
 
 type Step = 'welcome' | 'industry' | 'data' | 'goal' | 'mode' | 'setup';
 
@@ -92,7 +92,6 @@ export default function OnboardingPage() {
     }
 
     try {
-      // Save profile
       const storedCompanyId = window.localStorage.getItem('xeno_company_id');
       if (storedCompanyId) {
         await saveOnboardingProfile(storedCompanyId, {
@@ -101,7 +100,6 @@ export default function OnboardingPage() {
           operatingMode: mode,
           companyName,
         });
-        await startIngestion(storedCompanyId);
       }
     } catch (e) {
       console.error('Profile save error:', e);
