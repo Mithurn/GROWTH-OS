@@ -40,7 +40,7 @@ export function Step1BusinessSetup({ data, onUpdate }: BusinessSetupProps) {
             Industry <span className="text-red-500">*</span>
           </Label>
           <Select
-            value={data.industry}
+            value={(data.industry || undefined) as any}
             onValueChange={(value) => onUpdate({ industry: value })}
           >
             <SelectTrigger id="industry">
