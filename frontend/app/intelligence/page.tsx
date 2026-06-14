@@ -98,7 +98,7 @@ export default function IntelligencePage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{(data.revenue / 100000).toFixed(1)}L
+                  ₹{((data.revenue || 0) / 100000).toFixed(1)}L
                 </div>
               </CardContent>
             </Card>
@@ -110,7 +110,7 @@ export default function IntelligencePage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  ₹{Math.round(data.avgOrderValue).toLocaleString()}
+                  ₹{Math.round(data.avgOrderValue || 0).toLocaleString()}
                 </div>
               </CardContent>
             </Card>
@@ -127,7 +127,7 @@ export default function IntelligencePage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-900">
-                  {data.customerHealth.active}
+                  {data?.customerHealth?.active || 0}
                 </div>
                 <p className="text-xs text-green-700 mt-1">Engaged customers</p>
               </CardContent>
@@ -139,7 +139,7 @@ export default function IntelligencePage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-900">
-                  {data.customerHealth.dormant}
+                  {data?.customerHealth?.dormant || 0}
                 </div>
                 <p className="text-xs text-yellow-700 mt-1">Haven&apos;t purchased recently</p>
               </CardContent>
@@ -151,7 +151,7 @@ export default function IntelligencePage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-900">
-                  {data.customerHealth.atRisk}
+                  {data?.customerHealth?.atRisk || 0}
                 </div>
                 <p className="text-xs text-red-700 mt-1">Decreasing engagement</p>
               </CardContent>
@@ -173,7 +173,7 @@ export default function IntelligencePage() {
                         <span className="font-medium">{customer.name}</span>
                       </div>
                       <span className="font-bold text-primary">
-                        ₹{parseFloat(customer.totalSpent).toLocaleString()}
+                        ₹{parseFloat(String(customer.totalSpent)).toLocaleString()}
                       </span>
                     </div>
                   ))}

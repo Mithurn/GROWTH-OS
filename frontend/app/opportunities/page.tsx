@@ -142,7 +142,7 @@ export default function OpportunitiesPage() {
 
     async function loadActivities() {
       try {
-        const response = await getActivityStream(companyId, 5);
+        const response = await getActivityStream(companyId as string, 5);
         if (!mounted) return;
         setActivities(Array.isArray(response.data) ? response.data : []);
       } catch (err) {
