@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Check,
@@ -88,7 +88,7 @@ function channelIcon(channel: string) {
   }
 }
 
-export default function CampaignsPage() {
+function CampaignsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const opportunityId = searchParams.get('opportunityId');
@@ -765,5 +765,13 @@ export default function CampaignsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CampaignsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-[#5B4FFF]" /></div>}>
+      <CampaignsContent />
+    </Suspense>
   );
 }
