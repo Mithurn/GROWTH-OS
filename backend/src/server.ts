@@ -12,7 +12,7 @@ import { generateCustomerAttributes } from './services/customer-attributes';
 import { generateCustomerMetrics } from './services/customer-metrics';
 import { generateOpportunities, getOpportunityCustomers, getOpportunityDashboard, createOpportunityFromGoal, refineOpportunity } from './services/opportunities';
 import { generatePersonas, getPersonaCustomers, getPersonaDistribution } from './services/personas';
-import { generateCampaign, saveCampaign, approveCampaign, launchCampaign, getCampaigns, getCampaignById } from './services/campaigns';
+import { generateCampaign, saveCampaign, approveCampaign, launchCampaign, getCampaigns, getCampaignById, refineCampaignMessage } from './services/campaigns';
 import { verifySignature, processWebhook, type WebhookEvent } from './services/webhooks';
 import {
   generateIntelligenceBrief,
@@ -938,7 +938,7 @@ app.post('/api/campaigns', async (req, res) => {
     });
   } catch (error) {
     console.error('Error saving campaign:', error);
-    res.status(500).json({ error: 'Failed to save campaign' });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save campaign' });
   }
 });
 
@@ -971,6 +971,24 @@ app.get('/api/campaigns/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching campaign:', error);
     res.status(500).json({ error: 'Failed to fetch campaign' });
+  }
+});
+
+// POST /api/campaigns/:id/refine
+app.post('/api/campaigns/:id/refine', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { modifier = '', channel } = req.body ?? {};
+
+    const result = await refineCampaignMessage(supabase, id, modifier, channel ?? undefined);
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error refining campaign message:', error);
+    res.status(500).json({
+      error: 'Failed to refine campaign message',
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

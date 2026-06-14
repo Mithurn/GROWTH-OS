@@ -1,19 +1,24 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  ArrowLeft,
   Check,
+  CheckCircle2,
+  Loader2,
+  Mail,
+  MessageSquare,
   Rocket,
+  Send,
+  Smartphone,
   Sparkles,
   Target,
+  TrendingUp,
   Users,
-  ArrowLeft,
-  Edit,
-  Eye,
+  X,
+  Zap,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   generateCampaign,
   saveCampaign,
@@ -21,9 +26,12 @@ import {
   approveCampaign,
   launchCampaign,
   getOpportunityDashboard,
+  refineCampaign,
 } from '@/lib/api';
+import { PhoneMockup } from '@/components/ui/phone-mockup';
 
-interface Campaign {
+// ─── Types ───────────────────────────────────────────────────
+interface CampaignData {
   id: string;
   name: string;
   objective: string;
@@ -34,24 +42,10 @@ interface Campaign {
   expected_outcome: string | null;
   reasoning: string | null;
   status: string;
-  created_at: string;
-  audience_size: number;
-  communications_sent: number;
-  communications_delivered: number;
-  communications_read: number;
-  communications_clicked: number;
-  communications_failed: number;
-}
-
-interface GeneratedCampaign {
-  name: string;
-  objective: string;
-  channel: 'WhatsApp' | 'Email' | 'SMS';
-  offer: string;
-  message_angle: string;
-  campaign_content: string;
-  expected_outcome: string;
-  reasoning: string;
+  opportunity_id: string;
+  audience_size?: number;
+  communications_sent?: number;
+  communications_delivered?: number;
 }
 
 interface Opportunity {
@@ -60,717 +54,598 @@ interface Opportunity {
   description: string;
   audience_size: number;
   potential_revenue: number;
+  confidence_score?: number;
+  predicted_conversion_rate?: number | null;
+  supporting_customer_segment?: string;
 }
+
+// ─── Helpers ─────────────────────────────────────────────────
+const CHANNELS = ['WhatsApp', 'Email', 'SMS'] as const;
+type Channel = typeof CHANNELS[number];
+
+const CHANNEL_META: Record<Channel, { icon: React.ElementType; color: string; desc: string; stats: string }> = {
+  WhatsApp: {
+    icon: MessageSquare,
+    color: 'text-emerald-600',
+    desc: 'High engagement. Conversational format with rich media support.',
+    stats: '86% open rate',
+  },
+  Email: {
+    icon: Mail,
+    color: 'text-blue-600',
+    desc: 'Ideal for detailed offers. Supports images, links and long copy.',
+    stats: '24% open rate',
+  },
+  SMS: {
+    icon: Smartphone,
+    color: 'text-violet-600',
+    desc: 'Instant delivery. 160 char limit. Best for flash sales.',
+    stats: '98% delivery rate',
+  },
+};
+
+const REFINE_CHIPS = ['Make it more urgent', 'Make it shorter', 'More premium tone'];
+
+const formatCurrency = (v: number) => {
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}K`;
+  return `₹${Math.round(v)}`;
+};
 
 function statusStyles(status: string) {
   switch (status) {
-    case 'Approved':
-      return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-    case 'Launched':
-      return 'border-blue-200 bg-blue-50 text-blue-800';
-    case 'Completed':
-      return 'border-stone-200 bg-stone-100 text-stone-700';
-    default: // Draft
-      return 'border-amber-200 bg-amber-50 text-amber-800';
+    case 'Approved': return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+    case 'Launched': return 'border-blue-200 bg-blue-50 text-blue-800';
+    case 'Completed': return 'border-stone-200 bg-stone-100 text-stone-700';
+    default: return 'border-amber-200 bg-amber-50 text-amber-800';
   }
 }
 
-function channelIcon(channel: string) {
-  switch (channel) {
-    case 'WhatsApp':
-      return '💬';
-    case 'Email':
-      return '📧';
-    case 'SMS':
-      return '📱';
-    default:
-      return '📢';
-  }
-}
-
+// ─── Main component ──────────────────────────────────────────
 function CampaignsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const opportunityId = searchParams.get('opportunityId');
 
   const [companyId, setCompanyId] = useState<string | undefined>(undefined);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
-  const [generatedCampaign, setGeneratedCampaign] = useState<GeneratedCampaign | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedCampaign, setEditedCampaign] = useState<GeneratedCampaign | null>(null);
 
+  // Builder mode state
+  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
+  const [savedCampaign, setSavedCampaign] = useState<CampaignData | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<Channel>('WhatsApp');
+  const [currentMessage, setCurrentMessage] = useState('');
+  const [modifier, setModifier] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
+
+  // List mode state
+  const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
+  const [selectedCampaign, setSelectedCampaign] = useState<CampaignData | null>(null);
+
+  // Shared
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [approving, setApproving] = useState(false);
-  const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load company ID
+  // ── Load company ID ──
   useEffect(() => {
-    async function loadCompanyId() {
-      let storedCompanyId = window.localStorage.getItem('xeno_company_id');
-      console.log('Loading companyId from localStorage:', storedCompanyId);
-
-      if (!storedCompanyId) {
-        // Auto-fetch from backend
-        console.log('CompanyId not in localStorage, fetching from backend...');
+    async function init() {
+      let cid = window.localStorage.getItem('xeno_company_id');
+      if (!cid) {
         try {
-          const response = await fetch('http://localhost:3001/api/opportunities');
-          const data = await response.json();
-          if (data.success && data.data.companyId) {
-            storedCompanyId = data.data.companyId;
-            window.localStorage.setItem('xeno_company_id', storedCompanyId as string);
-            console.log('Auto-set companyId:', storedCompanyId);
+          const r = await fetch('https://xeno-crm-backend-n6d8.onrender.com/api/opportunities');
+          const d = await r.json();
+          if (d.success && d.data.companyId) {
+            cid = d.data.companyId;
+            window.localStorage.setItem('xeno_company_id', cid!);
           }
-        } catch (err) {
-          console.error('Failed to fetch companyId:', err);
-        }
+        } catch {}
       }
-
-      if (storedCompanyId) {
-        setCompanyId(storedCompanyId);
-      } else {
-        setError('Company ID not found. Please complete onboarding first.');
-      }
+      if (cid) setCompanyId(cid);
+      else setError('Company not found. Please complete onboarding.');
     }
-
-    loadCompanyId();
+    init();
   }, []);
 
-  // Load campaigns
-  useEffect(() => {
-    if (!companyId) return;
-
-    async function loadCampaigns() {
-      try {
-        setLoading(true);
-        const response = await getCampaigns(companyId);
-        setCampaigns(response.data ?? []);
-      } catch (err) {
-        console.error('Failed to load campaigns:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load campaigns');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadCampaigns();
-  }, [companyId]);
-
-  // Load opportunity if provided
-  useEffect(() => {
-    if (!opportunityId || !companyId) {
-      console.log('Skipping opportunity load:', { opportunityId, companyId });
-      return;
-    }
-
-    async function loadOpportunity() {
-      try {
-        console.log('Loading opportunity dashboard for companyId:', companyId);
-        const response = await getOpportunityDashboard(companyId);
-        console.log('Opportunities loaded:', response.data.opportunityDistribution.length);
-
-        const opp = response.data.opportunityDistribution.find(
-          (o: any) => o.opportunity_id === opportunityId
-        );
-
-        console.log('Found opportunity:', opp ? opp.title : 'NOT FOUND');
-
-        if (opp) {
-          setOpportunity(opp);
-        } else {
-          setError(`Opportunity ${opportunityId} not found`);
-        }
-      } catch (err) {
-        console.error('Failed to load opportunity:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load opportunity');
-      }
-    }
-
-    loadOpportunity();
-  }, [opportunityId, companyId]);
-
-  async function handleGenerateCampaign() {
-    if (!opportunityId) return;
-
+  // ── Builder mode: load opportunity + campaign ──
+  const loadBuilderData = useCallback(async () => {
+    if (!companyId || !opportunityId) return;
+    setLoading(true);
+    setError(null);
     try {
-      setGenerating(true);
-      setError(null);
-      const response = await generateCampaign(opportunityId, companyId);
-      const campaign = response.data.campaign;
-      setGeneratedCampaign(campaign);
-      setEditedCampaign(campaign);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate campaign');
+      const [dashRes, campaignsRes] = await Promise.all([
+        getOpportunityDashboard(companyId),
+        getCampaigns(companyId),
+      ]);
+
+      const opp = (dashRes.data.opportunityDistribution ?? []).find(
+        (o: any) => o.opportunity_id === opportunityId,
+      );
+      if (!opp) { setError('Opportunity not found.'); return; }
+      setOpportunity(opp);
+
+      const existing = (campaignsRes.data ?? []).find(
+        (c: any) => c.opportunity_id === opportunityId,
+      );
+
+      if (existing) {
+        setSavedCampaign(existing);
+        setCurrentMessage(existing.message_content);
+        setSelectedChannel((existing.channel as Channel) ?? 'WhatsApp');
+      } else {
+        setIsGenerating(true);
+        const genRes = await generateCampaign(opportunityId, companyId);
+        const draft = genRes.data.campaign;
+        const saveRes = await saveCampaign(opportunityId, draft, companyId);
+        const saved = saveRes.data;
+        setSavedCampaign(saved);
+        setCurrentMessage(saved.message_content);
+        setSelectedChannel((saved.channel as Channel) ?? 'WhatsApp');
+        setIsGenerating(false);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load campaign');
+      setIsGenerating(false);
     } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function handleSaveCampaign() {
-    if (!opportunityId || !editedCampaign) {
-      console.log('Cannot save: missing opportunityId or editedCampaign');
-      return;
-    }
-
-    try {
-      console.log('Saving campaign...', { opportunityId, campaign: editedCampaign });
-      setLoading(true);
-      setError(null);
-      const response = await saveCampaign(opportunityId, editedCampaign, companyId);
-      console.log('Campaign saved:', response.data);
-      const newCampaign = response.data;
-
-      // Reload campaigns
-      console.log('Reloading campaigns list...');
-      const campaignsResponse = await getCampaigns(companyId);
-      setCampaigns(campaignsResponse.data ?? []);
-      setSelectedCampaign(newCampaign);
-      setGeneratedCampaign(null);
-      setIsEditing(false);
-      console.log('Save complete!');
-    } catch (err) {
-      console.error('Save error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save campaign');
-    } finally {
-      console.log('Clearing loading state');
       setLoading(false);
     }
-  }
+  }, [companyId, opportunityId]);
 
-  async function handleApproveCampaign(campaignId: string) {
+  // ── List mode: load campaigns ──
+  const loadCampaigns = useCallback(async () => {
+    if (!companyId || opportunityId) return;
+    setLoading(true);
     try {
-      setApproving(true);
-      setError(null);
-      await approveCampaign(campaignId);
-
-      // Reload campaigns
-      const response = await getCampaigns(companyId);
-      setCampaigns(response.data ?? []);
-      const updated = response.data.find((c: Campaign) => c.id === campaignId);
-      if (updated) {
-        setSelectedCampaign(updated);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve campaign');
+      const res = await getCampaigns(companyId);
+      const list = res.data ?? [];
+      setCampaigns(list);
+      if (list.length > 0) setSelectedCampaign(list[0]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load campaigns');
     } finally {
-      setApproving(false);
+      setLoading(false);
+    }
+  }, [companyId, opportunityId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    if (opportunityId) loadBuilderData();
+    else loadCampaigns();
+  }, [companyId, opportunityId, loadBuilderData, loadCampaigns]);
+
+  // ── Handlers ──
+  async function handleChannelChange(ch: Channel) {
+    if (ch === selectedChannel || !savedCampaign || isRefining) return;
+    setSelectedChannel(ch);
+    setIsRefining(true);
+    try {
+      const res = await refineCampaign(savedCampaign.id, '', ch);
+      if (res.data?.message_content) setCurrentMessage(res.data.message_content);
+    } catch (e) {
+      console.error('[channel refine]', e);
+    } finally {
+      setIsRefining(false);
     }
   }
 
-  async function handleLaunchCampaign(campaignId: string) {
+  async function handleRefine(text?: string) {
+    const query = (text ?? modifier).trim();
+    if (!query || !savedCampaign || isRefining) return;
+    setIsRefining(true);
     try {
-      setLaunching(true);
-      setError(null);
-      const response = await launchCampaign(campaignId);
-
-      // Reload campaigns
-      const campaignsResponse = await getCampaigns(companyId);
-      setCampaigns(campaignsResponse.data ?? []);
-      const updated = campaignsResponse.data.find((c: Campaign) => c.id === campaignId);
-      if (updated) {
-        setSelectedCampaign(updated);
-      }
-
-      alert(`Campaign launched! ${response.data.communications_created} communications created.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to launch campaign');
+      const res = await refineCampaign(savedCampaign.id, query);
+      if (res.data?.message_content) setCurrentMessage(res.data.message_content);
+      setModifier('');
+    } catch (e) {
+      console.error('[refine]', e);
     } finally {
-      setLaunching(false);
+      setIsRefining(false);
     }
   }
 
-  if (loading && campaigns.length === 0 && !opportunityId) {
+  async function handleApproveAndLaunch() {
+    if (!savedCampaign || isLaunching) return;
+    setIsLaunching(true);
+    setError(null);
+    try {
+      await approveCampaign(savedCampaign.id);
+      await launchCampaign(savedCampaign.id);
+      router.push('/opportunities');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to launch campaign');
+      setIsLaunching(false);
+    }
+  }
+
+  // ── Render: generating ──
+  if (isGenerating || (loading && opportunityId)) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.22),_transparent_35%),linear-gradient(180deg,#fff9ed_0%,#ffffff_40%,#fffdf8_100%)] flex items-center justify-center">
-        <p className="text-stone-600">Loading campaigns...</p>
+      <div className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center gap-4">
+        <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center">
+          <Sparkles className="h-6 w-6 text-indigo-500 animate-pulse" />
+        </div>
+        <p className="text-sm font-medium text-gray-600">AI is crafting your campaign…</p>
+        <p className="text-xs text-gray-400">Analyzing opportunity signals and writing copy</p>
+      </div>
+    );
+  }
+
+  // ── Render: builder mode error (opportunityId present but something failed) ──
+  if (opportunityId && !savedCampaign && error) {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center gap-4 px-6">
+        <div className="bg-white rounded-xl border border-red-200 p-8 max-w-md w-full text-center shadow-sm">
+          <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+            <X className="h-5 w-5 text-red-500" />
+          </div>
+          <h2 className="text-base font-bold text-gray-900 mb-1">Campaign generation failed</h2>
+          <p className="text-sm text-red-600 mb-5">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => { setError(null); loadBuilderData(); }}
+              className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => router.push('/opportunities')}
+              className="px-5 py-2.5 border border-gray-200 text-gray-500 text-sm font-semibold rounded-xl hover:border-gray-300 transition-all"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: builder mode ──
+  if (opportunityId && savedCampaign && opportunity) {
+    const conv = opportunity.predicted_conversion_rate ?? Math.round((opportunity.confidence_score ?? 75) * 0.16);
+    const offerText = savedCampaign.offer ?? '₹500 Voucher';
+
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] pb-32">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+
+          {/* Top bar */}
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={() => router.push('/opportunities')}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to Opportunities
+            </button>
+            <span className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200">
+              Draft Generated by AI
+            </span>
+          </div>
+
+          {error && (
+            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          )}
+
+          {/* Title */}
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">{savedCampaign.name}</h1>
+          <p className="text-sm text-gray-400 mb-5">Generated from <span className="text-gray-600 font-medium">{opportunity.title}</span></p>
+
+          {/* Metric chips */}
+          <div className="flex items-center gap-3 flex-wrap mb-8">
+            <MetricChip icon={Users} label={`${opportunity.audience_size} Customers`} />
+            <MetricChip icon={TrendingUp} label={`${formatCurrency(opportunity.potential_revenue)} Projected Rev`} />
+            <MetricChip icon={Zap} label={`${conv}% Conversion`} accent />
+            <MetricChip icon={CheckCircle2} label={offerText} />
+          </div>
+
+          {/* 3-col layout: left strategy (2), right mockup (1) */}
+          <div className="grid grid-cols-3 gap-8">
+
+            {/* Left: 2/3 */}
+            <div className="col-span-2 space-y-6">
+
+              {/* Why section */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">Why I Created This Campaign</span>
+                </div>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {savedCampaign.reasoning ?? savedCampaign.objective}
+                </p>
+                {savedCampaign.expected_outcome && (
+                  <p className="mt-2 text-xs text-gray-400 italic">{savedCampaign.expected_outcome}</p>
+                )}
+              </div>
+
+              {/* Channel selector */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Target className="h-3.5 w-3.5 text-gray-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Channel Strategy</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {CHANNELS.map(ch => {
+                    const meta = CHANNEL_META[ch];
+                    const Icon = meta.icon;
+                    const selected = selectedChannel === ch;
+                    return (
+                      <button
+                        key={ch}
+                        onClick={() => handleChannelChange(ch)}
+                        disabled={isRefining}
+                        className={`rounded-xl border p-4 text-left transition-all duration-200 ${
+                          selected
+                            ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-1 ring-indigo-300'
+                            : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-gray-50'
+                        } disabled:opacity-50`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className={`flex items-center gap-1.5 ${selected ? 'text-indigo-600' : 'text-gray-600'}`}>
+                            <Icon className="h-4 w-4" />
+                            <span className="text-sm font-bold">{ch}</span>
+                          </div>
+                          {selected && <Check className="h-3.5 w-3.5 text-indigo-500" />}
+                        </div>
+                        <p className="text-[10px] text-gray-400 leading-snug mb-1.5">{meta.desc}</p>
+                        <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">{meta.stats}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: 1/3 — Phone mockup */}
+            <div className="col-span-1 flex justify-center pt-2">
+              <div className="sticky top-6">
+                <PhoneMockup
+                  channel={selectedChannel}
+                  message={currentMessage}
+                  brandName="Xeno Brand"
+                  isRefining={isRefining}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Fixed bottom bar ── */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+          <div className="max-w-7xl mx-auto px-6 py-3">
+            {/* Chips */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              {REFINE_CHIPS.map(chip => (
+                <button
+                  key={chip}
+                  onClick={() => handleRefine(chip)}
+                  disabled={isRefining || isLaunching}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-full hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 transition-all"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            {/* Input + actions */}
+            <div className="flex items-center gap-3">
+              <div className={`flex-1 flex items-center gap-2 rounded-xl border px-4 py-2.5 transition-all ${
+                isRefining ? 'border-indigo-300 bg-indigo-50/40' : 'border-gray-200 bg-white focus-within:border-indigo-400'
+              }`}>
+                {isRefining
+                  ? <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin shrink-0" />
+                  : <Sparkles className="h-3.5 w-3.5 text-gray-300 shrink-0" />}
+                <input
+                  value={modifier}
+                  onChange={e => setModifier(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleRefine()}
+                  disabled={isRefining || isLaunching}
+                  placeholder={isRefining ? 'AI is rewriting your copy…' : 'Tell Xeno how you\'d like to improve this campaign…'}
+                  className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={() => handleRefine()}
+                  disabled={!modifier.trim() || isRefining}
+                  className="h-7 w-7 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center disabled:opacity-30 shrink-0 transition-all"
+                >
+                  {isRefining
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <Send className="h-3 w-3" />}
+                </button>
+              </div>
+
+              <button
+                onClick={() => router.push('/opportunities')}
+                disabled={isLaunching}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-500 border border-gray-200 rounded-xl hover:text-red-500 hover:border-red-200 disabled:opacity-40 transition-all shrink-0"
+              >
+                <X className="h-4 w-4" /> Discard
+              </button>
+
+              <button
+                onClick={handleApproveAndLaunch}
+                disabled={isLaunching || isRefining}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl disabled:opacity-50 transition-all shrink-0"
+                style={{ boxShadow: '0 4px 14px 0 rgba(99,102,241,0.4)' }}
+              >
+                {isLaunching
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Launching…</>
+                  : <><Rocket className="h-4 w-4" /> Approve &amp; Launch</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: list mode ──
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.22),_transparent_35%),linear-gradient(180deg,#fff9ed_0%,#ffffff_40%,#fffdf8_100%)]">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-8">
-        {/* Header */}
-        <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-100 via-white to-white p-8 shadow-sm">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="mb-2 text-sm font-medium uppercase tracking-[0.24em] text-amber-700">
-                Campaign Studio
-              </p>
-              <h1 className="text-4xl font-semibold tracking-tight text-stone-950">
-                {opportunityId && opportunity
-                  ? `Create Campaign: ${opportunity.title}`
-                  : 'Campaign Management'}
-              </h1>
-              <p className="mt-3 text-base text-stone-600">
-                {opportunityId
-                  ? 'AI-powered campaign generation from detected opportunities.'
-                  : 'Manage and monitor your marketing campaigns.'}
-              </p>
-            </div>
+    <div className="min-h-screen bg-[#FAFAFA] pb-16">
+      <div className="max-w-6xl mx-auto px-6 py-8">
 
-            <div className="flex flex-wrap gap-3">
-              <Button variant="outline" onClick={() => router.push('/opportunities')}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Opportunities
-              </Button>
-            </div>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Campaigns</h1>
+            <p className="text-sm text-gray-400 mt-1">All your AI-generated campaigns</p>
           </div>
-
-          {error && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              {error}
-            </div>
-          )}
+          <button
+            onClick={() => router.push('/opportunities')}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" /> Opportunities
+          </button>
         </div>
 
-        {/* Generate Campaign from Opportunity */}
-        {opportunityId && !generatedCampaign && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Generate Campaign</CardTitle>
-              <CardDescription>
-                AI will generate a campaign plan based on the opportunity details
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {opportunity ? (
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-stone-500">Opportunity</div>
-                    <div className="mt-2 text-sm font-medium text-stone-950">{opportunity.title}</div>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-stone-500">Audience Size</div>
-                    <div className="mt-2 text-sm font-medium text-stone-950">
-                      {opportunity.audience_size} customers
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                    <div className="text-xs uppercase tracking-wide text-stone-500">Revenue Potential</div>
-                    <div className="mt-2 text-sm font-medium text-stone-950">
-                      ₹{Math.round(opportunity.potential_revenue).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                  Loading opportunity details...
-                </div>
-              )}
-
-              <Button onClick={handleGenerateCampaign} disabled={generating} className="w-full">
-                <Sparkles className={`mr-2 h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
-                {generating ? 'Generating Campaign...' : 'Generate Campaign with AI'}
-              </Button>
-            </CardContent>
-          </Card>
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        {/* Campaign Preview/Edit */}
-        {generatedCampaign && editedCampaign && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Campaign Preview</CardTitle>
-                  <CardDescription>Review and edit the AI-generated campaign</CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsEditing(!isEditing)}
+        {campaigns.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center shadow-sm">
+            <Sparkles className="h-10 w-10 text-indigo-300 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-gray-900 mb-1">No campaigns yet</h2>
+            <p className="text-sm text-gray-400 mb-5">Create your first campaign from an opportunity</p>
+            <button
+              onClick={() => router.push('/opportunities')}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all"
+            >
+              <Target className="h-4 w-4" /> View Opportunities
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-6">
+            {/* Campaign list */}
+            <div className="col-span-1 space-y-3">
+              {campaigns.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCampaign(c)}
+                  className={`w-full rounded-xl border p-4 text-left transition-all ${
+                    selectedCampaign?.id === c.id
+                      ? 'border-indigo-300 bg-indigo-50 shadow-sm'
+                      : 'border-gray-200 bg-white hover:border-indigo-200'
+                  }`}
                 >
-                  {isEditing ? <Eye className="mr-2 h-4 w-4" /> : <Edit className="mr-2 h-4 w-4" />}
-                  {isEditing ? 'Preview' : 'Edit'}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                {isEditing ? (
-                  <>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Campaign Name
-                      </label>
-                      <input
-                        type="text"
-                        value={editedCampaign.name}
-                        onChange={(e) => setEditedCampaign({ ...editedCampaign, name: e.target.value })}
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Channel
-                      </label>
-                      <select
-                        value={editedCampaign.channel}
-                        onChange={(e) =>
-                          setEditedCampaign({
-                            ...editedCampaign,
-                            channel: e.target.value as 'WhatsApp' | 'Email' | 'SMS',
-                          })
-                        }
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                      >
-                        <option value="WhatsApp">WhatsApp</option>
-                        <option value="Email">Email</option>
-                        <option value="SMS">SMS</option>
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Objective
-                      </label>
-                      <textarea
-                        value={editedCampaign.objective}
-                        onChange={(e) =>
-                          setEditedCampaign({ ...editedCampaign, objective: e.target.value })
-                        }
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                        rows={2}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Offer
-                      </label>
-                      <input
-                        type="text"
-                        value={editedCampaign.offer}
-                        onChange={(e) => setEditedCampaign({ ...editedCampaign, offer: e.target.value })}
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Message Angle
-                      </label>
-                      <input
-                        type="text"
-                        value={editedCampaign.message_angle}
-                        onChange={(e) =>
-                          setEditedCampaign({ ...editedCampaign, message_angle: e.target.value })
-                        }
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Message Content
-                      </label>
-                      <textarea
-                        value={editedCampaign.campaign_content}
-                        onChange={(e) =>
-                          setEditedCampaign({ ...editedCampaign, campaign_content: e.target.value })
-                        }
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm font-mono"
-                        rows={4}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Expected Outcome
-                      </label>
-                      <input
-                        type="text"
-                        value={editedCampaign.expected_outcome}
-                        onChange={(e) =>
-                          setEditedCampaign({ ...editedCampaign, expected_outcome: e.target.value })
-                        }
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Reasoning
-                      </label>
-                      <textarea
-                        value={editedCampaign.reasoning}
-                        onChange={(e) =>
-                          setEditedCampaign({ ...editedCampaign, reasoning: e.target.value })
-                        }
-                        className="mt-2 w-full rounded-xl border border-stone-200 px-4 py-2 text-sm"
-                        rows={2}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Campaign Name
-                      </div>
-                      <p className="mt-2 text-sm font-medium text-stone-950">{editedCampaign.name}</p>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Channel
-                      </div>
-                      <p className="mt-2 text-sm font-medium text-stone-950">
-                        {channelIcon(editedCampaign.channel)} {editedCampaign.channel}
-                      </p>
-                    </div>
-                    <div className="md:col-span-2 rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Objective
-                      </div>
-                      <p className="mt-2 text-sm text-stone-700">{editedCampaign.objective}</p>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Offer</div>
-                      <p className="mt-2 text-sm text-stone-700">{editedCampaign.offer}</p>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Message Angle
-                      </div>
-                      <p className="mt-2 text-sm text-stone-700">{editedCampaign.message_angle}</p>
-                    </div>
-                    <div className="md:col-span-2 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Message Content
-                      </div>
-                      <pre className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-950">
-                        {editedCampaign.campaign_content}
-                      </pre>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Expected Outcome
-                      </div>
-                      <p className="mt-2 text-sm text-stone-700">{editedCampaign.expected_outcome}</p>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Reasoning
-                      </div>
-                      <p className="mt-2 text-sm text-stone-700">{editedCampaign.reasoning}</p>
-                    </div>
-                  </>
-                )}
-              </div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="text-sm font-bold text-gray-900 leading-snug">{c.name}</span>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusStyles(c.status)}`}>
+                      {c.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400">{c.channel} · {c.audience_size ?? 0} customers</div>
+                </button>
+              ))}
+            </div>
 
-              <div className="flex gap-3">
-                <Button onClick={handleSaveCampaign} disabled={loading} className="flex-1">
-                  <Check className="mr-2 h-4 w-4" />
-                  {loading ? 'Saving...' : 'Save as Draft'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setGeneratedCampaign(null);
-                    setEditedCampaign(null);
-                    setIsEditing(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Campaigns List */}
-        {campaigns.length > 0 && !generatedCampaign && (
-          <div className="grid gap-6 lg:grid-cols-[400px_minmax(0,1fr)]">
-            <Card className="h-fit">
-              <CardHeader>
-                <CardTitle>Your Campaigns</CardTitle>
-                <CardDescription>All created campaigns across opportunities</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {campaigns.map((campaign) => (
-                  <button
-                    key={campaign.id}
-                    onClick={() => setSelectedCampaign(campaign)}
-                    className={`w-full rounded-2xl border p-4 text-left transition ${
-                      selectedCampaign?.id === campaign.id
-                        ? 'border-amber-400 bg-amber-50 shadow-sm'
-                        : 'border-stone-200 bg-white hover:border-amber-200 hover:bg-amber-50/60'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="font-semibold text-stone-950">{campaign.name}</div>
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusStyles(campaign.status)}`}
-                          >
-                            {campaign.status}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-sm text-stone-600">
-                          {channelIcon(campaign.channel)} {campaign.channel}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-stone-500">
-                      <div>
-                        <div className="uppercase tracking-wide">Audience</div>
-                        <div className="mt-1 text-sm font-medium text-stone-900">
-                          {campaign.audience_size} customers
-                        </div>
-                      </div>
-                      <div>
-                        <div className="uppercase tracking-wide">Sent</div>
-                        <div className="mt-1 text-sm font-medium text-stone-900">
-                          {campaign.communications_sent}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Campaign Detail */}
+            {/* Campaign detail */}
             {selectedCampaign && (
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+              <div className="col-span-2 space-y-5">
+                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                  <div className="flex items-start justify-between mb-4">
                     <div>
-                      <CardTitle>{selectedCampaign.name}</CardTitle>
-                      <CardDescription>{selectedCampaign.objective}</CardDescription>
+                      <h2 className="text-xl font-bold text-gray-900">{selectedCampaign.name}</h2>
+                      <p className="text-sm text-gray-400 mt-0.5">{selectedCampaign.objective}</p>
                     </div>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-medium ${statusStyles(selectedCampaign.status)}`}
-                    >
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles(selectedCampaign.status)}`}>
                       {selectedCampaign.status}
                     </span>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid gap-4 md:grid-cols-4">
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-stone-500">
-                        <Target className="h-3.5 w-3.5" />
-                        Channel
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-stone-950">
-                        {channelIcon(selectedCampaign.channel)} {selectedCampaign.channel}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-stone-500">
-                        <Users className="h-3.5 w-3.5" />
-                        Audience
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-stone-950">
-                        {selectedCampaign.audience_size}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-stone-500">
-                        Sent
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-stone-950">
-                        {selectedCampaign.communications_sent}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-stone-500">
-                        Delivered
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-stone-950">
-                        {selectedCampaign.communications_delivered}
-                      </div>
-                    </div>
+
+                  <div className="grid grid-cols-3 gap-3 mb-5">
+                    <StatCard label="Channel" value={selectedCampaign.channel} />
+                    <StatCard label="Audience" value={`${selectedCampaign.audience_size ?? 0}`} />
+                    <StatCard label="Sent" value={`${selectedCampaign.communications_sent ?? 0}`} />
                   </div>
 
-                  <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                    <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                      Message Content
-                    </div>
-                    <pre className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-700">
-                      {selectedCampaign.message_content}
-                    </pre>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Offer</div>
-                      <p className="mt-2 text-sm text-stone-700">{selectedCampaign.offer}</p>
-                    </div>
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Expected Outcome
-                      </div>
-                      <p className="mt-2 text-sm text-stone-700">{selectedCampaign.expected_outcome}</p>
-                    </div>
+                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 mb-4">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Message Content</div>
+                    <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">{selectedCampaign.message_content}</pre>
                   </div>
 
                   {selectedCampaign.reasoning && (
-                    <div className="rounded-2xl border border-stone-200 bg-white p-4">
-                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
-                        Reasoning
-                      </div>
-                      <p className="mt-2 text-sm text-stone-700">{selectedCampaign.reasoning}</p>
-                    </div>
+                    <p className="text-xs text-gray-400 italic border-l-2 border-indigo-100 pl-3">{selectedCampaign.reasoning}</p>
                   )}
 
-                  {/* Action Buttons */}
-                  <div className="flex flex-wrap gap-3">
-                    {selectedCampaign.status === 'Draft' && (
-                      <Button
-                        onClick={() => handleApproveCampaign(selectedCampaign.id)}
-                        disabled={approving}
+                  {selectedCampaign.status === 'Draft' && (
+                    <div className="flex gap-3 mt-5">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await approveCampaign(selectedCampaign.id);
+                            loadCampaigns();
+                          } catch {}
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all"
                       >
-                        <Check className="mr-2 h-4 w-4" />
-                        {approving ? 'Approving...' : 'Approve Campaign'}
-                      </Button>
-                    )}
-                    {selectedCampaign.status === 'Approved' && (
-                      <Button
-                        onClick={() => handleLaunchCampaign(selectedCampaign.id)}
-                        disabled={launching}
+                        <Check className="h-4 w-4" /> Approve
+                      </button>
+                    </div>
+                  )}
+                  {selectedCampaign.status === 'Approved' && (
+                    <div className="flex gap-3 mt-5">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await launchCampaign(selectedCampaign.id);
+                            loadCampaigns();
+                          } catch {}
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all"
                       >
-                        <Rocket className="mr-2 h-4 w-4" />
-                        {launching ? 'Launching...' : 'Launch Campaign'}
-                      </Button>
-                    )}
-                    {selectedCampaign.status === 'Launched' && (
-                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                        Campaign is live! Communications are being sent.
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                        <Rocket className="h-4 w-4" /> Launch
+                      </button>
+                    </div>
+                  )}
+                  {selectedCampaign.status === 'Launched' && (
+                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" /> Campaign is live!
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-        )}
-
-        {campaigns.length === 0 && !opportunityId && !generatedCampaign && (
-          <Card>
-            <CardHeader>
-              <CardTitle>No campaigns yet</CardTitle>
-              <CardDescription>
-                Create your first campaign from an opportunity
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => router.push('/opportunities')}>
-                <Target className="mr-2 h-4 w-4" />
-                View Opportunities
-              </Button>
-            </CardContent>
-          </Card>
         )}
       </div>
     </div>
   );
 }
 
+function MetricChip({ icon: Icon, label, accent }: { icon: React.ElementType; label: string; accent?: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium shadow-sm ${
+      accent ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700'
+    }`}>
+      <Icon className={`h-4 w-4 ${accent ? 'text-indigo-500' : 'text-gray-400'}`} />
+      {label}
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</div>
+      <div className="text-sm font-bold text-gray-900">{value}</div>
+    </div>
+  );
+}
+
 export default function CampaignsPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center p-8"><div className="h-8 w-8 animate-spin rounded-full border-4 border-[#5B4FFF] border-t-transparent" /></div>}>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      </div>
+    }>
       <CampaignsContent />
     </Suspense>
   );

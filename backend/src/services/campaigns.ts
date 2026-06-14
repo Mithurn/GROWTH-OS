@@ -220,25 +220,23 @@ export async function saveCampaign(
 ): Promise<CampaignRow> {
   const company = await ensureCompanyRow(supabase, companyId);
 
-  // Check for existing campaign with same opportunity
-  const { data: existing, error: checkError } = await supabase
+  // Check for existing campaign with same opportunity (use limit(1) to handle duplicates)
+  const { data: existingRows } = await supabase
     .from('campaigns')
-    .select('id, name, status')
+    .select('*')
     .eq('opportunity_id', opportunityId)
     .eq('company_id', company.id)
-    .maybeSingle();
+    .order('created_at', { ascending: true })
+    .limit(1);
 
-  if (checkError) {
-    throw new Error(`Failed to check for existing campaigns: ${checkError.message}`);
-  }
-
-  if (existing) {
-    throw new Error(`A campaign already exists for this opportunity: "${existing.name}" (${existing.status}). Please use the existing campaign or delete it first.`);
+  if (existingRows && existingRows.length > 0) {
+    return existingRows[0] as CampaignRow;
   }
 
   const { data, error } = await supabase
     .from('campaigns')
     .insert({
+      id: require('crypto').randomUUID(),
       company_id: company.id,
       opportunity_id: opportunityId,
       name: campaign.name,
@@ -250,6 +248,7 @@ export async function saveCampaign(
       expected_outcome: campaign.expected_outcome,
       reasoning: campaign.reasoning,
       status: 'Draft',
+      updated_at: new Date().toISOString(),
     })
     .select()
     .single();
@@ -482,6 +481,94 @@ export async function getCampaigns(
   );
 
   return campaignsWithMetrics as CampaignWithMetrics[];
+}
+
+export async function refineCampaignMessage(
+  supabase: SupabaseClient,
+  campaignId: string,
+  modifier: string,
+  newChannel?: string,
+  options: { model?: string } = {},
+): Promise<{ message_content: string; channel: string }> {
+  const { data: campaign, error: fetchError } = await supabase
+    .from('campaigns')
+    .select('id, channel, message_content, offer, objective, name')
+    .eq('id', campaignId)
+    .single();
+
+  if (fetchError || !campaign) throw new Error(`Campaign ${campaignId} not found`);
+
+  const targetChannel = newChannel ?? campaign.channel;
+  const isChannelSwitch = newChannel && newChannel !== campaign.channel;
+
+  const channelConstraints: Record<string, string> = {
+    WhatsApp: 'Up to 1000 characters. Conversational tone. Can use emojis and line breaks.',
+    Email: 'Can be long. Professional tone. Include a warm greeting and clear call-to-action.',
+    SMS: 'STRICTLY under 160 characters total. No line breaks. Concise and direct. One CTA only.',
+  };
+
+  const prompt = [
+    'You are a campaign copywriter for a retail brand.',
+    `Rewrite the campaign message below for the ${targetChannel} channel.`,
+    `Channel constraints: ${channelConstraints[targetChannel] ?? 'Standard marketing message.'}`,
+    isChannelSwitch ? `The message is being adapted from ${campaign.channel} to ${targetChannel}. Adjust format, length, and tone accordingly.` : '',
+    `Offer: ${campaign.offer ?? 'N/A'}`,
+    `Objective: ${campaign.objective ?? 'Re-engage customers'}`,
+    '',
+    'Current message:',
+    campaign.message_content,
+    '',
+    `Marketer instruction: "${modifier.trim() || (isChannelSwitch ? `Adapt this message for ${targetChannel}` : 'Improve the copy')}"`,
+    '',
+    'Return JSON only with this exact key: { "message_content": "..." }',
+    'No markdown fences.',
+  ].filter(Boolean).join('\n');
+
+  const model = options.model ?? openRouterConfig.defaultModel;
+  const client = new OpenAI({
+    apiKey: openRouterConfig.apiKey,
+    baseURL: openRouterConfig.baseUrl,
+    defaultHeaders: {
+      'HTTP-Referer': openRouterConfig.httpReferer,
+      'X-Title': openRouterConfig.appName,
+    },
+  });
+
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0.4,
+    max_tokens: 400,
+    messages: [
+      { role: 'system', content: 'Output only valid JSON. No markdown.' },
+      { role: 'user', content: prompt },
+    ],
+  });
+
+  const raw = response.choices[0]?.message?.content ?? '';
+  const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+
+  let parsed: { message_content: string };
+  try {
+    parsed = JSON.parse(jsonStr);
+    if (!parsed.message_content?.trim()) throw new Error('missing message_content');
+  } catch {
+    throw new Error('Refine model returned invalid JSON');
+  }
+
+  const updates: Record<string, unknown> = {
+    message_content: parsed.message_content,
+    updated_at: new Date().toISOString(),
+  };
+  if (isChannelSwitch) updates.channel = targetChannel;
+
+  const { error: updateError } = await supabase
+    .from('campaigns')
+    .update(updates)
+    .eq('id', campaignId);
+
+  if (updateError) throw new Error(`Failed to update campaign: ${updateError.message}`);
+
+  return { message_content: parsed.message_content, channel: targetChannel };
 }
 
 export async function getCampaignById(

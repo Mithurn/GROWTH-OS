@@ -451,6 +451,20 @@ export async function refineOpportunity(opportunityId: string, modifier: string)
   return response.json();
 }
 
+export async function refineCampaign(campaignId: string, modifier: string, channel?: string) {
+  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/refine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modifier, channel }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to refine campaign message');
+  }
+
+  return response.json();
+}
+
 export async function refineCampaignMessage(
   currentMessage: string,
   instruction: string,
