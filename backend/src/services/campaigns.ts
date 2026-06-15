@@ -337,10 +337,10 @@ export async function launchCampaign(
   supabase: SupabaseClient,
   campaignId: string,
 ): Promise<{ campaign: CampaignRow; communications_created: number }> {
-  // Get campaign details
+  // Get campaign details + opportunity audience_size
   const { data: campaign, error: campaignError } = await supabase
     .from('campaigns')
-    .select('id, company_id, opportunity_id, channel, message_content, status')
+    .select('id, company_id, opportunity_id, channel, message_content, status, opportunities(audience_size)')
     .eq('id', campaignId)
     .single();
 
@@ -352,11 +352,17 @@ export async function launchCampaign(
     throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
   }
 
-  // Get audience from opportunity
-  const { data: audienceRows, error: audienceError } = await supabase
+  const audienceCap = (campaign as any).opportunities?.audience_size ?? null;
+
+  // Get audience from opportunity, capped to audience_size to stay consistent with what's shown in UI
+  let query = supabase
     .from('opportunity_customers')
     .select('customer_id')
     .eq('opportunity_id', campaign.opportunity_id);
+
+  if (audienceCap) query = query.limit(audienceCap);
+
+  const { data: audienceRows, error: audienceError } = await query;
 
   if (audienceError) {
     throw new Error(`Failed to load campaign audience: ${audienceError.message}`);
