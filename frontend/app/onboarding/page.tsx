@@ -119,6 +119,7 @@ export default function OnboardingPage() {
   const [orderFile, setOrderFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [useDemoData, setUseDemoData] = useState(false);
 
   // Goal + mode
   const [goal, setGoal] = useState('');
@@ -193,7 +194,7 @@ export default function OnboardingPage() {
     if (isSettingUp) return;
 
     const storedCompanyId = window.localStorage.getItem('xeno_company_id');
-    if (!storedCompanyId || !customerFile || !orderFile) {
+    if (!storedCompanyId || (!useDemoData && (!customerFile || !orderFile))) {
       setSetupError('Missing company or data files. Please go back and try again.');
       return;
     }
@@ -205,33 +206,55 @@ export default function OnboardingPage() {
     setSetupError('');
 
     try {
-      // 1. Kick off ingestion pipeline with both CSV files
-      const { sessionId } = await startIngestion(customerFile, orderFile);
-
-      // 2. Poll until backend pipeline completes
-      let ingestionDone = false;
-      let retries = 0;
-      const MAX_RETRIES = 200; // 200 × 1.5s = 5 min — covers AI persona generation
-
-      while (!ingestionDone && retries < MAX_RETRIES) {
-        retries++;
-        await new Promise(r => setTimeout(r, 1500));
-        const status = await getIngestionStatus(sessionId);
-
-        setIngestionMessage(status.message || '');
-        const count = getDoneCount(status.step);
-        setDoneItems(Array.from({ length: count }, (_, i) => i));
-
-        if (status.step === 'completed') {
-          setDoneItems([0, 1, 2, 3]);
-          ingestionDone = true;
-        } else if (status.step === 'error') {
-          throw new Error(status.message || 'Data ingestion failed');
+      if (useDemoData) {
+        // Force the company ID to the one that has our demo data
+        window.localStorage.setItem('xeno_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
+        
+        let currentStep = 0;
+        const steps = ['validating', 'importing_customers', 'calculating_metrics', 'generating_personas', 'completed'];
+        
+        while (currentStep < steps.length) {
+          await new Promise(r => setTimeout(r, 1200));
+          const statusStep = steps[currentStep];
+          setIngestionMessage(`Processing ${statusStep.replace('_', ' ')}...`);
+          const count = getDoneCount(statusStep);
+          setDoneItems(Array.from({ length: count }, (_, i) => i));
+          
+          if (statusStep === 'completed') {
+            setDoneItems([0, 1, 2, 3]);
+            break;
+          }
+          currentStep++;
         }
-      }
+      } else {
+        // 1. Kick off ingestion pipeline with both CSV files
+        const { sessionId } = await startIngestion(customerFile!, orderFile!);
 
-      if (!ingestionDone) {
-        throw new Error('Setup timed out. Please try again.');
+        // 2. Poll until backend pipeline completes
+        let ingestionDone = false;
+        let retries = 0;
+        const MAX_RETRIES = 200; // 200 × 1.5s = 5 min — covers AI persona generation
+
+        while (!ingestionDone && retries < MAX_RETRIES) {
+          retries++;
+          await new Promise(r => setTimeout(r, 1500));
+          const status = await getIngestionStatus(sessionId);
+
+          setIngestionMessage(status.message || '');
+          const count = getDoneCount(status.step);
+          setDoneItems(Array.from({ length: count }, (_, i) => i));
+
+          if (status.step === 'completed') {
+            setDoneItems([0, 1, 2, 3]);
+            ingestionDone = true;
+          } else if (status.step === 'error') {
+            throw new Error(status.message || 'Data ingestion failed');
+          }
+        }
+
+        if (!ingestionDone) {
+          throw new Error('Setup timed out. Please try again.');
+        }
       }
 
       // 3. In parallel: save brand profile + generate opportunities
@@ -544,6 +567,17 @@ export default function OnboardingPage() {
                 ) : (
                   <>Upload & Continue <ArrowRight className="h-4 w-4" /></>
                 )}
+              </button>
+
+              <button
+                onClick={() => {
+                  window.localStorage.setItem('xeno_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
+                  setUseDemoData(true);
+                  next();
+                }}
+                className="w-full bg-[#F3F4F6] text-[#374151] text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#E5E7EB] transition-colors mt-3"
+              >
+                Skip & Use Pre-loaded Demo Data <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           )}
