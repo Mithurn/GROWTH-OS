@@ -16,6 +16,7 @@ import {
   generateOpportunities,
   getOpportunityDashboard,
   createOpportunityFromGoal,
+  getCampaigns,
 } from '@/lib/api';
 
 // ─────────────────────────────────────────────────────────────
@@ -86,11 +87,9 @@ const CATEGORY_FILTERS = [
 ];
 
 const STATUS_FILTERS = [
-  { key: 'new', label: 'New' },
-  { key: 'awaiting_review', label: 'Awaiting Review' },
-  { key: 'running', label: 'Running' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'custom', label: 'Custom' },
+  { key: 'new', label: 'No Campaign Yet' },
+  { key: 'awaiting_review', label: 'Campaign Draft' },
+  { key: 'completed', label: 'Campaign Launched' },
 ];
 
 const SUGGESTIONS = [
@@ -113,6 +112,7 @@ export default function OpportunitiesPage() {
   const [goal, setGoal] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<string | null>(null);
+  const [campaignMap, setCampaignMap] = useState<Record<string, string>>({}); // opportunityId → campaign status
 
   useEffect(() => {
     const id = window.localStorage.getItem('xeno_company_id') ?? undefined;
@@ -137,6 +137,15 @@ export default function OpportunitiesPage() {
           if (!mounted) return;
           setReport(gen.data as OpportunityReport);
         }
+        // Load campaign statuses to show cues on each opportunity
+        try {
+          const campRes = await getCampaigns(companyId);
+          const map: Record<string, string> = {};
+          (campRes.data ?? []).forEach((c: any) => {
+            if (c.opportunity_id) map[c.opportunity_id] = c.status;
+          });
+          if (mounted) setCampaignMap(map);
+        } catch { /* non-critical */ }
       } catch (e) {
         if (!mounted) return;
         setError(e instanceof Error ? e.message : 'Failed to load opportunities');
@@ -172,26 +181,33 @@ export default function OpportunitiesPage() {
     return counts;
   }, [allOpportunities]);
 
+  const getCampaignStatus = (oppId: string) => campaignMap[oppId] ?? null;
+
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const counts: Record<string, number> = { new: 0, awaiting_review: 0, completed: 0 };
     allOpportunities.forEach(o => {
-      const s = normalizeStatus(o.status);
-      counts[s] = (counts[s] ?? 0) + 1;
+      const id = o.opportunity_id || o.id || '';
+      const cs = campaignMap[id];
+      if (!cs) counts.new++;
+      else if (cs === 'Launched') counts.completed++;
+      else counts.awaiting_review++;
     });
     return counts;
-  }, [allOpportunities]);
+  }, [allOpportunities, campaignMap]);
 
   const filtered = useMemo(() => {
     return allOpportunities.filter(o => {
       if (activeCategory && getCategoryForType(o.opportunity_type) !== activeCategory) return false;
       if (activeStatus) {
-        const s = normalizeStatus(o.status);
-        if (activeStatus === 'new' && s !== 'new' && s !== '' && s !== 'detected') return false;
-        if (activeStatus !== 'new' && s !== activeStatus) return false;
+        const id = o.opportunity_id || o.id || '';
+        const cs = campaignMap[id];
+        if (activeStatus === 'new' && cs) return false;
+        if (activeStatus === 'awaiting_review' && (cs === 'Launched' || !cs)) return false;
+        if (activeStatus === 'completed' && cs !== 'Launched') return false;
       }
       return true;
     });
-  }, [allOpportunities, activeCategory, activeStatus]);
+  }, [allOpportunities, activeCategory, activeStatus, campaignMap]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -368,6 +384,7 @@ export default function OpportunitiesPage() {
               <OpportunityRow
                 key={opp.opportunity_id || opp.id || opp.title}
                 opportunity={opp}
+                campaignStatus={getCampaignStatus(opp.opportunity_id || opp.id || '')}
                 onClick={() => router.push(`/opportunities/${opp.opportunity_id || opp.id}`)}
               />
             ))}
@@ -383,38 +400,38 @@ export default function OpportunitiesPage() {
 // ─────────────────────────────────────────────────────────────
 function OpportunityRow({
   opportunity: opp,
+  campaignStatus,
   onClick,
 }: {
   opportunity: Opportunity;
+  campaignStatus: string | null;
   onClick: () => void;
 }) {
   const channel = parseChannel(opp.recommended_action);
-  const status = normalizeStatus(opp.status);
-  const isNew = !opp.status || status === 'new' || status === 'detected' || status === '';
+  const isLaunched = campaignStatus === 'Launched';
+  const hasDraft = !!campaignStatus && !isLaunched;
 
-  const statusBadge = () => {
-    if (status === 'running' || status === 'launched') {
-      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 rounded">Running</span>;
+  const accentColor = isLaunched ? 'bg-emerald-500' : hasDraft ? 'bg-amber-400' : 'bg-indigo-500';
+
+  const campaignBadge = () => {
+    if (isLaunched) {
+      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 rounded-full border border-emerald-200">● Campaign Live</span>;
     }
-    if (status === 'awaiting_review' || status === 'review') {
-      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 rounded">Awaiting Review</span>;
+    if (hasDraft) {
+      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 rounded-full border border-amber-200">◐ Campaign Draft</span>;
     }
-    if (status === 'monitoring') {
-      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 rounded">Monitoring</span>;
-    }
-    if (status === 'completed') {
-      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 rounded">Completed</span>;
-    }
-    return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500 rounded">AI Generated</span>;
+    return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-500 rounded-full border border-indigo-200">✦ AI Generated</span>;
   };
+
+  const ctaLabel = isLaunched ? 'View Analytics →' : hasDraft ? `${channel} → Review Campaign` : `${channel} → Create Campaign`;
 
   return (
     <div
       onClick={onClick}
       className="group relative flex items-center justify-between bg-white rounded-xl border border-gray-200 pl-5 pr-6 py-5 hover:shadow-lg hover:border-indigo-100 cursor-pointer transition-all duration-200 overflow-hidden"
     >
-      {/* Left accent border */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-l-xl" />
+      {/* Left accent border — colour-coded by campaign state */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor} rounded-l-xl`} />
 
       {/* Left content */}
       <div className="min-w-0 flex-1 pl-4 pr-8">
@@ -433,18 +450,13 @@ function OpportunityRow({
       </div>
 
       {/* Right content */}
-      <div className="flex flex-col items-end gap-2 shrink-0 min-w-[140px]">
-        <div className="flex items-center gap-1.5">
-          {statusBadge()}
-          {isNew && (
-            <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 rounded">New</span>
-          )}
-        </div>
+      <div className="flex flex-col items-end gap-2 shrink-0 min-w-[160px]">
+        {campaignBadge()}
         <button
           onClick={e => { e.stopPropagation(); onClick(); }}
-          className="text-xs font-bold text-indigo-500 hover:text-indigo-700 transition-colors"
+          className={`text-xs font-bold transition-colors ${isLaunched ? 'text-emerald-600 hover:text-emerald-800' : 'text-indigo-500 hover:text-indigo-700'}`}
         >
-          {channel} → Review
+          {ctaLabel}
         </button>
       </div>
     </div>
