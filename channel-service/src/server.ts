@@ -93,8 +93,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n📡 Channel Service running on http://localhost:${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`\n📡 Channel Service running on http://0.0.0.0:${PORT}`);
   console.log(`\n✓ Webhook endpoint: ${process.env.CRM_WEBHOOK_URL}`);
   console.log(`✓ Supported channels: WhatsApp, Email, SMS`);
   console.log(`✓ Failure rate: ${process.env.FAILURE_RATE}%`);

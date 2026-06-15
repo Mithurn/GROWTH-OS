@@ -1383,8 +1383,8 @@ app.get('/api/activity-stream', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`🚀 Backend server running on http://0.0.0.0:${PORT}`);
 
   // Start the Agent Orchestrator
   // Run every 5 minutes (300000ms) in production
