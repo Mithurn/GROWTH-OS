@@ -13,7 +13,6 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
   <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
-  <img src="https://img.shields.io/badge/OpenRouter-Gemini_2.5_Flash-F59E0B?style=flat-square" alt="OpenRouter">
   <img src="https://img.shields.io/badge/Vercel-Frontend-000000?style=flat-square&logo=vercel" alt="Vercel">
   <img src="https://img.shields.io/badge/Render-Backend-46E3B7?style=flat-square" alt="Render">
 </p>
