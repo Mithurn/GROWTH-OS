@@ -1,6 +1,31 @@
-# Xeno Growth OS
+<h1 align="center">
+  <br>
+  <img width="120" height="120" alt="Xeno Growth OS" src="https://xeno-grow.vercel.app/logo.png" />
+  <br>
+  Xeno Growth OS
+  <br>
+</h1>
 
-> **An autonomous AI Growth Copilot — not a dashboard you fill in, but an agent that finds your revenue gaps, writes the campaign, executes it across 500 customers, and shows you live what converted.**
+<p align="center"><strong>An autonomous AI Growth Copilot — not a dashboard you fill in, but an agent that finds your revenue gaps, writes the campaign, executes it across 500 customers, and shows you live what converted.</strong></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js" alt="Next.js">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
+  <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
+  <img src="https://img.shields.io/badge/OpenRouter-Gemini_2.5_Flash-F59E0B?style=flat-square" alt="OpenRouter">
+  <img src="https://img.shields.io/badge/Vercel-Frontend-000000?style=flat-square&logo=vercel" alt="Vercel">
+  <img src="https://img.shields.io/badge/Render-Backend-46E3B7?style=flat-square" alt="Render">
+</p>
+
+<p align="center">
+  <a href="#1-product-scoping-what-i-built--why">Scoping</a> •
+  <a href="#2-system-architecture">Architecture</a> •
+  <a href="#3-scale-assumptions--tradeoffs">Tradeoffs</a> •
+  <a href="#4-code-quality-deterministic-ai-orchestration">Code Quality</a> •
+  <a href="#5-ai-native-development-workflow">AI Workflow</a> •
+  <a href="#8-getting-started-locally">Setup</a>
+</p>
 
 **Live Demo:** https://xeno-grow.vercel.app
 **Repo:** https://github.com/Mithurn/xeno-grow
