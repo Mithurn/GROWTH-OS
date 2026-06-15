@@ -153,6 +153,28 @@ Three decoupled services, each independently deployable and replaceable:
 
 The channel service is a **separate process by design** — it mirrors how real-world CRMs integrate with providers like Twilio or Gupshup. Swapping the stub for a real provider requires zero changes to the CRM backend.
 
+### AI Layer — OpenRouter Dynamic Free Router
+
+Rather than hardcoding a single model, all AI calls use `openrouter/free` — a live load-balancer that routes each request to the fastest, least-congested free model at that exact millisecond. Automatic failover, zero cost, no single point of failure.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/NVIDIA-Nemotron_Nano_120B-76B900?style=flat-square&logo=nvidia&logoColor=white" alt="NVIDIA Nemotron">
+  <img src="https://img.shields.io/badge/Meta-Llama_3.1_8B-0467DF?style=flat-square&logo=meta&logoColor=white" alt="Meta Llama">
+  <img src="https://img.shields.io/badge/Google-Gemma_4_31B-4285F4?style=flat-square&logo=google&logoColor=white" alt="Google Gemma">
+  <img src="https://img.shields.io/badge/Liquid_AI-LFM_2.5_1.2B-8B5CF6?style=flat-square&logoColor=white" alt="Liquid AI LFM">
+  <img src="https://img.shields.io/badge/Poolside-Laguna_XS_2-EC4899?style=flat-square&logoColor=white" alt="Poolside Laguna">
+  <img src="https://img.shields.io/badge/Alibaba-Qwen3_Coder-FF6A00?style=flat-square&logoColor=white" alt="Qwen3">
+</p>
+
+| Provider | Model | Context | Strengths |
+|---|---|---|---|
+| 🟢 NVIDIA | Nemotron Nano 120B 2 VL | 1M tokens | Deep reasoning, multimodal |
+| 🔵 Meta | Llama 3.1 8B Instruct | 128K tokens | Fast inference, native tool calling |
+| 🔵 Google | Gemma 4 31B IT | 262K tokens | All-around logic, structured output |
+| 🟣 Liquid AI | LFM 2.5 1.2B Instruct | 32K tokens | Ultra-fast, low-latency responses |
+| 🩷 Poolside | Laguna XS 2 | 64K tokens | Code-optimised generation |
+| 🟠 Alibaba | Qwen3 Coder | 128K tokens | JSON schema adherence, code generation |
+
 ---
 
 ## 3. Scale Assumptions & Tradeoffs
