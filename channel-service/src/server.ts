@@ -99,4 +99,12 @@ app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`✓ Supported channels: WhatsApp, Email, SMS`);
   console.log(`✓ Failure rate: ${process.env.FAILURE_RATE}%`);
   console.log(`\n🚀 Ready to receive messages via POST /send\n`);
+
+  // Wake the backend on startup so it's ready to receive webhooks
+  const backendUrl = (process.env.CRM_WEBHOOK_URL || '').replace('/api/webhooks/channel-status', '');
+  if (backendUrl) {
+    fetch(`${backendUrl}/health`)
+      .then(() => console.log('[Startup] Backend wake ping sent'))
+      .catch(() => console.log('[Startup] Backend wake ping failed (will retry via webhook retries)'));
+  }
 });
