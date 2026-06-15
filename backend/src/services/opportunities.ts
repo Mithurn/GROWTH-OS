@@ -1597,9 +1597,15 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     if (criteria.max_days_since_last_order && profile.daysSinceLastOrder && profile.daysSinceLastOrder > criteria.max_days_since_last_order) return false;
 
     if (criteria.preferred_categories && criteria.preferred_categories.length > 0) {
-      const hasCategory = criteria.preferred_categories.some((cat: string) =>
-        profile.favoriteCategory === cat || profile.secondFavoriteCategory === cat
-      );
+      const hasCategory = criteria.preferred_categories.some((cat: string) => {
+        const needle = cat.toLowerCase();
+        return (
+          profile.favoriteCategory?.toLowerCase().includes(needle) ||
+          profile.secondFavoriteCategory?.toLowerCase().includes(needle) ||
+          needle.includes(profile.favoriteCategory?.toLowerCase() || '____') ||
+          needle.includes(profile.secondFavoriteCategory?.toLowerCase() || '____')
+        );
+      });
       if (!hasCategory) return false;
     }
 
@@ -1610,8 +1616,13 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     return true;
   });
 
-  const audienceSize = matchingProfiles.length;
-  const potentialRevenue = matchingProfiles.reduce((sum, p) => sum + p.avgOrderValue, 0) * (aiResponse.revenue_multiplier || 1.5);
+  // Fallback: if strict criteria matched nobody, use AI's estimated audience percentage
+  const effectiveProfiles = matchingProfiles.length > 0
+    ? matchingProfiles
+    : profiles.slice(0, Math.max(1, Math.round(profiles.length * ((aiResponse.estimated_audience_pct || 20) / 100))));
+
+  const audienceSize = effectiveProfiles.length;
+  const potentialRevenue = effectiveProfiles.reduce((sum, p) => sum + p.avgOrderValue, 0) * (aiResponse.revenue_multiplier || 1.5);
 
   // Create opportunity record
   const opportunityKey = `custom_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -1625,7 +1636,7 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     potential_revenue: Math.round(potentialRevenue),
     confidence_score: aiResponse.confidence_score || 75,
     priority_score: Math.round((aiResponse.confidence_score || 75) * 0.8),
-    supporting_customer_segment: matchingProfiles.length > 0 ? matchingProfiles[0].personaName || 'All Customers' : 'All Customers',
+    supporting_customer_segment: effectiveProfiles.length > 0 ? effectiveProfiles[0].personaName || 'All Customers' : 'All Customers',
     recommended_action: aiResponse.recommended_action || 'Review opportunity and create campaign',
     audience_definition: aiResponse.audience_criteria || {},
     trigger_reason: aiResponse.trigger_reason || `Generated from marketer goal: "${goal}"`,
@@ -1648,8 +1659,8 @@ Be realistic - don't promise impossible results. Base estimates on the business 
   }
 
   // Link customers to opportunity
-  if (matchingProfiles.length > 0) {
-    const opportunityCustomers = matchingProfiles.map(p => ({
+  if (effectiveProfiles.length > 0) {
+    const opportunityCustomers = effectiveProfiles.map(p => ({
       opportunity_id: insertedOpportunity.id,
       customer_id: p.customerId,
     }));
@@ -1666,11 +1677,11 @@ Be realistic - don't promise impossible results. Base estimates on the business 
   console.log(`[createOpportunityFromGoal] Created opportunity ${insertedOpportunity.id} with ${audienceSize} customers`);
 
   // Return in dashboard format
-  const avgSpend = matchingProfiles.length > 0
-    ? matchingProfiles.reduce((sum, p) => sum + p.totalSpent, 0) / matchingProfiles.length
+  const avgSpend = effectiveProfiles.length > 0
+    ? effectiveProfiles.reduce((sum, p) => sum + p.totalSpent, 0) / effectiveProfiles.length
     : 0;
-  const avgOrders = matchingProfiles.length > 0
-    ? matchingProfiles.reduce((sum, p) => sum + p.totalOrders, 0) / matchingProfiles.length
+  const avgOrders = effectiveProfiles.length > 0
+    ? effectiveProfiles.reduce((sum, p) => sum + p.totalOrders, 0) / effectiveProfiles.length
     : 0;
 
   return {
