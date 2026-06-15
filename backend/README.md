@@ -31,7 +31,16 @@
 
 ## AI Pipeline
 
-Every AI step routes through **`openrouter/free`** — OpenRouter's dynamic load-balancer that selects the fastest available free model (Nemotron, LFM, Laguna, and others) at the moment of the request. This means zero AI cost, no rate-limit cliff, and automatic failover if any single provider goes down.
+Every AI step routes through **`openrouter/free`** — OpenRouter's dynamic load-balancer that selects the fastest available free model at the moment of the request. Zero AI cost, no rate-limit cliff, automatic failover.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/NVIDIA-Nemotron_Nano_120B-76B900?style=flat-square&logo=nvidia&logoColor=white" alt="NVIDIA">
+  <img src="https://img.shields.io/badge/Meta-Llama_3.1_8B-0467DF?style=flat-square&logo=meta&logoColor=white" alt="Meta">
+  <img src="https://img.shields.io/badge/Google-Gemma_4_31B-4285F4?style=flat-square&logo=google&logoColor=white" alt="Google">
+  <img src="https://img.shields.io/badge/Liquid_AI-LFM_2.5_1.2B-8B5CF6?style=flat-square&logoColor=white" alt="Liquid AI">
+  <img src="https://img.shields.io/badge/Poolside-Laguna_XS_2-EC4899?style=flat-square&logoColor=white" alt="Poolside">
+  <img src="https://img.shields.io/badge/Alibaba-Qwen3_Coder-FF6A00?style=flat-square&logoColor=white" alt="Qwen3">
+</p>
 
 Every AI step uses a strict **structured prompt → JSON parse → validate → store** pattern. The LLM never outputs free-form text that touches the database or UI directly.
 
