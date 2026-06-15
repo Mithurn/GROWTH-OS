@@ -398,47 +398,51 @@ export async function launchCampaign(
     throw new Error(`Failed to fetch created communications: ${fetchCommsError.message}`);
   }
 
-  // Send each communication to the Channel Service
+  // Send all communications to Channel Service in parallel
   const CHANNEL_SERVICE_URL = process.env.CHANNEL_SERVICE_URL || 'http://localhost:5001';
 
-  for (const comm of createdComms) {
+  await Promise.allSettled(createdComms.map(async (comm) => {
     try {
       const customer = (comm as any).customers;
       const recipient = campaign.channel === 'Email' ? customer?.email : customer?.phone;
 
       if (!recipient) {
-        console.warn(`[Launch] Skipping communication ${comm.id}: No ${campaign.channel === 'Email' ? 'email' : 'phone'} for customer ${comm.customer_id}`);
-        continue;
+        console.warn(`[Launch] Skipping ${comm.id}: no ${campaign.channel === 'Email' ? 'email' : 'phone'}`);
+        return;
       }
 
-      const response = await fetch(`${CHANNEL_SERVICE_URL}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          communicationId: comm.id,
-          recipient,
-          channel: campaign.channel,
-          content: comm.message,
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
 
-      if (!response.ok) {
-        throw new Error(`Channel Service responded with ${response.status}`);
+      let result: { providerMessageId?: string };
+      try {
+        const response = await fetch(`${CHANNEL_SERVICE_URL}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            communicationId: comm.id,
+            recipient,
+            channel: campaign.channel,
+            content: comm.message,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!response.ok) throw new Error(`Channel Service responded with ${response.status}`);
+        result = await response.json() as { providerMessageId?: string };
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
       }
 
-      const result = await response.json() as { providerMessageId?: string };
-
-      // Update communication with provider message ID
       await supabase
         .from('communications')
         .update({ provider_message_id: result.providerMessageId })
         .eq('id', comm.id);
 
-      console.log(`[Launch] ✓ Sent ${comm.id} to Channel Service: ${result.providerMessageId}`);
+      console.log(`[Launch] ✓ ${comm.id} → ${result.providerMessageId}`);
     } catch (error) {
-      console.error(`[Launch] Failed to send communication ${comm.id}:`, error);
-
-      // Mark as failed
+      console.error(`[Launch] Failed ${comm.id}:`, error);
       await supabase
         .from('communications')
         .update({
@@ -448,7 +452,7 @@ export async function launchCampaign(
         })
         .eq('id', comm.id);
     }
-  }
+  }));
 
   // Create QUEUED events for all communications
   const events = createdComms.map((comm: any) => ({

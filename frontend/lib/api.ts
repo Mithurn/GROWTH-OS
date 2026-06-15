@@ -259,19 +259,25 @@ export async function getPersonaCustomers(personaName: string, companyId?: strin
 // ============================================
 
 export async function generateCampaign(opportunityId: string, companyId?: string, model?: string) {
-  const response = await fetch(`${API_BASE_URL}/campaigns/generate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ opportunityId, companyId, model }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
 
-  if (!response.ok) {
-    throw new Error('Failed to generate campaign');
+  try {
+    const response = await fetch(`${API_BASE_URL}/campaigns/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opportunityId, companyId, model }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) throw new Error('Failed to generate campaign');
+    return response.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw new Error('Campaign generation timed out — the server is waking up, please try again in a moment.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return response.json();
 }
 
 export async function saveCampaign(opportunityId: string, campaign: any, companyId?: string) {
