@@ -192,7 +192,7 @@ export default function HomePage() {
   // Wake both Render services immediately on homepage load
   useEffect(() => {
     fetch('https://xeno-crm-backend-n6d8.onrender.com/health').catch(() => {});
-    fetch('https://xeno-channel-service.onrender.com/health').catch(() => {});
+    fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
   }, []);
 
   // Fetch opportunities
