@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
-  <img src="https://img.shields.io/badge/OpenRouter-Gemini_2.5_Flash-F59E0B?style=flat-square" alt="OpenRouter">
+  <img src="https://img.shields.io/badge/OpenRouter-Dynamic_Free_Router-F59E0B?style=flat-square" alt="OpenRouter">
   <img src="https://img.shields.io/badge/Deployed-Render-46E3B7?style=flat-square" alt="Render">
 </p>
 
@@ -30,6 +30,8 @@
 ---
 
 ## AI Pipeline
+
+Every AI step routes through **`openrouter/free`** — OpenRouter's dynamic load-balancer that selects the fastest available free model (Nemotron, LFM, Laguna, and others) at the moment of the request. This means zero AI cost, no rate-limit cliff, and automatic failover if any single provider goes down.
 
 Every AI step uses a strict **structured prompt → JSON parse → validate → store** pattern. The LLM never outputs free-form text that touches the database or UI directly.
 
@@ -163,10 +165,10 @@ npm run dev
 PORT=3001
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-OPENROUTER_API_KEY=
+OPENROUTER_API_KEY=            # Get free at openrouter.ai
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_APP_NAME=xeno-grow
-OPENROUTER_MODEL=google/gemini-2.5-flash
+OPENROUTER_MODEL=openrouter/free  # Dynamic router — auto-selects fastest free model at runtime
 CHANNEL_SERVICE_URL=http://localhost:5001
 WEBHOOK_SECRET=your_shared_secret
 ```
