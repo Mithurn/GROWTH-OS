@@ -126,6 +126,7 @@ function CampaignsContent() {
   // Shared
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [alreadyLaunchedId, setAlreadyLaunchedId] = useState<string | null>(null);
   const [isLaunched, setIsLaunched] = useState(false);
   const [launchBarWidth, setLaunchBarWidth] = useState(0);
 
@@ -171,6 +172,12 @@ function CampaignsContent() {
       );
 
       if (existing) {
+        if (existing.status === 'Launched') {
+          setAlreadyLaunchedId(existing.id);
+          setLoading(false);
+          setTimeout(() => router.push(`/analytics?campaignId=${existing.id}`), 2500);
+          return;
+        }
         setSavedCampaign(existing);
         setCurrentMessage(existing.message_content);
         setSelectedChannel((existing.channel as Channel) ?? 'WhatsApp');
@@ -260,6 +267,26 @@ function CampaignsContent() {
       setError(e instanceof Error ? e.message : 'Failed to launch campaign');
       setIsLaunching(false);
     }
+  }
+
+  // ── Render: already launched — redirect to analytics ──
+  if (alreadyLaunchedId) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E1A]">
+        <div className="bg-[#141929] border border-[#1E2545] rounded-2xl p-10 text-center max-w-md w-full mx-6 shadow-2xl">
+          <div className="relative h-20 w-20 mx-auto mb-6">
+            <div className="relative h-20 w-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center">
+              <CheckCircle2 className="h-9 w-9 text-emerald-400" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-extrabold text-white mb-2">Already Launched</h2>
+          <p className="text-[#8B92A5] text-sm mb-6">This opportunity's campaign has already been launched. Taking you to the analytics...</p>
+          <div className="h-1 w-full bg-[#1E2545] rounded-full overflow-hidden">
+            <div className="h-1 bg-emerald-500 rounded-full animate-[width_2.5s_ease-in-out_forwards]" style={{ width: '100%', transition: 'width 2.5s ease-in-out' }} />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // ── Render: launch success overlay ──
