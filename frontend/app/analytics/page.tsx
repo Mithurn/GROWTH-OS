@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
   ArrowLeft, Brain, ChevronRight, Loader2, Mail, MailOpen,
-  MessageSquare, MousePointerClick, Smartphone,
+  MessageSquare, MousePointerClick, Send, Smartphone,
   Target, TrendingUp, Users, Zap, Activity,
 } from 'lucide-react';
 
