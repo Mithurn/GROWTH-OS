@@ -501,72 +501,37 @@ export default function OnboardingPage() {
                 Upload your customers and orders as CSV files. Xeno will analyse them instantly.
               </p>
 
-              <div className="space-y-3 mb-6">
-                <div
-                  onClick={() => customerInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-5 cursor-pointer transition-all hover:border-[#5B4FFF] hover:bg-[#F8F7FF] ${
-                    customerFile ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB]'
-                  }`}
-                >
-                  <input
-                    ref={customerInputRef}
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={e => setCustomerFile(e.target.files?.[0] || null)}
-                  />
+              <div className="space-y-3 mb-6 pointer-events-none opacity-50">
+                <div className="border-2 border-dashed rounded-xl p-5 border-[#E5E7EB]">
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${customerFile ? 'bg-[#5B4FFF]' : 'bg-[#F3F4F6]'}`}>
-                      {customerFile ? <Check className="h-5 w-5 text-white" /> : <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />}
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#F3F4F6]">
+                      <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-[#1A1A1A]">
-                        {customerFile ? customerFile.name : 'Upload Customers CSV'}
-                      </div>
+                      <div className="text-sm font-bold text-[#1A1A1A]">Upload Customers CSV</div>
                       <div className="text-xs text-[#9CA3AF] mt-0.5">customer_id, name, email, phone, city...</div>
                     </div>
                   </div>
                 </div>
 
-                <div
-                  onClick={() => orderInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-5 cursor-pointer transition-all hover:border-[#5B4FFF] hover:bg-[#F8F7FF] ${
-                    orderFile ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB]'
-                  }`}
-                >
-                  <input
-                    ref={orderInputRef}
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={e => setOrderFile(e.target.files?.[0] || null)}
-                  />
+                <div className="border-2 border-dashed rounded-xl p-5 border-[#E5E7EB]">
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${orderFile ? 'bg-[#5B4FFF]' : 'bg-[#F3F4F6]'}`}>
-                      {orderFile ? <Check className="h-5 w-5 text-white" /> : <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />}
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#F3F4F6]">
+                      <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-[#1A1A1A]">
-                        {orderFile ? orderFile.name : 'Upload Orders CSV'}
-                      </div>
+                      <div className="text-sm font-bold text-[#1A1A1A]">Upload Orders CSV</div>
                       <div className="text-xs text-[#9CA3AF] mt-0.5">order_id, customer_id, date, amount, product...</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {uploadError && <p className="text-xs text-red-500 mb-4">{uploadError}</p>}
-
               <button
-                onClick={handleDataUpload}
-                disabled={!customerFile || !orderFile || uploading}
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled
+                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 opacity-40 cursor-not-allowed mb-3"
               >
-                {uploading ? (
-                  <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Validating...</>
-                ) : (
-                  <>Upload & Continue <ArrowRight className="h-4 w-4" /></>
-                )}
+                Upload & Continue <ArrowRight className="h-4 w-4" />
               </button>
 
               <button
@@ -575,9 +540,9 @@ export default function OnboardingPage() {
                   setUseDemoData(true);
                   next();
                 }}
-                className="w-full bg-[#F3F4F6] text-[#374151] text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#E5E7EB] transition-colors mt-3"
+                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors"
               >
-                Skip & Use Pre-loaded Demo Data <ArrowRight className="h-4 w-4" />
+                Connect Pre-loaded Demo Data <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           )}
