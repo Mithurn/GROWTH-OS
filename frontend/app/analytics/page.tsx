@@ -8,8 +8,8 @@ import {
 } from 'recharts';
 import {
   ArrowLeft, Brain, ChevronRight, Loader2, Mail, MailOpen,
-  MessageSquare, MousePointerClick, Send, Smartphone,
-  Sparkles, Target, TrendingUp, Users, Zap, Activity,
+  MessageSquare, MousePointerClick, Smartphone,
+  Target, TrendingUp, Users, Zap, Activity,
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
@@ -301,7 +301,7 @@ function AudienceDonut({ personas, targeted }: { personas: AnalyticsData['person
                 <Pie data={data} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} cx="50%" cy="50%" paddingAngle={2} stroke="none">
                   {data.map((_, i) => <Cell key={i} fill={SEG_COLORS[i % SEG_COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11 }} labelStyle={{ color: C.text }} itemStyle={{ color: C.text }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -500,7 +500,6 @@ function AnalyticsContent() {
   const [data,    setData]    = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
-  const [aiInput, setAiInput] = useState('');
   const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAnalytics = useCallback(async (id: string) => {
@@ -614,35 +613,6 @@ function AnalyticsContent() {
         <OpportunityCard nextAction={insights.nextAction} />
       </div>
 
-      {/* Bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40" style={{ background: C.card, borderTop: `1px solid ${C.border}` }}>
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            {['Compare to last month', 'Export Report'].map(label => (
-              <button key={label}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:text-white transition-colors"
-                style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.muted }}>
-                {label === 'Compare to last month' && <TrendingUp className="h-3 w-3" />}
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 rounded-lg px-4 py-2 max-w-sm w-full"
-            style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-            <Sparkles className="h-3.5 w-3.5 shrink-0" style={{ color: C.blue }} />
-            <input
-              value={aiInput}
-              onChange={e => setAiInput(e.target.value)}
-              placeholder="Ask AI about campaign performance…"
-              className="flex-1 bg-transparent text-xs outline-none placeholder:opacity-40"
-              style={{ color: C.text }}
-            />
-            <button className="h-6 w-6 rounded-md flex items-center justify-center shrink-0" style={{ background: C.blue }}>
-              <Send className="h-3 w-3 text-white" />
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
