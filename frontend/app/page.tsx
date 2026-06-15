@@ -609,16 +609,9 @@ export default function HomePage() {
                 </div>
 
                 {activityLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="flex gap-3 animate-pulse">
-                        <div className="mt-1.5 h-2 w-2 rounded-full bg-gray-200 shrink-0" />
-                        <div className="flex-1 space-y-1.5">
-                          <div className="h-3 w-3/4 bg-gray-100 rounded" />
-                          <div className="h-2.5 w-1/2 bg-gray-100 rounded" />
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex flex-col items-center justify-center py-8 gap-3">
+                    <div className="h-8 w-8 rounded-full border-2 border-[#E5E7EB] border-t-[#5B4FFF] animate-spin" />
+                    <p className="text-xs text-[#9CA3AF]">Loading activity…</p>
                   </div>
                 ) : activityItems.length === 0 ? (
                   <div className="text-center py-6">
