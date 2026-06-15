@@ -9,7 +9,7 @@ import {
 import {
   ArrowLeft, Brain, ChevronRight, Loader2, Mail, MailOpen,
   MessageSquare, MousePointerClick, Send, Smartphone,
-  Target, TrendingUp, Users, Zap, Activity,
+  Sparkles, Target, TrendingUp, Users, Zap, Activity,
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
