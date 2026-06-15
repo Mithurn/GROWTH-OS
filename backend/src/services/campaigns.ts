@@ -316,6 +316,16 @@ export async function approveCampaign(
   supabase: SupabaseClient,
   campaignId: string,
 ): Promise<CampaignRow> {
+  const { data: existing } = await supabase
+    .from('campaigns')
+    .select('status')
+    .eq('id', campaignId)
+    .single();
+
+  if (existing?.status === 'Launched') {
+    throw new Error('Campaign has already been launched and cannot be re-approved');
+  }
+
   const { data, error } = await supabase
     .from('campaigns')
     .update({
