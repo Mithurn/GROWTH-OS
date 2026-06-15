@@ -256,16 +256,24 @@ function VelocityChart({
       ) : (
         <>
           <ResponsiveContainer width="100%" height={150}>
-            <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-              <XAxis dataKey="t" tick={{ fill: C.muted, fontSize: 9 }} axisLine={false} tickLine={false} />
+            <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke={C.border} strokeDasharray="3 3" />
+              <XAxis dataKey="t" tick={{ fill: C.muted, fontSize: 9 }} axisLine={false} tickLine={false} tickMargin={8} />
               <YAxis hide />
               <Tooltip
-                contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 11 }}
+                cursor={false}
+                contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11 }}
+                labelStyle={{ color: C.text }}
+                itemStyle={{ color: C.text }}
                 formatter={(v: number, name: string) => [name === 'Revenue' ? fmtRev(v) : fmtNum(v), name]}
               />
-              <Line type="monotone" dataKey="Revenue" stroke={C.green} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="Engaged" stroke={C.blue} strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+              <Line type="natural" dataKey="Revenue" stroke={C.green} strokeWidth={2}
+                dot={{ fill: C.green, r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 0 }} />
+              <Line type="natural" dataKey="Engaged" stroke={C.blue} strokeWidth={1.5}
+                dot={{ fill: C.blue, r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 0 }}
+                strokeDasharray="4 2" />
             </LineChart>
           </ResponsiveContainer>
           <div className="flex gap-4 mt-2">
