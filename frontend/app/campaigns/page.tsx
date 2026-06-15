@@ -257,9 +257,10 @@ function CampaignsContent() {
     setIsLaunching(true);
     setError(null);
     try {
-      // Wake channel service before launching so it's ready to receive sends
+      // Wake both services before launching to prevent cold-start failures
+      fetch('https://xeno-crm-backend-n6d8.onrender.com/health').catch(() => {});
       fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
-      await new Promise(r => setTimeout(r, 3000)); // give it 3s to wake
+      await new Promise(r => setTimeout(r, 5000)); // give both 5s to wake
       await approveCampaign(savedCampaign.id);
       await launchCampaign(savedCampaign.id);
       setIsLaunching(false);
