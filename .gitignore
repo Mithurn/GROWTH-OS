@@ -32,3 +32,9 @@ pnpm-debug.log*
 # Supabase local state
 backend/.supabase/
 backend/.temp/
+
+# Claude / AI tooling (local dev only)
+.agents/
+.claude/skills/
+skills-lock.json
+backend/.mcp.json
