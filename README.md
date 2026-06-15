@@ -143,7 +143,10 @@ Every AI step uses a structured JSON prompt → parse → store pattern, never f
 | Campaign Generator | Opportunity context + channel | Campaign name, message copy, offer | `campaigns` table |
 | Analytics Insights | Live funnel data | Learnings + next best action | Returned inline |
 
-### 4. Scale Tradeoffs (Explicit)
+### 4. Deterministic AI Orchestration (Code Quality)
+A major challenge with LLMs in production is unpredictable text outputs breaking the application state. In `backend/src/services/campaigns.ts` and `opportunities.ts`, the AI is tightly orchestrated using strict structured prompts. We force the LLM to return deterministic JSON objects, which are parsed and validated before being safely written to the PostgreSQL database. This ensures the application logic remains bulletproof and the UI never breaks due to malformed AI responses.
+
+### 5. Scale Tradeoffs (Explicit)
 | Decision | Choice Made | Production Alternative |
 |---|---|---|
 | Webhook processing | Inline Supabase upsert | Push to SQS/Kafka, worker pool |
@@ -263,4 +266,13 @@ xeno-grow/
 
 ---
 
-*Built with Claude Code as the primary development environment — AI-native workflow throughout.*
+## AI-Native Development Workflow
+
+This project was built using an AI-native engineering workflow, treating the developer as the **Principal System Architect** and AI agents as the **Implementers**:
+
+1. **System Design (Human):** The core product vision, 3-service decoupled architecture, database schema, and asynchronous webhook loop were designed entirely upfront.
+2. **Validation & Tradeoffs (Human + AI):** Claude Opus was used as a sounding board to validate architectural decisions (e.g., choosing 5s polling over WebSockets for this specific scope) and to refine the data model.
+3. **Implementation (AI Agents):** Google Antigravity and Claude Code were used as autonomous coding agents to rapidly scaffold the Next.js frontend, wire up the Express backend, and build the Tailwind/shadcn UI based on Google Stitch design principles.
+4. **Review & Refinement (Human):** AI outputs were rigorously code-reviewed to ensure strict adherence to the defined architecture, particularly around webhook idempotency, error handling, and deterministic LLM parsing.
+
+*The result is a fully functional, highly-opinionated application built in a fraction of the traditional time, demonstrating the power of AI-native product engineering.*
