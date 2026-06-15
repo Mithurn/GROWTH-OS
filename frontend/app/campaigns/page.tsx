@@ -257,6 +257,9 @@ function CampaignsContent() {
     setIsLaunching(true);
     setError(null);
     try {
+      // Wake channel service before launching so it's ready to receive sends
+      fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
+      await new Promise(r => setTimeout(r, 3000)); // give it 3s to wake
       await approveCampaign(savedCampaign.id);
       await launchCampaign(savedCampaign.id);
       setIsLaunching(false);
