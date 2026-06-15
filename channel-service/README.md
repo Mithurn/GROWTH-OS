@@ -1,435 +1,158 @@
-# Channel Service
+<h1 align="center">
+  <br>
+  <img width="120" height="120" alt="Xeno Growth OS" src="https://xeno-grow.vercel.app/logo.png" />
+  <br>
+  Xeno Growth OS — Channel Service
+  <br>
+</h1>
 
-A simulated messaging channel provider for WhatsApp, Email, and SMS communications. This service demonstrates production-ready patterns for webhook-based integrations.
+<h4 align="center">A standalone delivery simulator that models the full async lifecycle of a real messaging provider — without sending a single real message.</h4>
 
-## Overview
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js" alt="Node.js">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
+  <img src="https://img.shields.io/badge/Channels-WhatsApp_·_Email_·_SMS-25D366?style=flat-square" alt="Channels">
+  <img src="https://img.shields.io/badge/Deployed-Render-46E3B7?style=flat-square" alt="Render">
+</p>
 
-The Channel Service simulates the behavior of real messaging providers (like Twilio, SendGrid, WhatsApp Business API) by:
+<p align="center">
+  <a href="#why-a-separate-service">Why Separate</a> •
+  <a href="#delivery-lifecycle">Delivery Lifecycle</a> •
+  <a href="#webhook-contract">Webhook Contract</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#setup">Setup</a>
+</p>
 
-1. **Accepting messages** via REST API (returns 202 Accepted immediately)
-2. **Processing asynchronously** through realistic state transitions
-3. **Sending webhooks** to notify the CRM of status changes
-4. **Implementing retry logic** for reliable webhook delivery
-
-## Architecture
-
-```
-┌──────────────┐      POST /send       ┌─────────────────┐
-│     CRM      │─────────────────────▶│  HTTP Server    │
-│   Backend    │◀─────────────────────│   (Express)     │
-└──────────────┘   Webhook Callbacks   └─────────────────┘
-                                              │
-                                              ▼
-                                       ┌─────────────────┐
-                                       │  Message Queue  │
-                                       │  (In-Memory)    │
-                                       └─────────────────┘
-                                              │
-                                              ▼
-                                       ┌─────────────────┐
-                                       │ State Machine   │
-                                       │  Processor      │
-                                       └─────────────────┘
-                                              │
-                                              ▼
-                                       ┌─────────────────┐
-                                       │  Webhook Sender │
-                                       │  (with retry)   │
-                                       └─────────────────┘
-```
-
-## State Machine
-
-Messages progress through the following states:
-
-```
-QUEUED (seq 1)
-   │
-   │ wait 2s
-   ▼
-SENT (seq 2)
-   │
-   │ wait 3s
-   ▼
-DELIVERED (seq 3) ─────── 10% ────────▶ FAILED (seq 3)
-   │                                         [END]
-   │ 60% chance
-   ▼
-READ (seq 4)
-   │
-   │ 20% chance
-   ▼
-CLICKED (seq 5)
-   [END]
-```
-
-**Sequence Numbers:**
-- QUEUED: 1
-- SENT: 2
-- DELIVERED: 3
-- READ: 4
-- CLICKED: 5
-- FAILED: 3 (same as DELIVERED for ordering)
-
-## API Reference
-
-### POST /send
-
-Accept a message for delivery.
-
-**Request:**
-```json
-{
-  "communicationId": "uuid-from-crm",
-  "recipient": "user@example.com" | "+1234567890",
-  "channel": "WhatsApp" | "Email" | "SMS",
-  "content": "Message text"
-}
-```
-
-**Response: 202 Accepted**
-```json
-{
-  "accepted": true,
-  "providerMessageId": "wa_msg_1781208693740_zks0y1",
-  "message": "Communication accepted for delivery"
-}
-```
-
-**Validation:**
-- All fields are required
-- Channel must be one of: WhatsApp, Email, SMS
+**Production URL:** https://xeno-channel-service-0dpu.onrender.com
 
 ---
 
-### GET /status/:providerMessageId
+## Why a Separate Service
 
-Check the status of a message.
+This is a **deliberately separate process** — not a module inside the backend.
 
-**Response: 200 OK**
+Real-world CRMs integrate with messaging providers like Twilio, Gupshup, or Kaleyra over HTTP. The CRM sends a message, the provider delivers it asynchronously, and fires webhooks back with each status update (delivered, read, clicked). The CRM and the provider are two independent services.
+
+This channel service models that exact architecture. Swapping the simulator for a real provider (Twilio) requires **zero changes to the CRM backend** — just point `CHANNEL_SERVICE_URL` at the real endpoint.
+
+---
+
+## Delivery Lifecycle
+
+Each message accepted via `POST /send` goes through a stochastic async pipeline:
+
+```
+POST /send → 202 Accepted (immediate)
+                ↓
+         [in-memory queue]
+                ↓ ~2s
+            SENT (seq 2)  ──────────────────────► webhook → backend
+                ↓
+         10% failure rate
+         ├── FAILED (seq 3) ────────────────────► webhook → backend
+         └── DELIVERED (seq 3) ─────────────────► webhook → backend
+                    ↓ ~4s
+               60% read rate
+               READ (seq 4) ──────────────────► webhook → backend
+                    ↓ ~5s
+               20% click rate
+               CLICKED (seq 5) ──────────────► webhook → backend
+```
+
+All timing and rates are configurable via environment variables.
+
+---
+
+## Webhook Contract
+
+Every status update fires a `POST` to the backend's `CRM_WEBHOOK_URL` with:
+
 ```json
 {
-  "providerMessageId": "wa_msg_1781208693740_zks0y1",
+  "eventId": "uuid-v4",
+  "providerMessageId": "email_msg_1781519576454_abc123",
+  "communicationId": "uuid-from-backend",
   "status": "DELIVERED",
-  "sequenceNumber": 3,
-  "channel": "WhatsApp",
-  "createdAt": "2026-06-11T20:10:18.769Z",
-  "lastUpdatedAt": "2026-06-11T20:10:23.806Z"
-}
-```
-
-**Response: 404 Not Found**
-```json
-{
-  "error": "Message not found"
-}
-```
-
----
-
-### GET /messages
-
-List all messages in the queue (for debugging).
-
-**Response: 200 OK**
-```json
-{
-  "total": 18,
-  "messages": [
-    {
-      "providerMessageId": "wa_msg_1781208693740_zks0y1",
-      "communicationId": "740157de-eff6-48b2-bb7f-a31ccca0c8ec",
-      "status": "READ",
-      "sequenceNumber": 4,
-      "channel": "WhatsApp",
-      "recipient": "+919876543210",
-      "createdAt": "2026-06-11T20:10:18.769Z",
-      "lastUpdatedAt": "2026-06-11T20:10:28.806Z"
-    }
-  ]
-}
-```
-
----
-
-### GET /health
-
-Health check endpoint.
-
-**Response: 200 OK**
-```json
-{
-  "status": "healthy",
-  "service": "channel-service",
-  "uptime": 144.345609
-}
-```
-
-## Webhooks
-
-### Webhook Format
-
-The Channel Service sends webhooks to the CRM at each state transition.
-
-**Endpoint:** `process.env.CRM_WEBHOOK_URL`
-**Method:** POST
-**Headers:**
-```
-Content-Type: application/json
-X-Signature: <HMAC-SHA256-signature>
-```
-
-**Body:**
-```json
-{
-  "eventId": "uuid-unique-event-id",
-  "providerMessageId": "wa_msg_1781208693740_zks0y1",
-  "communicationId": "740157de-eff6-48b2-bb7f-a31ccca0c8ec",
-  "status": "DELIVERED",
-  "timestamp": "2026-06-11T20:10:23.806Z",
+  "timestamp": "2026-06-15T10:22:34.123Z",
   "sequenceNumber": 3
 }
 ```
 
-### Signature Verification
+**Security:** Every payload is signed with HMAC-SHA256 using the shared `WEBHOOK_SECRET`. The backend verifies the `X-Signature` header and rejects any request that doesn't match.
 
-Webhooks are signed using HMAC SHA256:
+**Reliability:** Failed webhook deliveries are retried 3 times with increasing delays (15s → 30s → 60s) to handle cold-start scenarios on the backend.
 
-```typescript
-const signature = crypto
-  .createHmac('sha256', WEBHOOK_SECRET)
-  .update(JSON.stringify(payload))
-  .digest('hex');
+---
+
+## API Endpoints
+
+```
+POST /send                          # Accept a message for async delivery
+GET  /status/:providerMessageId     # Check message status (debug)
+GET  /messages                      # List all in-memory messages (debug)
+GET  /health                        # Health check
 ```
 
-The CRM should verify this signature to ensure webhooks are authentic:
-
-```typescript
-const expectedSignature = crypto
-  .createHmac('sha256', WEBHOOK_SECRET)
-  .update(payload)
-  .digest('hex');
-
-const isValid = crypto.timingSafeEqual(
-  Buffer.from(signature),
-  Buffer.from(expectedSignature)
-);
-```
-
-### Retry Logic
-
-If a webhook fails (non-200 response), the Channel Service retries with exponential backoff:
-
-1. **First retry:** 5 seconds
-2. **Second retry:** 15 seconds
-3. **Third retry:** 30 seconds
-4. **Give up:** After 3 failed attempts
-
-## Configuration
-
-Environment variables in `.env`:
-
-```env
-# Server
-PORT=5001                    # Port to listen on
-
-# Webhook
-CRM_WEBHOOK_URL=http://localhost:3001/api/webhooks/channel-status
-WEBHOOK_SECRET=xeno-webhook-secret-dev
-
-# State transition delays (milliseconds)
-QUEUED_TO_SENT_DELAY=2000
-SENT_TO_DELIVERED_DELAY=3000
-DELIVERED_TO_READ_DELAY=4000
-READ_TO_CLICKED_DELAY=5000
-
-# Retry delays (milliseconds)
-RETRY_DELAY_1=5000
-RETRY_DELAY_2=15000
-RETRY_DELAY_3=30000
-
-# Failure simulation
-FAILURE_RATE=10              # Percentage (0-100)
-```
-
-## Installation
-
-```bash
-npm install
-```
-
-## Running
-
-### Development (with auto-reload)
-```bash
-npm run dev
-```
-
-### Production
-```bash
-npm start
-```
-
-## Testing
-
-### Quick Test
-```bash
-curl -X POST http://localhost:5001/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "communicationId": "test-123",
-    "recipient": "test@example.com",
-    "channel": "Email",
-    "content": "Hello World"
-  }'
-```
-
-**Expected Response:**
+### POST /send — Request body
 ```json
 {
-  "accepted": true,
-  "providerMessageId": "email_msg_1781208618769_65iw4m",
-  "message": "Communication accepted for delivery"
+  "communicationId": "uuid",
+  "recipient": "user@example.com",
+  "channel": "Email",
+  "content": "Your personalised message here"
 }
 ```
 
-### Check Status
+---
+
+## Configuration
+
+All behaviour is tunable via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `5001` | Service port |
+| `CRM_WEBHOOK_URL` | `http://localhost:3001/api/webhooks/channel-status` | Backend callback URL |
+| `WEBHOOK_SECRET` | — | Shared HMAC secret (must match backend) |
+| `FAILURE_RATE` | `10` | % of messages that fail at delivery |
+| `QUEUED_TO_SENT_DELAY` | `2000` | ms before SENT fires |
+| `SENT_TO_DELIVERED_DELAY` | `3000` | ms before DELIVERED/FAILED fires |
+| `DELIVERED_TO_READ_DELAY` | `4000` | ms before READ fires |
+| `READ_TO_CLICKED_DELAY` | `5000` | ms before CLICKED fires |
+| `RETRY_DELAY_1` | `15000` | First webhook retry delay (ms) |
+| `RETRY_DELAY_2` | `30000` | Second webhook retry delay (ms) |
+| `RETRY_DELAY_3` | `60000` | Third webhook retry delay (ms) |
+
+---
+
+## Source Structure
+
+```
+channel-service/src/
+├── server.ts       # Express app — /send, /status, /messages, /health endpoints
+├── queue.ts        # In-memory message queue + async delivery state machine
+├── webhook.ts      # HMAC-signed webhook emitter with retry logic
+└── types.ts        # Shared TypeScript types
+```
+
+---
+
+## Setup
+
 ```bash
-curl http://localhost:5001/status/email_msg_1781208618769_65iw4m
+cd channel-service
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-### View All Messages
-```bash
-curl http://localhost:5001/messages | jq .
+**.env**
+```
+PORT=5001
+CRM_WEBHOOK_URL=http://localhost:3001/api/webhooks/channel-status
+WEBHOOK_SECRET=your_shared_secret
+FAILURE_RATE=10
 ```
 
-## Provider Message ID Format
-
-The service generates unique provider message IDs based on channel:
-
-- **WhatsApp:** `wa_msg_{timestamp}_{random}`
-- **Email:** `email_msg_{timestamp}_{random}`
-- **SMS:** `sms_msg_{timestamp}_{random}`
-
-Example: `wa_msg_1781208693740_zks0y1`
-
-## Realistic Behavior
-
-The service simulates real-world messaging provider behavior:
-
-### Delivery Success Rate
-- **90% delivered** - Most messages reach recipients
-- **10% failed** - Some messages fail (invalid recipient, service error, etc.)
-
-### Engagement Rates
-- **60% of delivered messages are read**
-- **20% of read messages are clicked** (if they contain links)
-
-### Timing
-- Messages don't process instantly (configurable delays)
-- Webhooks arrive asynchronously
-- Retry logic handles transient failures
-
-## Production Patterns
-
-This service demonstrates several production-ready patterns:
-
-### 1. Asynchronous Processing
-- Returns 202 Accepted immediately
-- Processes messages in background
-- Doesn't block the calling service
-
-### 2. Webhook Security
-- HMAC signature on all webhooks
-- Shared secret between services
-- Prevents webhook spoofing
-
-### 3. Idempotency
-- Each webhook has unique eventId
-- CRM can safely retry operations
-- Duplicate events can be detected
-
-### 4. Reliability
-- Automatic retry with exponential backoff
-- Handles transient network failures
-- Logs all retry attempts
-
-### 5. Observability
-- Comprehensive logging
-- Status endpoints for debugging
-- Message queue visibility
-
-## File Structure
-
-```
-channel-service/
-├── package.json         # Dependencies
-├── .env                 # Configuration
-├── src/
-│   ├── server.ts        # Express app and endpoints
-│   ├── queue.ts         # Message queue and state machine
-│   ├── webhook.ts       # Webhook sender with retry logic
-│   └── types.ts         # TypeScript types
-└── README.md            # This file
-```
-
-## Dependencies
-
-- **express** - HTTP server
-- **dotenv** - Environment configuration
-- **uuid** - Unique event IDs
-- **tsx** - TypeScript execution (dev)
-- **typescript** - Type checking
-
-## Limitations
-
-### In-Memory Storage
-- Messages are stored in memory (Map)
-- Restart clears all messages
-- Not suitable for production scale
-
-**Production Alternative:**
-- Use Redis for queue storage
-- Implement job queue (Bull, BullMQ)
-- Add persistence layer
-
-### No Authentication
-- No API key or authentication
-- Assumes trusted network
-- All endpoints are public
-
-**Production Alternative:**
-- Require API key on POST /send
-- Rate limiting
-- IP allowlisting
-
-### Single Instance
-- No clustering support
-- No load balancing
-- Single point of failure
-
-**Production Alternative:**
-- Run multiple instances behind load balancer
-- Use distributed queue (RabbitMQ, Kafka)
-- Share state via Redis
-
-## Future Enhancements
-
-1. **Persistence** - Store messages in database
-2. **Authentication** - API keys for /send endpoint
-3. **Rate Limiting** - Prevent abuse
-4. **Message Templates** - Support for rich messages
-5. **Delivery Reports** - Detailed failure reasons
-6. **Channel-Specific Behavior** - Different timing per channel
-7. **Batch Sending** - Accept multiple messages at once
-8. **Priority Queue** - High-priority message support
-9. **Dead Letter Queue** - Handle permanently failed messages
-10. **Metrics** - Prometheus/Grafana integration
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions, contact the development team.
+Runs at **http://localhost:5001**
