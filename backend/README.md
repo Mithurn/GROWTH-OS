@@ -1,253 +1,180 @@
-# Xeno Growth OS — Backend API
+<h1 align="center">
+  <br>
+  <img width="120" height="120" alt="Xeno Growth OS" src="https://xeno-grow.vercel.app/logo.png" />
+  <br>
+  Xeno Growth OS — Backend API
+  <br>
+</h1>
 
-Express.js REST API powering the Xeno Growth OS platform. Handles data ingestion, AI pipeline execution, campaign lifecycle, webhook processing, and analytics.
+<h4 align="center">The AI orchestration engine. Handles data ingestion, persona & opportunity generation, campaign lifecycle, webhook processing, and live analytics.</h4>
 
-**Production URL:** https://xeno-crm-backend-n6d8.onrender.com  
-**Deployed on:** Render (free tier)
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js" alt="Node.js">
+  <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
+  <img src="https://img.shields.io/badge/OpenRouter-Gemini_2.5_Flash-F59E0B?style=flat-square" alt="OpenRouter">
+  <img src="https://img.shields.io/badge/Deployed-Render-46E3B7?style=flat-square" alt="Render">
+</p>
 
----
+<p align="center">
+  <a href="#ai-pipeline">AI Pipeline</a> •
+  <a href="#api-endpoints">API Endpoints</a> •
+  <a href="#webhook-loop">Webhook Loop</a> •
+  <a href="#scale-tradeoffs">Scale Tradeoffs</a> •
+  <a href="#setup">Setup</a>
+</p>
 
-## Tech Stack
-
-| Layer | Technology | Version |
-|---|---|---|
-| Runtime | Node.js | 18+ |
-| Framework | Express.js | 5.x |
-| Language | TypeScript | 6.x |
-| ORM | Prisma | 7.x |
-| Database | Supabase (PostgreSQL) | — |
-| AI | OpenRouter → Gemini 2.5 Flash | — |
-| CSV parsing | csv-parser | 3.x |
-| File uploads | multer | 2.x |
-| Build | esbuild | 0.28.x |
-| Dev runner | tsx | 4.x |
-
----
-
-## Architecture
-
-```
-                        ┌─────────────────────────────────────────┐
-                        │           Express.js API                 │
-                        │           src/server.ts                  │
-                        │                                          │
-  CSV Upload ──────────▶│  /api/process-ingestion                  │
-                        │  /api/opportunities                      │
-  Frontend ────────────▶│  /api/campaigns/*                        │──▶ Supabase (PostgreSQL)
-                        │  /api/analytics/*                        │
-  Channel Service ─────▶│  /api/webhooks/channel-status            │
-                        │                                          │
-                        │         Services Layer                   │
-                        │  ┌──────────────────────────────────┐    │
-                        │  │ personas.ts     → AI persona gen │    │──▶ OpenRouter
-                        │  │ opportunities.ts → AI opp engine │    │    (Gemini 2.5 Flash)
-                        │  │ campaigns.ts    → AI copy gen    │    │
-                        │  │ analytics.ts    → funnel engine  │    │
-                        │  │ webhooks.ts     → event receiver │    │
-                        │  │ agent-logger.ts → activity feed  │    │
-                        │  └──────────────────────────────────┘    │
-                        └─────────────────────────────────────────┘
-```
-
----
-
-## Data Model
-
-```
-companies
- ├── customers          (external_id, RFM scores, persona_id, city, signup_date)
- │    └── orders        (order_date, amount, channel)
- │         └── order_items → products
- │
- ├── personas           (AI-assigned segment labels, reasoning, distribution counts)
- │
- ├── opportunities      (AI-detected, audience_size, potential_revenue, confidence)
- │    └── campaigns     (AI-generated copy, channel, status: DRAFT→ACTIVE→COMPLETED)
- │         └── communications   (one row per recipient, status tracked)
- │              └── communication_events
- │                   (QUEUED → SENT → DELIVERED → READ → CLICKED | FAILED)
- │
- ├── agent_actions      (activity log — every AI decision recorded)
- └── onboarding_profiles (brand info, primary goal, operating mode)
-```
-
----
-
-## API Routes
-
-### Ingestion
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/process-ingestion` | Upload + validate customer & order CSVs, seed DB, compute metrics, run AI pipeline |
-| `GET` | `/api/ingestion-status/:sessionId` | Poll ingestion progress |
-| `POST` | `/api/upload-customers` | Preview-only CSV validate (no DB write) |
-| `POST` | `/api/upload-orders` | Preview-only CSV validate (no DB write) |
-
-### Opportunities
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/opportunities` | List all AI-detected opportunities for a company |
-| `POST` | `/api/opportunities/generate` | Trigger AI opportunity discovery |
-| `GET` | `/api/opportunities/:id` | Single opportunity detail |
-
-### Campaigns
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/campaigns/generate` | AI generates campaign draft from opportunity |
-| `GET` | `/api/campaigns` | List campaigns |
-| `GET` | `/api/campaigns/:id` | Single campaign |
-| `POST` | `/api/campaigns/:id/launch` | Launch campaign → enqueues to channel service |
-| `PATCH` | `/api/campaigns/:id` | Update draft |
-
-### Analytics
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/campaigns/:id/analytics` | Live funnel, delivery breakdown, AI insights |
-| `GET` | `/api/analytics/overview` | Company-wide metrics (revenue, orders, customers) |
-
-### Webhooks
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/webhooks/channel-status` | Receive delivery events from channel service (HMAC-verified) |
-
-### Activity & Misc
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/activity-stream` | Recent AI agent actions for home feed |
-| `POST` | `/api/companies` | Create company record during onboarding |
-| `POST` | `/api/onboarding/profile` | Save brand profile post-onboarding |
-| `POST` | `/api/agents` | Create AI agent config |
+**Production URL:** https://xeno-crm-backend-n6d8.onrender.com
 
 ---
 
 ## AI Pipeline
 
-Every AI call follows a **structured prompt → JSON parse → DB store** pattern. No free-form text is ever rendered directly from AI output.
+Every AI step uses a strict **structured prompt → JSON parse → validate → store** pattern. The LLM never outputs free-form text that touches the database or UI directly.
+
+| Step | Service | Input | Output Stored |
+|------|---------|-------|---------------|
+| **Persona Engine** | `services/personas.ts` | RFM scores + purchase history per customer | `personas` table — label + reasoning per customer |
+| **Opportunity Engine** | `services/opportunities.ts` | Persona distribution + revenue signals | `opportunities` table — typed objects with audience size + predicted revenue |
+| **Campaign Generator** | `services/campaigns.ts` | Opportunity context + channel | `campaigns` table — name, copy, offer, predicted conversion |
+| **Analytics Insights** | `services/analytics.ts` | Live funnel data | Returned inline — learnings + next best action |
+
+Each prompt enforces a strict JSON schema contract. Malformed responses are caught, logged, and never written to the database — the application state never breaks due to LLM unpredictability.
+
+---
+
+## API Endpoints
+
+### Data Ingestion
+```
+POST /api/upload/customers          # CSV multipart upload
+POST /api/upload/orders             # CSV multipart upload
+POST /api/process-ingestion         # Trigger enrichment pipeline
+```
+
+### Opportunities
+```
+GET  /api/opportunities             # List all opportunities
+GET  /api/opportunities/:id         # Single opportunity detail
+GET  /api/opportunities/:id/customers  # Audience for opportunity
+POST /api/opportunities/from-goal   # Create from natural language goal
+POST /api/opportunities/:id/refine  # AI refinement via natural language
+```
+
+### Campaigns
+```
+POST /api/campaigns/generate        # AI-generate campaign for opportunity
+GET  /api/campaigns                 # List all campaigns
+GET  /api/campaigns/:id             # Single campaign
+POST /api/campaigns/:id/approve     # Approve (blocks re-approval after launch)
+POST /api/campaigns/:id/launch      # Launch — creates communications + fires channel service
+GET  /api/campaigns/:id/analytics   # Live funnel + AI insights
+POST /api/campaigns/:id/refine-message  # Refine message copy via AI
+```
+
+### Webhooks
+```
+POST /api/webhooks/channel-status   # HMAC-verified webhook receiver from channel service
+```
+
+### Analytics & Intelligence
+```
+GET  /api/analytics/intelligence-brief
+GET  /api/analytics/campaign-funnel
+GET  /api/analytics/channel-performance
+GET  /api/analytics/opportunity-pipeline
+GET  /api/agent/recent-actions
+```
 
 ```
-CSV Data
-   │
-   ▼
-customer-metrics.ts   → RFM scores (recency, frequency, monetary)
-customer-attributes.ts → behavioural attributes per customer
-   │
-   ▼
-personas.ts ──────────▶ OpenRouter (Gemini 2.5 Flash)
-   │                    Prompt: RFM distribution + purchase patterns
-   │                    Output: persona labels + customer assignments
-   ▼
-opportunities.ts ─────▶ OpenRouter (Gemini 2.5 Flash)
-   │                    Prompt: persona mix + revenue data
-   │                    Output: opportunity objects { title, audience_size, revenue_potential }
-   ▼
-campaigns.ts ─────────▶ OpenRouter (Gemini 2.5 Flash)
-                        Prompt: opportunity context + channel
-                        Output: campaign name + personalised message copy
+GET  /health                        # Health check (used for cold-start warming)
 ```
 
 ---
 
-## Key Services
+## Webhook Loop
 
-### `services/webhooks.ts`
-Receives delivery status callbacks from the channel service. Each event is HMAC-verified, deduplicated by `event_id`, and only advances status if `sequenceNumber` ≥ current (out-of-order safety).
+When a campaign launches, the async delivery lifecycle works as follows:
 
-### `services/agent-logger.ts`
-Writes every AI decision (persona run, opportunity detected, campaign launched) to `agent_actions` table — surfaced on the home dashboard as the live Xeno Activity feed.
+```
+Backend → POST /send (parallel, per recipient) → Channel Service
+                                                        ↓ async
+Backend ← POST /api/webhooks/channel-status ←  Channel Service
+    ↓
+communication_events table
+    ↓
+Analytics page (polls every 5s)
+```
 
-### `services/analytics.ts`
-Aggregates `communications` + `communication_events` into funnel metrics (sent → delivered → read → clicked) and calls AI for per-campaign learnings and next best action recommendations.
+**Three production-grade properties of the webhook receiver (`services/webhooks.ts`):**
 
-### `data-generator/generate-data.ts`
-Synthetic data generator using `@faker-js/faker`. Produces realistic Indian retail customer and order data.
+- **Idempotency** — every event carries a unique `event_id`; deduplicated via `processed_webhook_events` table before any write
+- **Out-of-order safety** — events carry a `sequenceNumber`; status only advances forward (QUEUED=1 → SENT=2 → DELIVERED=3 → READ=4 → CLICKED=5), never backwards
+- **HMAC signature verification** — channel service signs every payload with a shared secret (`WEBHOOK_SECRET`); backend rejects unsigned or tampered requests with 401
 
-```bash
-TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
-# → backend/generated-data/customers.csv
-# → backend/generated-data/orders.csv
+---
+
+## Scale Tradeoffs
+
+| Concern | This Implementation | Production Alternative |
+|---------|-------------------|----------------------|
+| Webhook ingestion | Inline Supabase upsert per event | SQS / Kafka → worker pool with batched writes |
+| AI calls | Sequential, per-request | BullMQ job queue with retries + dead-letter |
+| Campaign launch | `Promise.allSettled` — all sends in parallel | Chunked batching with rate limiting + backpressure |
+| Analytics | 5s polling | Supabase Realtime or WebSockets |
+| Auth | Company ID in localStorage | JWT + Row Level Security on all tables |
+| Webhook retries | 3 retries at 15s / 30s / 60s | Exponential backoff with jitter + dead-letter queue |
+
+---
+
+## Services
+
+```
+backend/src/
+├── server.ts                 # All API routes (single file, ~1400 lines)
+└── services/
+    ├── personas.ts           # AI persona assignment per customer
+    ├── opportunities.ts      # AI opportunity detection + refinement
+    ├── campaigns.ts          # Campaign CRUD, launch, AI generation
+    ├── analytics.ts          # Funnel, channel performance, AI insights
+    ├── webhooks.ts           # HMAC verification + idempotent event processing
+    ├── agent-orchestrator.ts # Runs every 5 min — detects new opportunities autonomously
+    ├── agent-logger.ts       # Logs agent actions for the activity stream
+    ├── customer-metrics.ts   # Deterministic RFM scoring
+    ├── customer-attributes.ts # Behavioural enrichment
+    ├── onboarding-chat.ts    # Conversational onboarding via AI
+    └── data-generator/       # Synthetic CSV generator (500 customers, 3000 orders)
 ```
 
 ---
 
-## Environment Variables
-
-```env
-DATABASE_URL=postgresql://...          # Supabase connection string
-NEXT_PUBLIC_SUPABASE_URL=https://...   # Supabase project URL
-SUPABASE_SERVICE_ROLE_KEY=eyJ...       # Supabase service role key
-OPENROUTER_API_KEY=sk-or-...           # OpenRouter API key
-CHANNEL_SERVICE_URL=https://...        # Channel service base URL
-WEBHOOK_SECRET=...                     # Shared HMAC secret with channel service
-PORT=3001
-```
-
----
-
-## Running Locally
+## Setup
 
 ```bash
 cd backend
 npm install
-npm run dev          # tsx watch src/server.ts — hot reloads on save
+cp .env.example .env
+npm run dev
 ```
 
-Server starts at `http://localhost:3001`.
+**.env**
+```
+PORT=3001
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_APP_NAME=xeno-grow
+OPENROUTER_MODEL=google/gemini-2.5-flash
+CHANNEL_SERVICE_URL=http://localhost:5001
+WEBHOOK_SECRET=your_shared_secret
+```
 
-## Production Build (Render)
+Runs at **http://localhost:3001**
 
+### Generate demo data
 ```bash
-npx prisma generate --schema=prisma/schema.prisma
-npx esbuild src/server.ts --bundle --platform=node --target=node18 \
-  --outfile=dist/server.js --external:pg --external:pg-native
-node dist/server.js
-```
-
----
-
-## Database Migrations
-
-Managed via Prisma. Migration files live in `prisma/migrations/`.
-
-```bash
-npx prisma migrate dev     # apply + generate client (local)
-npx prisma generate        # regenerate client only
-```
-
----
-
-## Project Structure
-
-```
-backend/
-├── src/
-│   ├── server.ts                   # All route definitions
-│   ├── lib/
-│   │   └── prisma.ts               # Prisma client singleton
-│   ├── config/
-│   │   └── openrouter.ts           # OpenAI-compatible client for OpenRouter
-│   ├── services/
-│   │   ├── personas.ts             # AI persona generation
-│   │   ├── opportunities.ts        # AI opportunity detection
-│   │   ├── opportunity-discovery.ts
-│   │   ├── campaigns.ts            # Campaign CRUD + launch
-│   │   ├── campaign-planner.ts     # AI copy generation
-│   │   ├── analytics.ts            # Funnel + AI insights
-│   │   ├── webhooks.ts             # Delivery event receiver
-│   │   ├── customer-metrics.ts     # RFM computation
-│   │   ├── customer-attributes.ts  # Behavioural attributes
-│   │   ├── agent-logger.ts         # Activity feed writer
-│   │   ├── agent-orchestrator.ts   # AI agent coordination
-│   │   └── onboarding-chat.ts      # Onboarding AI chat
-│   └── data-generator/
-│       ├── generate-data.ts        # Synthetic data generator
-│       └── products.ts             # Product catalogue
-├── prisma/
-│   ├── schema.prisma               # Data model
-│   └── migrations/                 # Migration history
-├── generated-data/
-│   ├── customers.csv               # Demo dataset (500 customers)
-│   └── orders.csv                  # Demo dataset (3000 orders)
-├── package.json
-├── tsconfig.json
-└── render.yaml                     # Render deployment config
+TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
+# Outputs: generated-data/customers.csv + orders.csv
 ```

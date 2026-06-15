@@ -1,215 +1,87 @@
-# Xeno Growth OS — Frontend
+<h1 align="center">
+  <br>
+  <img width="120" height="120" alt="Xeno Growth OS" src="https://xeno-grow.vercel.app/logo.png" />
+  <br>
+  Xeno Growth OS — Frontend
+  <br>
+</h1>
 
-Next.js 16 app for the Xeno Growth OS platform. Provides the onboarding wizard, AI opportunity discovery, campaign management, live analytics, and the home activity dashboard.
+<h4 align="center">The marketer-facing interface for an autonomous AI Growth Copilot. Built on Next.js 16 App Router.</h4>
 
-**Production URL:** https://xeno-grow.vercel.app  
-**Deployed on:** Vercel
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js" alt="Next.js">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss" alt="Tailwind">
+  <img src="https://img.shields.io/badge/Deployed-Vercel-000000?style=flat-square&logo=vercel" alt="Vercel">
+  <img src="https://img.shields.io/badge/Charts-Recharts-22C55E?style=flat-square" alt="Recharts">
+</p>
 
----
+<p align="center">
+  <a href="#pages">Pages</a> •
+  <a href="#tech-stack">Tech Stack</a> •
+  <a href="#key-design-decisions">Design Decisions</a> •
+  <a href="#setup">Setup</a>
+</p>
 
-## Tech Stack
-
-| Layer | Technology | Version |
-|---|---|---|
-| Framework | Next.js (App Router) | 16.x |
-| Language | TypeScript | 5.x |
-| UI | React | 19.x |
-| Styling | Tailwind CSS | 4.x |
-| Components | shadcn/ui + Base UI | — |
-| Icons | Lucide React | 1.x |
-| Charts | Recharts | 2.x |
-| HTTP | Native fetch (lib/api.ts) | — |
-
----
-
-## Architecture
-
-```
-Browser
-   │
-   ▼
-Next.js App Router (Vercel)
-   │
-   ├── app/page.tsx                  Home dashboard
-   │    ├── Opportunity cards         GET /api/opportunities
-   │    ├── Xeno Activity feed        GET /api/activity-stream  (polls every 30s)
-   │    └── AI goal input             POST /api/opportunities/generate
-   │
-   ├── app/onboarding/page.tsx       4-step wizard
-   │    ├── Step 1: Brand info        POST /api/companies
-   │    ├── Step 2: Data upload       Connect pre-loaded demo data
-   │    ├── Step 3: Primary goal      (local state)
-   │    └── Step 4: AI mode           POST /api/onboarding/profile
-   │                                  POST /api/agents
-   │
-   ├── app/opportunities/            Opportunity discovery
-   │    ├── page.tsx                  GET /api/opportunities
-   │    └── [id]/page.tsx             GET /api/opportunities/:id
-   │         └── [id]/campaign/       POST /api/campaigns/generate
-   │                                  POST /api/campaigns/:id/launch
-   │
-   ├── app/campaigns/page.tsx        Campaign management
-   │    └──                           GET /api/campaigns
-   │
-   ├── app/analytics/page.tsx        Live campaign analytics
-   │    └──                           GET /api/analytics/overview
-   │                                  GET /api/campaigns/:id/analytics (polls 5s when LIVE)
-   │
-   └── app/personas/page.tsx         Customer persona breakdown
-```
+**Live:** https://xeno-grow.vercel.app
 
 ---
 
 ## Pages
 
-### Home (`/`)
-The central command dashboard. Shows:
-- AI-detected top opportunity with one-click launch
-- Grid of other opportunities
-- Live Xeno Activity feed (AI agent decisions, real-time)
-- Natural language goal input → triggers new opportunity generation
-
-### Onboarding (`/onboarding`)
-4-step wizard for new users:
-1. **Brand info** — company name + industry
-2. **Data** — CSV upload boxes (visible/disabled for demo) + "Connect Pre-loaded Demo Data" button
-3. **Primary goal** — select growth objective (repeat purchases, churn reduction, etc.)
-4. **AI mode** — Operator (you approve) vs Autonomous (full autopilot)
-
-Onboarding bypasses the upload flow for reviewers by pre-loading a demo company with 500 customers and 3000 orders already in the DB.
-
-### Opportunities (`/opportunities`)
-Lists all AI-detected revenue opportunities. Each card shows:
-- Opportunity title + type
-- Audience size
-- Predicted revenue uplift
-- Confidence score + priority badge
-
-### Opportunity Detail (`/opportunities/[id]`)
-Deep-dive on a single opportunity with tabs for customer audience breakdown, AI intelligence + persona insights, and campaign generation and launch.
-
-### Campaigns (`/campaigns`)
-All campaigns across all opportunities. Filter by status (DRAFT / ACTIVE / COMPLETED).
-
-### Analytics (`/analytics`)
-Live campaign performance dashboard:
-- Funnel chart (sent → delivered → read → clicked)
-- Revenue velocity chart (rolling)
-- Channel breakdown donut
-- AI-generated learnings + next best action (typewriter reveal)
-- Polls every 5s while a campaign is LIVE
-
-### Personas (`/personas`)
-Visual breakdown of AI-assigned customer segments — persona labels, sizes, and behavioural descriptions.
+| Route | Purpose |
+|-------|---------|
+| `/` | Overview dashboard — featured opportunity, AI activity stream, natural language command bar |
+| `/onboarding` | 5-step wizard: industry → CSV upload → goal → mode → animated setup |
+| `/opportunities` | AI-detected revenue opportunities with audience size, revenue potential, confidence scores |
+| `/opportunities/[id]/campaign` | Campaign generation, channel selection, message preview, approve & launch |
+| `/analytics` | Live campaign funnel — polls every 5s while campaign is active, updates in real-time |
+| `/campaigns` | All campaigns with status tracking |
+| `/personas` | AI-assigned persona distribution across the customer base |
+| `/intelligence` | Customer intelligence view |
 
 ---
 
-## Key Components
+## Tech Stack
 
-| Component | Path | Purpose |
-|---|---|---|
-| `main-layout.tsx` | `components/` | Shell with sidebar nav |
-| `nav-header.tsx` | `components/` | Top bar with greeting + context |
-| `sidebar.tsx` | `components/` | Left nav (Home, Opportunities, Campaigns, Analytics) |
-| `ui/card.tsx` | `components/ui/` | shadcn card primitive |
-| `ui/phone-mockup.tsx` | `components/ui/` | WhatsApp message preview |
-
----
-
-## API Client
-
-All backend calls go through `lib/api.ts`. It reads `NEXT_PUBLIC_API_URL` for the base URL and attaches `xeno_company_id` from `localStorage` on every request.
-
-```typescript
-// lib/api.ts — example shape
-getOpportunityDashboard(companyId?)     → GET /api/opportunities
-getActivityStream(companyId, limit)     → GET /api/activity-stream
-createOpportunityFromGoal(...)          → POST /api/opportunities/generate
-uploadCustomerCSV(file)                 → POST /api/upload-customers
-startIngestion(customerFile, orderFile) → POST /api/process-ingestion
-getIngestionStatus(sessionId)           → GET /api/ingestion-status/:id
-```
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 App Router (Turbopack) |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS 4 + shadcn/ui |
+| Charts | Recharts (LineChart, PieChart) |
+| Icons | Lucide React |
+| Deployment | Vercel (automatic deploys from `main`) |
+| API | All calls via `lib/api.ts` → Express backend |
 
 ---
 
-## Environment Variables
+## Key Design Decisions
 
-```env
-NEXT_PUBLIC_API_URL=https://xeno-crm-backend-n6d8.onrender.com
-```
+**No auth on the frontend.** Company ID stored in `localStorage` after onboarding. At production scale this becomes JWT + Supabase Row Level Security — removed for demo simplicity.
 
-For local development pointing to local backend:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001
-```
+**Polling over WebSockets.** Analytics page polls `/api/campaigns/:id/analytics` every 5 seconds while status is `Launched`. Keeps the client stateless. At scale, Supabase Realtime replaces this.
+
+**AI command bar on homepage.** Natural language input lets the marketer type a goal ("increase repeat purchases") and the backend generates a targeted opportunity from it — no segment builder required.
+
+**Wake pings on page load.** Both backend and channel service health endpoints are pinged the moment the homepage loads, pre-warming Render free-tier instances before the marketer reaches campaign generation.
 
 ---
 
-## Running Locally
+## Setup
 
 ```bash
 cd frontend
 npm install
-npm run dev        # Next.js dev server with hot reload
+cp .env.example .env.local
+npm run dev
 ```
 
-App runs at `http://localhost:3000`. Requires the backend running at `NEXT_PUBLIC_API_URL`.
-
-## Production Build
-
-```bash
-npm run build      # Next.js production build
-npm run start      # Serve production build
+**.env.local**
+```
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
----
-
-## Project Structure
-
-```
-frontend/
-├── app/
-│   ├── layout.tsx                  # Root layout (font, metadata)
-│   ├── globals.css                 # Tailwind base styles
-│   ├── page.tsx                    # Home dashboard
-│   ├── onboarding/
-│   │   ├── page.tsx                # 4-step onboarding wizard
-│   │   └── loading/page.tsx        # Onboarding loading state
-│   ├── opportunities/
-│   │   ├── page.tsx                # Opportunity list
-│   │   ├── layout.tsx
-│   │   └── [id]/
-│   │       ├── page.tsx            # Opportunity detail
-│   │       ├── layout.tsx
-│   │       ├── campaign/page.tsx   # Campaign builder + launch
-│   │       └── intelligence/page.tsx
-│   ├── campaigns/page.tsx          # Campaign list
-│   ├── analytics/page.tsx          # Live analytics dashboard
-│   ├── personas/page.tsx           # Persona breakdown
-│   ├── intelligence/page.tsx       # AI intelligence centre
-│   └── settings/page.tsx           # Settings
-│
-├── components/
-│   ├── main-layout.tsx             # App shell with sidebar
-│   ├── nav-header.tsx              # Top navigation bar
-│   ├── sidebar.tsx                 # Left sidebar nav
-│   └── ui/                         # shadcn/ui primitives
-│       ├── button.tsx
-│       ├── card.tsx
-│       ├── input.tsx
-│       ├── label.tsx
-│       ├── phone-mockup.tsx        # WhatsApp preview component
-│       ├── progress.tsx
-│       └── select.tsx
-│
-├── lib/
-│   ├── api.ts                      # All backend API calls
-│   └── utils.ts                    # cn() and shared helpers
-│
-├── public/
-│   └── logo.png                    # Xeno logo
-│
-├── next.config.ts
-├── tsconfig.json
-└── package.json
-```
+Runs at **http://localhost:3000**
