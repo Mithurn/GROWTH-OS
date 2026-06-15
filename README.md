@@ -28,7 +28,6 @@
 
 **Live Demo:** https://xeno-grow.vercel.app
 **Repo:** https://github.com/Mithurn/xeno-grow
-**Stack:** Next.js 16 · Express.js · Node.js · Supabase (PostgreSQL) · OpenRouter → Gemini 2.5 Flash
 
 ---
 
