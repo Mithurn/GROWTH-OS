@@ -46,6 +46,9 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   const [activeChannel, setActiveChannel] = useState<'WhatsApp' | 'Email' | 'SMS'>('WhatsApp');
 
   useEffect(() => {
+    // Wake channel service so it's ready by the time they hit Launch
+    fetch('https://xeno-channel-service.onrender.com/health').catch(() => {});
+
     async function init() {
       try {
         const companyId = window.localStorage.getItem('xeno_company_id');
