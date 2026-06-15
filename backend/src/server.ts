@@ -65,6 +65,11 @@ function parseCSV(buffer: Buffer): Promise<any[]> {
   });
 }
 
+// GET /health
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // GET /api/companies/:id
 app.get('/api/companies/:id', async (req, res) => {
   try {
