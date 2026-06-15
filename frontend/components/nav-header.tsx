@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -13,7 +12,6 @@ const NAV_ITEMS = [
 
 export function NavHeader() {
   const pathname = usePathname();
-  const [mode, setMode] = useState<'operator' | 'autonomous'>('operator');
 
   const dark = pathname.startsWith('/analytics');
 
@@ -69,41 +67,8 @@ export function NavHeader() {
           })}
         </nav>
 
-        {/* Right: Mode Toggle + Avatar */}
-        <div className="flex items-center justify-end gap-4">
-          <div
-            className="flex rounded-full p-0.5"
-            style={dark
-              ? { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }
-              : { background: '#FAFAFA', border: '1px solid #E5E7EB' }}
-          >
-            <button
-              onClick={() => setMode('operator')}
-              className={`text-xs px-4 py-1.5 rounded-full font-medium transition-all ${
-                mode === 'operator'
-                  ? 'text-white shadow-sm'
-                  : dark ? 'text-[#8B92A5] hover:text-white' : 'text-[#6B7280] hover:text-[#1A1A1A]'
-              }`}
-              style={mode === 'operator' ? { background: dark ? 'linear-gradient(135deg, #5B4FFF, #7C6FFF)' : '#1A1A1A' } : {}}
-            >
-              Operator
-            </button>
-            <button
-              onClick={() => setMode('autonomous')}
-              className={`text-xs px-4 py-1.5 rounded-full font-medium transition-all ${
-                mode === 'autonomous'
-                  ? 'text-white shadow-sm'
-                  : dark ? 'text-[#8B92A5] hover:text-white' : 'text-[#6B7280] hover:text-[#1A1A1A]'
-              }`}
-              style={mode === 'autonomous' ? { background: dark ? 'linear-gradient(135deg, #5B4FFF, #7C6FFF)' : '#1A1A1A' } : {}}
-            >
-              Autonomous
-            </button>
-          </div>
-          <div className={`h-8 w-8 rounded-full bg-[#5B4FFF] flex items-center justify-center text-white text-sm font-medium shadow-sm ${dark ? 'ring-2 ring-white/10' : 'ring-2 ring-white'}`}>
-            U
-          </div>
-        </div>
+        {/* Right: placeholder for alignment */}
+        <div />
 
       </div>
     </header>
