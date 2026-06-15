@@ -1389,6 +1389,6 @@ app.listen(Number(PORT), '0.0.0.0', () => {
   // Start the Agent Orchestrator
   // Run every 5 minutes (300000ms) in production
   // For demo/testing, you can set this to 60000ms (1 minute)
-  agentOrchestrator.start(300000);
+  agentOrchestrator.start(21600000); // 6 hours — preserves free-tier quota
   console.log('🤖 Agent Orchestrator started');
 });
