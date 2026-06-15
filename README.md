@@ -1,30 +1,43 @@
-# Xeno Growth OS — AI-Native Mini CRM
+# Xeno Growth OS
 
-> Built for the Xeno Engineering Take-Home Assignment · June 2026
+> **An autonomous AI Growth Copilot — not a dashboard you fill in, but an agent that finds your revenue gaps, writes the campaign, executes it across 500 customers, and shows you live what converted.**
 
-Xeno Growth OS helps consumer brands discover hidden revenue in their customer data and execute personalised campaigns across WhatsApp, SMS, and Email — with AI doing the heavy lifting at every step.
-
-**Live Demo:** https://xeno-grow.vercel.app  
-**Stack:** Next.js · Express.js · Node.js · Supabase (PostgreSQL) · OpenRouter → Gemini 2.5 Flash
+**Live Demo:** https://xeno-grow.vercel.app
+**Repo:** https://github.com/Mithurn/xeno-grow
+**Stack:** Next.js 16 · Express.js · Node.js · Supabase (PostgreSQL) · OpenRouter → Gemini 2.5 Flash
 
 ---
 
-## The AI-Native Approach
+## 1. Product Scoping: What I Built & Why
 
-Traditional CRMs require the marketer to *know what to look for* — build an audience, write a message, pick a channel. This product inverts that model.
+The brief was intentionally open. My bet was this: **the hardest part of CRM isn't sending campaigns — it's knowing what to send, to whom, and why.**
 
-Instead of a blank canvas, Xeno Growth OS has an **Autonomous Opportunity Engine**:
+Traditional CRMs make the marketer do all the thinking: build an audience rule, write a message, pick a channel. That's a blank canvas. Xeno Growth OS inverts this.
 
-1. The AI continuously analyses unified customer behaviour (RFM scores, purchase patterns, persona signals)
-2. It proactively surfaces revenue opportunities — *"450 Dormant VIPs haven't bought in 60 days, potential recovery: ₹1.4L"*
-3. It auto-generates the audience definition, recommended channel, campaign copy, and predicted revenue
-4. The marketer reviews, refines via chat, and launches — the AI handles the rest
+Instead of a segment builder, there's an **Autonomous Opportunity Engine** that runs every 5 minutes:
+
+1. Analyses unified customer behaviour — RFM scores, purchase patterns, category preferences, persona signals
+2. Proactively surfaces revenue opportunities — *"77 Dormant VIPs haven't bought in 60 days — ₹3.9L recoverable"*
+3. Auto-generates the audience definition, recommended channel, personalised message copy, and predicted revenue
+4. The marketer reviews, refines in natural language, approves, and launches — the AI handles the rest
 
 **The marketer's role shifts from building to steering.**
 
+### What I explicitly chose NOT to build
+
+| Cut | Reason |
+|-----|--------|
+| Auth / login flows | Company ID via localStorage is sufficient for a demo scope; JWT + Supabase Row Level Security is the production path |
+| Real messaging providers (Twilio, Gupshup) | The stubbed channel service is architecturally equivalent and demonstrates the async delivery lifecycle more cleanly |
+| Rule-builder segment UI | The AI-native approach makes manual segment building unnecessary — the Opportunity Engine does this automatically |
+| A/B testing, scheduling, frequency capping | Valid next features; out of scope for the time constraint |
+| Multi-tenancy | Single-tenant, single company for this scope |
+
+Cutting these freed 100% of the engineering time for the AI orchestration layer and the async webhook architecture — the parts that actually demonstrate the thinking.
+
 ---
 
-## Architecture
+## 2. System Architecture
 
 ```mermaid
 graph TD
@@ -108,55 +121,80 @@ graph TD
     style CSV fill:#1E2D3D,stroke:#3B82F6,color:#93C5FD
 ```
 
+Three decoupled services, each independently deployable and replaceable:
+
+- **Frontend (Vercel)** — Next.js 16 App Router. Stateless; all data from the backend API.
+- **Backend API (Render)** — Express.js. Owns all business logic, AI orchestration, data ingestion, and webhook reception.
+- **Channel Service (Render)** — Standalone Node.js process. Owns delivery simulation and fires HMAC-signed webhooks back to the backend asynchronously.
+
+The channel service is a **separate process by design** — it mirrors how real-world CRMs integrate with providers like Twilio or Gupshup. Swapping the stub for a real provider requires zero changes to the CRM backend.
+
 ---
 
-## Key Design Decisions
+## 3. Scale Assumptions & Tradeoffs
 
-### 1. Three-Service Architecture
-The backend and channel service are deliberately separate processes. This mirrors how real-world CRMs integrate with providers like Twilio or Gupshup — the CRM owns business logic, the provider owns delivery. Keeping them separate means the channel simulation can be swapped for a real provider with zero changes to the CRM.
+> *"I'd do X at scale but did Y for this scope"*
 
-### 2. Asynchronous Webhook Loop
-When a campaign launches, the flow is:
+| Concern | What I did | What I'd do at scale |
+|---------|-----------|---------------------|
+| **Analytics delivery** | 5s polling on the analytics page | WebSockets or Supabase Realtime subscriptions |
+| **Webhook ingestion** | Inline Supabase upsert per webhook event | Push to SQS / Kafka; worker pool consumes and batches writes |
+| **AI calls** | Sequential, per-request (persona → opportunity → campaign) | Background job queue (Bull/BullMQ) with retries, backoff, and dead-letter |
+| **Auth** | Company ID stored in localStorage | JWTs + Supabase Row Level Security on every table |
+| **Campaign launch** | `Promise.allSettled` — all sends in parallel | Chunked batching with per-chunk rate limiting and backpressure |
+| **Webhook reliability** | 3 retries with 15s / 30s / 60s backoff | Exponential backoff with jitter; dead-letter queue for failed events |
+| **Cold starts** | Health-ping on page load to pre-warm Render free tier | Paid tier with always-on instances; or serverless with provisioned concurrency |
+
+The webhook loop has three production-grade properties even at this scope:
+- **Idempotency** — each event carries a unique `event_id`; the receiver deduplicates before writing via `processed_webhook_events` table
+- **Out-of-order safety** — events carry a `sequenceNumber`; status only advances forward, never backwards
+- **HMAC signature verification** — every webhook is signed with a shared secret; the backend rejects any unsigned or tampered request with 401
+
+---
+
+## 4. Code Quality: Deterministic AI Orchestration
+
+A major challenge with LLMs in production is unpredictable text outputs breaking application state. Every AI step in this codebase uses a strict **structured prompt → JSON parse → validate → store** pattern. The LLM never outputs free-form text that touches the UI directly.
 
 ```
-Backend → POST /send (per recipient) → Channel Service
-                                              ↓ (async, simulates latency + stochastic outcomes)
-Backend ← POST /api/webhooks/channel-status ← Channel Service
+Prompt (strict schema contract)
     ↓
-communication_events table
+LLM response (raw string)
     ↓
-Analytics page (polls every 5s, all charts update live)
+JSON.parse() → schema validation
+    ↓
+Safe write to PostgreSQL
+    ↓
+Typed API response to frontend
 ```
 
-Key engineering properties of this loop:
-- **Idempotency** — each webhook carries a unique `event_id`; the receiver deduplicates before writing
-- **Out-of-order safety** — events carry a `sequenceNumber`; status only advances if the incoming sequence ≥ current
-- **HMAC signature verification** — the channel service signs every webhook payload; the backend rejects unsigned requests
-
-### 3. AI Pipeline (Data → Insight → Action)
-Every AI step uses a structured JSON prompt → parse → store pattern, never free-form text in the UI:
-
-| Step | Input | AI Output | Stored As |
-|---|---|---|---|
-| Persona Engine | RFM scores + purchase history | Persona labels + reasoning | `personas` table |
-| Opportunity Engine | Persona distribution + revenue data | Opportunity objects with audience size + predicted revenue | `opportunities` table |
-| Campaign Generator | Opportunity context + channel | Campaign name, message copy, offer | `campaigns` table |
-| Analytics Insights | Live funnel data | Learnings + next best action | Returned inline |
-
-### 4. Deterministic AI Orchestration (Code Quality)
-A major challenge with LLMs in production is unpredictable text outputs breaking the application state. In `backend/src/services/campaigns.ts` and `opportunities.ts`, the AI is tightly orchestrated using strict structured prompts. We force the LLM to return deterministic JSON objects, which are parsed and validated before being safely written to the PostgreSQL database. This ensures the application logic remains bulletproof and the UI never breaks due to malformed AI responses.
-
-### 5. Scale Tradeoffs (Explicit)
-| Decision | Choice Made | Production Alternative |
+| Pipeline Step | Prompt enforces | Fallback if malformed |
 |---|---|---|
-| Webhook processing | Inline Supabase upsert | Push to SQS/Kafka, worker pool |
-| Analytics | 5s polling | WebSockets or Supabase Realtime |
-| AI calls | Sequential, per-request | Background job queue with retries |
-| Auth | Company ID via localStorage | JWT + Row Level Security on all tables |
+| Persona Engine | `{ persona_name, description, reasoning }` per customer | Skip assignment, log error |
+| Opportunity Engine | Full opportunity object with typed numeric fields | Discard opportunity, continue |
+| Campaign Generator | `{ name, message_content, channel, objective, expected_outcome }` | Return error to frontend |
+| Analytics Insights | `{ learnings: string[], nextAction: { title, potentialRevenue, confidence } }` | Return empty insights, never crash |
+
+Key files: `backend/src/services/opportunities.ts`, `backend/src/services/campaigns.ts`, `backend/src/services/personas.ts`
 
 ---
 
-## Data Model
+## 5. AI-Native Development Workflow
+
+This project was built treating the developer as **Principal Architect** and AI agents as **Implementers**:
+
+| Phase | Who | What |
+|-------|-----|------|
+| System design | Human | Defined the 3-service architecture, async webhook loop, database schema, and AI pipeline upfront — before writing a line of code |
+| Architectural validation | Human + AI | Used Claude as a sounding board to pressure-test decisions (e.g. polling vs. WebSockets, inline upserts vs. a queue) and explicitly surface the tradeoffs |
+| Implementation | AI Agents | Claude Code and Google Stitch used as autonomous coding agents to scaffold the Next.js frontend, wire up Express routes, generate the Tailwind/shadcn UI, and implement the channel service |
+| Review & hardening | Human | All AI output rigorously reviewed — especially webhook idempotency logic, HMAC verification, sequence number enforcement, and structured prompt contracts |
+
+The result: a fully functional, production-aware system built at a speed that would be impossible without AI tooling — while maintaining full understanding of every architectural decision.
+
+---
+
+## 6. Data Model
 
 ```
 companies
@@ -165,63 +203,16 @@ companies
 
     └── personas (AI-assigned segment per customer)
     └── opportunities (AI-detected, linked to persona distribution)
+        └── opportunity_customers (audience join table)
         └── campaigns (AI-generated, linked to opportunity)
             └── communications (one per recipient, status tracked)
-                └── communication_events (QUEUED → SENT → DELIVERED → READ → CLICKED)
+                └── communication_events (QUEUED → SENT → DELIVERED → READ → CLICKED / FAILED)
+                └── processed_webhook_events (idempotency dedup table)
 ```
 
 ---
 
-## Getting Started
-
-### Prerequisites
-- Node.js v18+
-- Supabase project (PostgreSQL)
-- OpenRouter API key
-
-### Run Locally
-
-```bash
-# Clone and install
-git clone https://github.com/Mithurn/xeno-grow
-cd xeno-grow && chmod +x start-all.sh && ./start-all.sh
-```
-
-| Service | URL |
-|---|---|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:3001 |
-| Channel Service | http://localhost:5001 |
-
-### Environment Variables
-
-**backend/.env**
-```
-NEXT_PUBLIC_SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-OPENROUTER_API_KEY=
-CHANNEL_SERVICE_URL=http://localhost:5001
-WEBHOOK_SECRET=
-```
-
-**channel-service/.env**
-```
-CRM_WEBHOOK_URL=http://localhost:3001/api/webhooks/channel-status
-WEBHOOK_SECRET=
-```
-
-### Generate Demo Data
-
-```bash
-cd backend
-TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
-# Outputs: backend/generated-data/customers.csv + orders.csv
-# Upload both via the onboarding flow
-```
-
----
-
-## Repository Structure
+## 7. Repository Structure
 
 ```
 xeno-grow/
@@ -249,30 +240,55 @@ xeno-grow/
 ├── channel-service/   # Standalone Node.js delivery simulator
 │   └── src/
 │       ├── server.ts             # /send endpoint
-│       ├── queue.ts              # Async message queue
-│       └── webhook.ts            # Callback emitter
+│       ├── queue.ts              # Async message processor
+│       └── webhook.ts            # HMAC-signed callback emitter
 │
 └── render.yaml        # Render deployment config (backend + channel-service)
 ```
 
 ---
 
-## What I Chose NOT to Build
+## 8. Getting Started Locally
 
-- Real messaging provider integration (Twilio, Gupshup) — the stub is intentional and architecturally equivalent
-- Auth / multi-tenancy — company ID via localStorage; RLS is the production path
-- A/B testing, campaign scheduling, frequency capping — valid next features, out of scope for the time constraint
-- A rule-builder segment UI — the AI-native approach makes this unnecessary for the core demo
+### Prerequisites
+- Node.js v18+
+- Supabase project (PostgreSQL)
+- OpenRouter API key
 
----
+```bash
+git clone https://github.com/Mithurn/xeno-grow
+cd xeno-grow && chmod +x scripts/start-all.sh && ./scripts/start-all.sh
+```
 
-## AI-Native Development Workflow
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:3001 |
+| Channel Service | http://localhost:5001 |
 
-This project was built using an AI-native engineering workflow, treating the developer as the **Principal System Architect** and AI agents as the **Implementers**:
+### Environment Variables
 
-1. **System Design (Human):** The core product vision, 3-service decoupled architecture, database schema, and asynchronous webhook loop were designed entirely upfront.
-2. **Validation & Tradeoffs (Human + AI):** Claude Opus was used as a sounding board to validate architectural decisions (e.g., choosing 5s polling over WebSockets for this specific scope) and to refine the data model.
-3. **Implementation (AI Agents):** Google Antigravity and Claude Code were used as autonomous coding agents to rapidly scaffold the Next.js frontend, wire up the Express backend, and build the Tailwind/shadcn UI based on Google Stitch design principles.
-4. **Review & Refinement (Human):** AI outputs were rigorously code-reviewed to ensure strict adherence to the defined architecture, particularly around webhook idempotency, error handling, and deterministic LLM parsing.
+**backend/.env**
+```
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+OPENROUTER_API_KEY=
+CHANNEL_SERVICE_URL=http://localhost:5001
+WEBHOOK_SECRET=
+```
 
-*The result is a fully functional, highly-opinionated application built in a fraction of the traditional time, demonstrating the power of AI-native product engineering.*
+**channel-service/.env**
+```
+CRM_WEBHOOK_URL=http://localhost:3001/api/webhooks/channel-status
+WEBHOOK_SECRET=
+FAILURE_RATE=10
+```
+
+### Generate Demo Data
+
+```bash
+cd backend
+TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
+# Outputs: backend/generated-data/customers.csv + orders.csv
+# Upload both via the onboarding flow at /onboarding
+```
