@@ -426,7 +426,7 @@ export async function launchCampaign(
         throw new Error(`Channel Service responded with ${response.status}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as { providerMessageId?: string };
 
       // Update communication with provider message ID
       await supabase
