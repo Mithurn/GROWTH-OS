@@ -222,7 +222,7 @@ TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
 
 ```
 xeno-grow/
-├── frontend/          # Next.js 14 App Router · Tailwind CSS · Recharts
+├── frontend/          # Next.js 16 App Router · Tailwind CSS · Recharts
 │   ├── app/
 │   │   ├── page.tsx              # Home / Overview dashboard
 │   │   ├── onboarding/           # Data ingestion wizard
