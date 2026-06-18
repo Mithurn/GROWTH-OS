@@ -1,8 +1,10 @@
 import { createHash } from 'crypto';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import OpenAI from 'openai';
 import { openRouterConfig } from '../config/openrouter';
 import { getSegmentCache, setSegmentCache } from '../lib/redis';
+import { parseWithRetry } from '../lib/ai';
 
 // ── OpenRouter client with required headers ───────────────────────────────────
 const openai = new OpenAI({
@@ -26,6 +28,23 @@ const OPPORTUNITY_TYPE_ENUM: OpportunityType[] = [
   'Upsell',
   'Reactivation',
 ];
+
+const DiscoveredOpportunityRawSchema = z.object({
+  opportunity_key: z.string(),
+  opportunity_type: z.enum(['Retention-Churn', 'Retention-VIP', 'Upsell', 'Reactivation']),
+  title: z.string(),
+  description: z.string(),
+  audience_size: z.number(),
+  potential_revenue: z.number(),
+  confidence_score: z.number(),
+  priority_score: z.number(),
+  supporting_customer_segment: z.string(),
+  recommended_action: z.string(),
+  trigger_reason: z.string(),
+  ai_summary: z.string(),
+  ai_reasoning: z.string(),
+});
+const DiscoveredOpportunityArraySchema = z.array(DiscoveredOpportunityRawSchema);
 
 interface DiscoveredOpportunity {
   id: string;
@@ -203,35 +222,20 @@ For each opportunity provide:
 
 Respond ONLY with a valid JSON array. No markdown, no explanation outside the JSON.`;
 
-    const response = await openai.chat.completions.create({
-      model: openRouterConfig.defaultModel,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.5,
-      max_tokens: 2000,
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      console.log('No response from AI');
-      return [];
-    }
-
-    // Strip markdown fences if the model wraps in ```json
-    const jsonString = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-    const opportunitiesData = JSON.parse(jsonString);
+    const opportunitiesData = await parseWithRetry(
+      () => openai.chat.completions.create({
+        model: openRouterConfig.defaultModel,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 2000,
+      }).then(r => r.choices[0]?.message?.content ?? ''),
+      DiscoveredOpportunityArraySchema,
+    );
 
     const createdOpportunities: DiscoveredOpportunity[] = [];
 
     for (const oppData of opportunitiesData) {
       try {
-        // Reject any type that isn't in the enum — never fall through to a blast
-        if (!OPPORTUNITY_TYPE_ENUM.includes(oppData.opportunity_type as OpportunityType)) {
-          console.warn(
-            `⚠️  AI returned unknown opportunity_type "${oppData.opportunity_type}" for key "${oppData.opportunity_key}" — skipping to avoid audience blast`,
-          );
-          continue;
-        }
-
         const existing = await prisma.opportunity.findFirst({
           where: { companyId, opportunityKey: oppData.opportunity_key },
         });

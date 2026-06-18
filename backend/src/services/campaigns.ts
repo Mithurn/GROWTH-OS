@@ -1,7 +1,9 @@
 import OpenAI from 'openai';
+import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { openRouterConfig } from '../config/openrouter';
 import { checkAndIncrFrequencyCap } from '../lib/redis';
+import { parseWithRetry } from '../lib/ai';
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -19,6 +21,21 @@ export interface GeneratedCampaign {
   expected_outcome: string;
   reasoning: string;
 }
+
+const GeneratedCampaignSchema = z.object({
+  name: z.string(),
+  objective: z.string(),
+  channel: z.enum(['WhatsApp', 'Email', 'SMS']),
+  offer: z.string(),
+  message_angle: z.string(),
+  campaign_content: z.string().min(1),
+  expected_outcome: z.string(),
+  reasoning: z.string(),
+});
+
+const RefinedMessageSchema = z.object({
+  message_content: z.string().min(1),
+});
 
 export interface CampaignRow {
   id: string;
@@ -170,40 +187,21 @@ export async function generateCampaign(
   });
 
   try {
-    const response = await client.chat.completions.create({
-      model,
-      temperature: 0.7,
-      max_tokens: 800,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content: 'You output only valid JSON and never include markdown formatting.',
-        },
-        {
-          role: 'user',
-          content: buildCampaignPrompt(opportunity, company),
-        },
-      ],
-    });
-
-    const raw = response.choices[0]?.message?.content ?? '';
-    let jsonString = raw.trim();
-    if (jsonString.startsWith('```')) {
-      jsonString = jsonString.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
-    }
-
-    const parsed = JSON.parse(jsonString) as GeneratedCampaign;
-    if (!parsed.name || !parsed.objective || !parsed.channel || !parsed.campaign_content) {
-      throw new Error('Missing required campaign fields');
-    }
-    if (!['WhatsApp', 'Email', 'SMS'].includes(parsed.channel)) {
-      throw new Error(`Invalid channel: ${parsed.channel}`);
-    }
-
-    return { campaign: parsed };
+    const campaign = await parseWithRetry(
+      () => client.chat.completions.create({
+        model,
+        temperature: 0.7,
+        max_tokens: 800,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: 'You output only valid JSON and never include markdown formatting.' },
+          { role: 'user', content: buildCampaignPrompt(opportunity, company) },
+        ],
+      }).then(r => r.choices[0]?.message?.content ?? ''),
+      GeneratedCampaignSchema,
+    );
+    return { campaign };
   } catch (err: any) {
-    // If AI is unavailable (credits exhausted, network error), generate a high-quality deterministic campaign
     console.warn('[Campaign] AI unavailable, using deterministic fallback:', err?.message ?? err);
     return { campaign: buildFallbackCampaign(opportunity, company) };
   }
@@ -625,26 +623,18 @@ export async function refineCampaignMessage(
     },
   });
 
-  const response = await client.chat.completions.create({
-    model,
-    temperature: 0.4,
-    max_tokens: 400,
-    messages: [
-      { role: 'system', content: 'Output only valid JSON. No markdown.' },
-      { role: 'user', content: prompt },
-    ],
-  });
-
-  const raw = response.choices[0]?.message?.content ?? '';
-  const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-
-  let parsed: { message_content: string };
-  try {
-    parsed = JSON.parse(jsonStr);
-    if (!parsed.message_content?.trim()) throw new Error('missing message_content');
-  } catch {
-    throw new Error('Refine model returned invalid JSON');
-  }
+  const parsed = await parseWithRetry(
+    () => client.chat.completions.create({
+      model,
+      temperature: 0.4,
+      max_tokens: 400,
+      messages: [
+        { role: 'system', content: 'Output only valid JSON. No markdown.' },
+        { role: 'user', content: prompt },
+      ],
+    }).then(r => r.choices[0]?.message?.content ?? ''),
+    RefinedMessageSchema,
+  );
 
   const updates: Record<string, unknown> = {
     message_content: parsed.message_content,
