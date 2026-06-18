@@ -48,7 +48,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   useEffect(() => {
     async function init() {
       try {
-        const companyId = window.localStorage.getItem('xeno_company_id');
+        const companyId = window.localStorage.getItem('growthOS_company_id');
         
         // Fetch opportunity
         const oppRes = await getOpportunityCustomers(opportunityId);
@@ -91,7 +91,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   const handleApprove = async () => {
     try {
       setIsSaving(true);
-      const companyId = window.localStorage.getItem('xeno_company_id');
+      const companyId = window.localStorage.getItem('growthOS_company_id');
       
       // Save campaign
       const saveRes = await saveCampaign(opportunityId, campaign, companyId || undefined);
@@ -110,7 +110,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center flex-col gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-[#5B4FFF]" />
         <p className="text-[#6B7280] font-medium text-sm animate-pulse">
-          Xeno AI is generating your campaign strategy...
+          GrowthOS is generating your campaign strategy...
         </p>
       </div>
     );
@@ -255,7 +255,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                   <ArrowLeft className="h-4 w-4" />
                   <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-[15px]">X</div>
                   <div>
-                    <div className="font-bold text-[14px] leading-tight">Xeno Brand</div>
+                    <div className="font-bold text-[14px] leading-tight">Your Brand</div>
                     <div className="text-[10px] text-white/80">Verified Business</div>
                   </div>
                 </div>
@@ -265,7 +265,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                   <ArrowLeft className="h-4 w-4 text-[#007AFF]" />
                   <div className="flex flex-col items-center">
                     <div className="h-6 w-6 rounded-full bg-[#E5E7EB] flex items-center justify-center text-[10px] text-[#6B7280] font-bold">X</div>
-                    <div className="text-[10px] font-medium text-[#1A1A1A]">Xeno Brand</div>
+                    <div className="text-[10px] font-medium text-[#1A1A1A]">Your Brand</div>
                   </div>
                   <div className="w-4"></div>
                 </div>
@@ -281,7 +281,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                   </div>
                   <div className="text-[14px] font-bold truncate">{campaign.name || 'Your Offer'}</div>
                   <div className="flex items-center gap-1 text-[10px]">
-                    <span className="font-bold bg-[#F3F4F6] px-1 rounded">Xeno Brand</span>
+                    <span className="font-bold bg-[#F3F4F6] px-1 rounded">Your Brand</span>
                     <span className="text-[#6B7280]">to you</span>
                   </div>
                 </div>
@@ -313,7 +313,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                       </div>
                       <div className="p-2 bg-[#E5E7EB]">
                         <div className="font-bold text-[12px] text-[#1A1A1A] truncate">{campaign.offer || 'Exclusive Offer'}</div>
-                        <div className="text-[10px] text-[#6B7280]">xenobrand.com/offer</div>
+                        <div className="text-[10px] text-[#6B7280]">yourbrand.com/offer</div>
                       </div>
                     </div>
                   )}
@@ -362,7 +362,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                   value={chatQuery}
                   onChange={(e) => setChatQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleRefine(); }}
-                  placeholder="Tell Xeno how you'd like to improve this campaign..."
+                  placeholder="Tell GrowthOS how you'd like to improve this campaign..."
                   className="flex-1 bg-transparent text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] outline-none"
                   disabled={isRefining}
                 />

@@ -3,7 +3,7 @@ import "./globals.css";
 import { MainLayout } from "@/components/main-layout";
 
 export const metadata: Metadata = {
-  title: "Xeno Growth Agent",
+  title: "GrowthOS",
   description: "AI Growth Copilot for retail marketers",
 };
 

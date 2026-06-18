@@ -10,7 +10,7 @@ const openai = new OpenAI({
   },
 });
 
-const SYSTEM_PROMPT = `You are a friendly onboarding assistant for Xeno Growth Copilot, an AI-powered customer growth platform.
+const SYSTEM_PROMPT = `You are a friendly onboarding assistant for GrowthOS, an AI-powered customer growth platform.
 
 Your goal is to gather important context about the user's business goals in a natural, conversational way. You need to understand:
 

@@ -115,7 +115,7 @@ export default function OpportunitiesPage() {
   const [campaignMap, setCampaignMap] = useState<Record<string, string>>({}); // opportunityId → campaign status
 
   useEffect(() => {
-    const id = window.localStorage.getItem('xeno_company_id') ?? undefined;
+    const id = window.localStorage.getItem('growthOS_company_id') ?? undefined;
     setCompanyId(id);
     setCompanyIdLoaded(true);
   }, []);
@@ -329,7 +329,7 @@ export default function OpportunitiesPage() {
                   <input
                     value={goal}
                     onChange={e => setGoal(e.target.value)}
-                    placeholder="Ask Xeno to discover an opportunity..."
+                    placeholder="Ask GrowthOS to discover an opportunity..."
                     disabled={creatingGoal}
                     className="flex-1 bg-transparent text-2xl font-medium text-gray-800 placeholder:text-gray-300 outline-none"
                   />

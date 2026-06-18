@@ -339,7 +339,7 @@ async function ensureCompanyRow(supabase: SupabaseClient, companyId?: string): P
     .from('companies')
     .upsert(
       {
-        company_name: 'Xeno Demo Fashion',
+        company_name: 'GrowthOS Demo Fashion',
         industry: 'Fashion',
       },
       { onConflict: 'company_name' },

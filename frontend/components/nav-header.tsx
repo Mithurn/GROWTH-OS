@@ -25,7 +25,7 @@ export function NavHeader() {
 
         {/* Left: Logo */}
         <Link href="/" className="flex items-center">
-          <Image src="/logo.png" alt="Xeno" width={80} height={32} className="object-contain" />
+          <Image src="/logo.png" alt="GrowthOS" width={80} height={32} className="object-contain" />
         </Link>
 
         {/* Center: Navigation */}

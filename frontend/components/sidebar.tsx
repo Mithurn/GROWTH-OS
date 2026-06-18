@@ -57,7 +57,7 @@ export function Sidebar() {
         <div className="px-6 py-7">
           <div className="flex items-center gap-3">
             <div className="relative h-[30px] w-[132px]">
-              <Image src="/logo.png" alt="Xeno" fill priority sizes="132px" className="object-contain object-left" />
+              <Image src="/logo.png" alt="GrowthOS" fill priority sizes="132px" className="object-contain object-left" />
             </div>
           </div>
         </div>

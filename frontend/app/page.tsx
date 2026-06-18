@@ -199,7 +199,7 @@ export default function HomePage() {
   useEffect(() => {
     const run = async () => {
       try {
-        const companyId = window.localStorage.getItem('xeno_company_id') ?? undefined;
+        const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
         const data = await getOpportunityDashboard(companyId);
         if (data.success && data.data.topOpportunities) {
           setOpportunities(data.data.topOpportunities);
@@ -217,7 +217,7 @@ export default function HomePage() {
   useEffect(() => {
     const run = async () => {
       try {
-        const companyId = window.localStorage.getItem('xeno_company_id');
+        const companyId = window.localStorage.getItem('growthOS_company_id');
         if (!companyId) return;
         const data = await getActivityStream(companyId, 10);
         if (data.success && Array.isArray(data.data)) {
@@ -258,7 +258,7 @@ export default function HomePage() {
       setActivityItems(prev => [
         {
           id,
-          agentId: 'xeno',
+          agentId: 'growthOS',
           actionType: 'generating_opportunity',
           description: steps[idx],
           createdAt: new Date().toISOString(),
@@ -284,7 +284,7 @@ export default function HomePage() {
 
     setQueryError(null);
     try {
-      const companyId = window.localStorage.getItem('xeno_company_id') ?? undefined;
+      const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
       const result = await createOpportunityFromGoal(submittedQuery, companyId);
       const data = await getOpportunityDashboard(companyId);
       if (data.success && data.data.topOpportunities) {
@@ -298,7 +298,7 @@ export default function HomePage() {
         }, 300);
       }
     } catch {
-      setQueryError('Xeno couldn\'t generate that opportunity right now. Try a different query.');
+      setQueryError('GrowthOS couldn\'t generate that opportunity right now. Try a different query.');
       setTimeout(() => setQueryError(null), 4000);
     } finally {
       if (stepIntervalRef.current) {
@@ -340,7 +340,7 @@ export default function HomePage() {
                 Scanning for opportunities…
               </span>
             ) : (
-              'Xeno analyzed customer behavior, campaign performance, and revenue signals while you were away.'
+              'GrowthOS analyzed customer behavior, campaign performance, and revenue signals while you were away.'
             )}
           </p>
 
@@ -435,7 +435,7 @@ export default function HomePage() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5B4FFF]" />
                     </span>
-                    Xeno is analyzing your request
+                    GrowthOS is analyzing your request
                   </div>
 
                   <h2 className="text-3xl font-bold text-[#1A1A1A] mb-3">
@@ -461,7 +461,7 @@ export default function HomePage() {
 
                   {/* Skeleton info rows */}
                   <div className="grid grid-cols-3 gap-6 pt-8 border-t border-[#E5E7EB]">
-                    {['Why Xeno Found This', 'Predicted Outcome', 'Recommended Action'].map(col => (
+                    {['Why GrowthOS Found This', 'Predicted Outcome', 'Recommended Action'].map(col => (
                       <div key={col}>
                         <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">{col}</p>
                         <div className="space-y-2.5">
@@ -526,7 +526,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 gap-8 pt-8 border-t border-[#E5E7EB]">
                   <div>
                     <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">
-                      Why Xeno Found This
+                      Why GrowthOS Found This
                     </p>
                     <ul className="space-y-2.5">
                       {parseTriggerReasons(featuredOpportunity).map((reason, i) => (
@@ -602,7 +602,7 @@ export default function HomePage() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#5B4FFF]" />
                     </div>
-                    <h3 className="text-sm font-bold text-[#1A1A1A]">Xeno Activity</h3>
+                    <h3 className="text-sm font-bold text-[#1A1A1A]">Agent Activity</h3>
                   </div>
                   {activityItems.length > 0 && (
                     <button
@@ -623,7 +623,7 @@ export default function HomePage() {
                   <div className="text-center py-6">
                     <Activity className="h-8 w-8 mx-auto mb-2 text-[#D1D5DB]" />
                     <p className="text-xs text-[#9CA3AF]">
-                      Xeno is discovering opportunities…
+                      GrowthOS is discovering opportunities…
                     </p>
                   </div>
                 ) : (
@@ -723,7 +723,7 @@ export default function HomePage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#5B4FFF]" />
                 </div>
-                <h2 className="text-base font-bold text-[#1A1A1A]">Xeno Agent Activity Log</h2>
+                <h2 className="text-base font-bold text-[#1A1A1A]">GrowthOS Agent Activity Log</h2>
               </div>
               <button
                 onClick={() => setModalOpen(false)}

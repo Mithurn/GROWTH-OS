@@ -20,7 +20,7 @@ export default function LoadingPage() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const sessionId = window.localStorage.getItem('xeno_session_id');
+    const sessionId = window.localStorage.getItem('growthOS_session_id');
 
     if (!sessionId) {
       // No session - use fallback auto-progress
@@ -31,8 +31,8 @@ export default function LoadingPage() {
           }
           clearInterval(interval);
           setTimeout(() => {
-            window.localStorage.removeItem('xeno_onboarding');
-            window.localStorage.removeItem('xeno_session_id');
+            window.localStorage.removeItem('growthOS_onboarding');
+            window.localStorage.removeItem('growthOS_session_id');
             router.push('/opportunities');
           }, 1500);
           return prev;
@@ -62,8 +62,8 @@ export default function LoadingPage() {
           clearInterval(interval);
           setCurrentStep(LOADING_STEPS.length);
           setTimeout(() => {
-            window.localStorage.removeItem('xeno_onboarding');
-            window.localStorage.removeItem('xeno_session_id');
+            window.localStorage.removeItem('growthOS_onboarding');
+            window.localStorage.removeItem('growthOS_session_id');
             router.push('/opportunities');
           }, 1500);
         }

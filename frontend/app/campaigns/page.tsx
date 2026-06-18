@@ -133,14 +133,14 @@ function CampaignsContent() {
   // ── Load company ID ──
   useEffect(() => {
     async function init() {
-      let cid = window.localStorage.getItem('xeno_company_id');
+      let cid = window.localStorage.getItem('growthOS_company_id');
       if (!cid) {
         try {
-          const r = await fetch('https://xeno-crm-backend-n6d8.onrender.com/api/opportunities');
+          const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api'}/opportunities`);
           const d = await r.json();
           if (d.success && d.data.companyId) {
             cid = d.data.companyId;
-            window.localStorage.setItem('xeno_company_id', cid!);
+            window.localStorage.setItem('growthOS_company_id', cid!);
           }
         } catch {}
       }
@@ -461,7 +461,7 @@ function CampaignsContent() {
                 <PhoneMockup
                   channel={selectedChannel}
                   message={currentMessage}
-                  brandName="Xeno Brand"
+                  brandName="Your Brand"
                   isRefining={isRefining}
                 />
               </div>
@@ -499,7 +499,7 @@ function CampaignsContent() {
                   onChange={e => setModifier(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleRefine()}
                   disabled={isRefining || isLaunching}
-                  placeholder={isRefining ? 'AI is rewriting your copy…' : 'Tell Xeno how you\'d like to improve this campaign…'}
+                  placeholder={isRefining ? 'AI is rewriting your copy…' : 'Tell GrowthOS how you\'d like to improve this campaign…'}
                   className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none disabled:cursor-not-allowed"
                 />
                 <button
