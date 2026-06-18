@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { openRouterConfig } from '../config/openrouter';
+import { checkAndIncrFrequencyCap } from '../lib/redis';
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -424,6 +425,18 @@ export async function launchCampaign(
 
       if (!recipient) {
         console.warn(`[Launch] Skipping ${comm.id}: no ${campaign.channel === 'Email' ? 'email' : 'phone'}`);
+        return;
+      }
+
+      // Frequency cap: suppress if customer has already received 2+ messages today
+      const suppressed = await checkAndIncrFrequencyCap(comm.customer_id);
+      if (suppressed) {
+        console.log(`[Launch] Frequency cap hit for customer ${comm.customer_id}, suppressing`);
+        await supabase.from('communications').update({
+          status: 'FAILED',
+          failure_reason: 'Suppressed: frequency cap exceeded (2 messages/day)',
+          failed_at: new Date().toISOString(),
+        }).eq('id', comm.id);
         return;
       }
 

@@ -1,6 +1,8 @@
+import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import OpenAI from 'openai';
 import { openRouterConfig } from '../config/openrouter';
+import { getSegmentCache, setSegmentCache } from '../lib/redis';
 
 // ── OpenRouter client with required headers ───────────────────────────────────
 const openai = new OpenAI({
@@ -49,7 +51,22 @@ export async function discoverOpportunities(
       return [];
     }
 
-    return await analyzeWithAI(companyId, agentId, goal, analytics);
+    // Segment cache: skip LLM if we've already computed opportunities for this
+    // exact analytics snapshot + goal within the last 15 minutes
+    const cacheHash = createHash('sha256')
+      .update(JSON.stringify(analytics) + goal)
+      .digest('hex')
+      .slice(0, 16);
+
+    const cached = await getSegmentCache(cacheHash);
+    if (cached) {
+      console.log(`[OpportunityDiscovery] Cache hit (${cacheHash}), skipping LLM call`);
+      return JSON.parse(cached) as DiscoveredOpportunity[];
+    }
+
+    const result = await analyzeWithAI(companyId, agentId, goal, analytics);
+    await setSegmentCache(cacheHash, JSON.stringify(result));
+    return result;
   } catch (error) {
     console.error('Error in opportunity discovery:', error);
     return [];
