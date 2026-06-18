@@ -9,7 +9,7 @@ interface PhoneMockupProps {
   isRefining?: boolean;
 }
 
-export function PhoneMockup({ channel, message, brandName = 'Xeno Brand', isRefining }: PhoneMockupProps) {
+export function PhoneMockup({ channel, message, brandName = 'Your Brand', isRefining }: PhoneMockupProps) {
   const preview = message.replace(/\{\{customer_name\}\}/gi, 'Priya').replace(/\{customer_name\}/gi, 'Priya');
 
   return (

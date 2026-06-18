@@ -78,7 +78,7 @@ export default function SettingsPage() {
 
   async function loadSettings() {
     try {
-      const companyId = window.localStorage.getItem('xeno_company_id');
+      const companyId = window.localStorage.getItem('growthOS_company_id');
       if (!companyId) {
         setError('No company found. Please complete onboarding first.');
         setLoading(false);
@@ -117,7 +117,7 @@ export default function SettingsPage() {
       setError(null);
       setSuccess(false);
 
-      const companyId = window.localStorage.getItem('xeno_company_id');
+      const companyId = window.localStorage.getItem('growthOS_company_id');
       if (!companyId) {
         setError('No company found');
         setSaving(false);

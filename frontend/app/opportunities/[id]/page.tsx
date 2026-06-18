@@ -256,11 +256,11 @@ export default function OpportunityDetailPage() {
           <StatPill icon={Zap} label={`Recommended: ${channel}`} />
         </div>
 
-        {/* ── Why Xeno Found This ── */}
+        {/* ── Why GrowthOS Found This ── */}
         <div className="mb-8">
           <div className="flex items-center gap-1.5 mb-3">
             <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-            <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-500">Why Xeno Found This</span>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-500">Why GrowthOS Found This</span>
           </div>
           <p className="text-sm text-gray-600 leading-relaxed max-w-3xl min-h-[3rem]">
             {typedSummary}

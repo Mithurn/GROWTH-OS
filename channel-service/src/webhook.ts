@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import type { WebhookEvent } from './types';
 
 const CRM_WEBHOOK_URL = process.env.CRM_WEBHOOK_URL || 'http://localhost:3001/api/webhooks/channel-status';
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'xeno-webhook-secret-dev';
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'growthOS-webhook-secret-dev';
 const RETRY_DELAYS = [
   parseInt(process.env.RETRY_DELAY_1 || '15000'),
   parseInt(process.env.RETRY_DELAY_2 || '30000'),

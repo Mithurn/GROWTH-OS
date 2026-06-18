@@ -1,5 +1,5 @@
 {
-  "name": "channel-service",
+  "name": "growthOS-channel-service",
   "version": "1.0.0",
   "description": "Simulated channel provider for WhatsApp, Email, and SMS",
   "main": "src/server.ts",

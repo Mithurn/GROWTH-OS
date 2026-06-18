@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'xeno-webhook-secret-dev';
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'growthOS-webhook-secret-dev';
 
 export interface WebhookEvent {
   eventId: string;

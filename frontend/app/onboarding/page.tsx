@@ -43,7 +43,7 @@ function Logo() {
         <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
         <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
       </div>
-      <span className="text-[22px] font-semibold text-[#3B82F6] tracking-tight leading-none">xeno</span>
+      <span className="text-[22px] font-semibold text-[#3B82F6] tracking-tight leading-none">GrowthOS</span>
     </Link>
   );
 }
@@ -159,7 +159,7 @@ export default function OnboardingPage() {
       const res = await saveBusinessInfo(companyName.trim(), industry);
       const id = res?.data?.id;
       if (!id) throw new Error('No company ID returned');
-      window.localStorage.setItem('xeno_company_id', id);
+      window.localStorage.setItem('growthOS_company_id', id);
       next();
     } catch {
       setCompanyError('Failed to save. Please try again.');
@@ -193,7 +193,7 @@ export default function OnboardingPage() {
     // Double-click guard
     if (isSettingUp) return;
 
-    const storedCompanyId = window.localStorage.getItem('xeno_company_id');
+    const storedCompanyId = window.localStorage.getItem('growthOS_company_id');
     if (!storedCompanyId || (!useDemoData && (!customerFile || !orderFile))) {
       setSetupError('Missing company or data files. Please go back and try again.');
       return;
@@ -208,7 +208,7 @@ export default function OnboardingPage() {
     try {
       if (useDemoData) {
         // Force the company ID to the one that has our demo data
-        window.localStorage.setItem('xeno_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
+        window.localStorage.setItem('growthOS_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
         
         let currentStep = 0;
         const steps = ['validating', 'importing_customers', 'calculating_metrics', 'generating_personas', 'completed'];
@@ -307,7 +307,7 @@ export default function OnboardingPage() {
               <Sparkles className="h-7 w-7 text-white" />
             </div>
             <h1 className="text-4xl font-black text-[#1A1A1A] mb-4 tracking-tight leading-tight">
-              Welcome to Xeno Growth OS
+              Welcome to GrowthOS
             </h1>
             <p className="text-base text-[#6B7280] mb-10 leading-relaxed">
               An AI-native platform that finds growth opportunities, builds customer audiences, and runs personalised campaigns for your brand.
@@ -428,7 +428,7 @@ export default function OnboardingPage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 1 of 4</p>
               <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">Tell us about your brand</h2>
-              <p className="text-[#6B7280] mb-8">This helps Xeno tailor its AI to your market.</p>
+              <p className="text-[#6B7280] mb-8">This helps GrowthOS tailor its AI to your market.</p>
 
               {/* Company name */}
               <div className="mb-6">
@@ -498,7 +498,7 @@ export default function OnboardingPage() {
               <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 2 of 4</p>
               <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">Connect your customer data</h2>
               <p className="text-[#6B7280] mb-8">
-                Upload your customers and orders as CSV files. Xeno will analyse them instantly.
+                Upload your customers and orders as CSV files. GrowthOS will analyse them instantly.
               </p>
 
               <div className="space-y-3 mb-6 pointer-events-none opacity-50">
@@ -536,7 +536,7 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => {
-                  window.localStorage.setItem('xeno_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
+                  window.localStorage.setItem('growthOS_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
                   setUseDemoData(true);
                   next();
                 }}
@@ -552,7 +552,7 @@ export default function OnboardingPage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 3 of 4</p>
               <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">What is your primary growth goal?</h2>
-              <p className="text-[#6B7280] mb-8">Xeno will optimise every decision around this objective.</p>
+              <p className="text-[#6B7280] mb-8">GrowthOS will optimise every decision around this objective.</p>
 
               <div className="flex flex-col gap-2 mb-8">
                 {GOALS.map(g => {
@@ -597,7 +597,7 @@ export default function OnboardingPage() {
           {step === 'mode' && (
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 4 of 4</p>
-              <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">How should Xeno work?</h2>
+              <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">How should GrowthOS work?</h2>
               <p className="text-[#6B7280] mb-8">
                 Choose how much autonomy you give your AI team. You can change this at any time.
               </p>
@@ -621,7 +621,7 @@ export default function OnboardingPage() {
                     )}
                   </div>
                   <p className="text-xs text-[#6B7280] leading-relaxed">
-                    Xeno discovers opportunities, builds audiences, and drafts campaigns.{' '}
+                    GrowthOS discovers opportunities, builds audiences, and drafts campaigns.{' '}
                     <span className="font-semibold text-[#374151]">You approve before launch.</span>
                   </p>
                 </button>
@@ -644,7 +644,7 @@ export default function OnboardingPage() {
                     )}
                   </div>
                   <p className="text-xs text-[#6B7280] leading-relaxed">
-                    Xeno discovers opportunities, creates campaigns, and launches automatically.{' '}
+                    GrowthOS discovers opportunities, creates campaigns, and launches automatically.{' '}
                     <span className="font-semibold text-[#374151]">Full autopilot.</span>
                   </p>
                 </button>

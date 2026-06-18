@@ -487,7 +487,7 @@ async function ensureCompanyRow(
   const { data: inserted, error: insertError } = await supabase
     .from('companies')
     .upsert({
-      company_name: 'Xeno Demo Fashion',
+      company_name: 'GrowthOS Demo Fashion',
       industry: 'Fashion',
     }, { onConflict: 'company_name' })
     .select('id, company_name, industry')
