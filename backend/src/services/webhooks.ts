@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isDuplicateWebhook } from '../lib/redis';
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'growthOS-webhook-secret-dev';
 
@@ -45,6 +46,12 @@ export async function processWebhook(
   supabase: SupabaseClient,
   event: WebhookEvent
 ): Promise<{ success: boolean; message: string }> {
+  // Redis fast-path dedup: reject duplicates before hitting the DB
+  const isDup = await isDuplicateWebhook(event.providerMessageId, event.status);
+  if (isDup) {
+    return { success: true, message: 'Event already processed (Redis dedup)' };
+  }
+
   // Check idempotency
   const { data: existing, error: checkError } = await supabase
     .from('processed_webhook_events')
