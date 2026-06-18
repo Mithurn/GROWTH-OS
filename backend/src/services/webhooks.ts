@@ -8,26 +8,33 @@ export interface WebhookEvent {
   eventId: string;
   providerMessageId: string;
   communicationId: string;
-  status: 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'CLICKED' | 'FAILED';
+  status: 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'CLICKED' | 'CONVERTED' | 'FAILED';
   timestamp: string;
   sequenceNumber: number;
 }
 
-const SequenceNumbers: Record<string, number> = {
-  QUEUED: 1,
-  SENT: 2,
+// Strict forward-only state machine. FAILED is a terminal error state handled separately.
+// Rule: incoming status position must be strictly greater than current status position.
+const STATE_ORDER: Record<string, number> = {
+  QUEUED:    1,
+  SENT:      2,
   DELIVERED: 3,
-  READ: 4,
-  CLICKED: 5,
-  FAILED: 3,
+  READ:      4,
+  CLICKED:   5,
+  CONVERTED: 6,
 };
 
+// FAILED is only valid from pre-success states (before READ).
+// Once a message is READ/CLICKED/CONVERTED it cannot regress to FAILED.
+const FAILED_ALLOWED_FROM = new Set(['QUEUED', 'SENT', 'DELIVERED']);
+
 const TimestampFields: Record<string, string> = {
-  SENT: 'sent_at',
+  SENT:      'sent_at',
   DELIVERED: 'delivered_at',
-  READ: 'read_at',
-  CLICKED: 'clicked_at',
-  FAILED: 'failed_at',
+  READ:      'read_at',
+  CLICKED:   'clicked_at',
+  CONVERTED: 'converted_at',
+  FAILED:    'failed_at',
 };
 
 export function verifySignature(payload: string, signature: string): boolean {
@@ -82,36 +89,38 @@ export async function processWebhook(
     throw new Error(`Communication ${event.communicationId} not found`);
   }
 
-  // Get latest event sequence number for this communication
-  const { data: latestEvent } = await supabase
-    .from('communication_events')
-    .select('sequence_number')
-    .eq('communication_id', event.communicationId)
-    .order('sequence_number', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // ── State machine enforcement ─────────────────────────────────────────────────
+  // Enforce transitions based on DB state, not on what the caller asserts.
+  // This guards against late callbacks, retried webhooks, and out-of-order DLRs.
+  const currentPos = STATE_ORDER[comm.status] ?? 0;
 
-  const currentSequence = latestEvent?.sequence_number ?? 0;
-
-  // Enforce sequence number ordering
-  if (event.sequenceNumber <= currentSequence) {
-    console.warn(
-      `[Webhook] Out-of-order event ${event.eventId}: seq ${event.sequenceNumber} <= current ${currentSequence}`
-    );
-    // Still mark as processed to prevent retries
-    await supabase
-      .from('processed_webhook_events')
-      .insert({
+  if (event.status === 'FAILED') {
+    if (!FAILED_ALLOWED_FROM.has(comm.status)) {
+      console.warn(
+        `[Webhook] Rejected FAILED callback for ${event.communicationId}: current state is ${comm.status} (already succeeded)`
+      );
+      await supabase.from('processed_webhook_events').insert({
         id: crypto.randomUUID(),
         event_id: event.eventId,
         communication_id: event.communicationId,
       });
-
-    return {
-      success: true,
-      message: `Event ignored (sequence ${event.sequenceNumber} <= current ${currentSequence})`,
-    };
+      return { success: true, message: `Rejected: cannot fail a communication in state ${comm.status}` };
+    }
+  } else {
+    const incomingPos = STATE_ORDER[event.status] ?? 0;
+    if (incomingPos <= currentPos) {
+      console.warn(
+        `[Webhook] Rejected out-of-order transition for ${event.communicationId}: ${comm.status}(${currentPos}) → ${event.status}(${incomingPos})`
+      );
+      await supabase.from('processed_webhook_events').insert({
+        id: crypto.randomUUID(),
+        event_id: event.eventId,
+        communication_id: event.communicationId,
+      });
+      return { success: true, message: `Rejected: ${comm.status} → ${event.status} is not a valid forward transition` };
+    }
   }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Update communication status and timestamp
   const updates: any = {
