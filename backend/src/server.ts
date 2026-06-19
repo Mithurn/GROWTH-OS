@@ -27,6 +27,7 @@ import {
 } from './services/analytics';
 import { agentOrchestrator } from './services/agent-orchestrator';
 import { getRecentActions } from './services/agent-logger';
+import { startWorkers } from './lib/queues';
 import { prisma } from './lib/prisma';
 import { startConversation, sendMessage, getConversation } from './services/onboarding-chat';
 
@@ -1389,6 +1390,7 @@ app.listen(Number(PORT), '0.0.0.0', () => {
   // Start the Agent Orchestrator
   // Run every 5 minutes (300000ms) in production
   // For demo/testing, you can set this to 60000ms (1 minute)
+  startWorkers();
   agentOrchestrator.start(21600000); // 6 hours — preserves free-tier quota
   console.log('🤖 Agent Orchestrator started');
 });

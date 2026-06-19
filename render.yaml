@@ -3,7 +3,7 @@ services:
     name: xeno-crm-backend
     env: node
     plan: free
-    buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js --external:pg --external:pg-native
+    buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js --external:pg --external:pg-native --external:bullmq --external:ioredis
     startCommand: cd backend && node dist/server.js
     envVars:
       - key: PORT
