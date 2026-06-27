@@ -7,6 +7,9 @@ import { createClient } from '@supabase/supabase-js';
 import { Readable } from 'stream';
 import WebSocket from 'ws';
 import 'dotenv/config';
+import rateLimit from 'express-rate-limit';
+import pino from 'pino';
+import pinoHttp from 'pino-http';
 import { fashionProducts, seedProducts } from './data-generator/products';
 import { generateCustomerAttributes } from './services/customer-attributes';
 import { generateCustomerMetrics } from './services/customer-metrics';
@@ -30,13 +33,40 @@ import { getRecentActions } from './services/agent-logger';
 import { startWorkers } from './lib/queues';
 import { prisma } from './lib/prisma';
 import { startConversation, sendMessage, getConversation } from './services/onboarding-chat';
+import { getCached, setCached } from './lib/cache';
+import { subscribeToActivity } from './lib/activity-emitter';
+import { requireAuth, softAuth, type AuthRequest } from './middleware/auth';
+
+export const logger = pino({
+  level: process.env.LOG_LEVEL ?? 'info',
+  ...(process.env.NODE_ENV !== 'production' && { transport: { target: 'pino-pretty' } }),
+});
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Middleware
+// ── Rate limiters ────────────────────────────────────────────────────────────
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+const llmLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'AI rate limit reached, please wait a moment.' },
+});
+
+// ── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
+app.use('/api', generalLimiter);
 
 // Supabase client
 const supabase = createClient(
@@ -51,6 +81,19 @@ const supabase = createClient(
 
 // In-memory storage for ingestion status
 const ingestionStatus: Record<string, any> = {};
+
+// Look up a company by authenticated user_id, falling back to the provided companyId
+async function resolveCompany(userId?: string, fallbackCompanyId?: string): Promise<string | null> {
+  if (userId) {
+    const { data } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (data?.id) return data.id;
+  }
+  return fallbackCompanyId ?? null;
+}
 
 // Helper: Parse CSV from buffer
 function parseCSV(buffer: Buffer): Promise<any[]> {
@@ -69,6 +112,13 @@ function parseCSV(buffer: Buffer): Promise<any[]> {
 // GET /health
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// GET /api/sse/activity — SSE stream for real-time agent activity
+app.get('/api/sse/activity', (req, res) => {
+  const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : '';
+  const unsubscribe = subscribeToActivity(res, companyId);
+  req.on('close', unsubscribe);
 });
 
 // GET /api/companies/:id
@@ -97,7 +147,7 @@ app.get('/api/companies/:id', async (req, res) => {
 });
 
 // POST /api/onboarding/business
-app.post('/api/onboarding/business', async (req, res) => {
+app.post('/api/onboarding/business', softAuth, async (req: AuthRequest, res) => {
   try {
     const { companyName, industry } = req.body;
 
@@ -107,6 +157,7 @@ app.post('/api/onboarding/business', async (req, res) => {
         {
           company_name: companyName,
           industry,
+          ...(req.userId ? { user_id: req.userId } : {}),
         },
         { onConflict: 'company_name' },
       )
@@ -734,10 +785,18 @@ app.get('/api/intelligence-preview', async (req, res) => {
     const revenue = revenueData?.reduce((sum, o) => sum + parseFloat(o.total_amount.toString()), 0) || 0;
     const avgOrderValue = totalOrders ? revenue / totalOrders : 0;
 
-    // Get customer health (mock for now - will be real in Phase 3)
-    const active = Math.floor(totalCustomers! * 0.68);
-    const dormant = Math.floor(totalCustomers! * 0.12);
-    const atRisk = totalCustomers! - active - dormant;
+    // Real customer health from days_since_last_order
+    const { data: healthData } = await supabase
+      .from('customer_attributes')
+      .select('days_since_last_order');
+
+    let active = 0, atRisk = 0, dormant = 0;
+    for (const row of healthData ?? []) {
+      const days = row.days_since_last_order ?? 0;
+      if (days <= 60) active++;
+      else if (days <= 180) atRisk++;
+      else dormant++;
+    }
 
     // Get top customers
     const { data: topCustomers } = await supabase
@@ -763,7 +822,7 @@ app.get('/api/intelligence-preview', async (req, res) => {
   }
 });
 
-app.post('/api/personas/generate', async (req, res) => {
+app.post('/api/personas/generate', llmLimiter, async (req, res) => {
   try {
     const { companyId, model } = req.body ?? {};
     const report = await generatePersonas(supabase, { companyId, model });
@@ -778,7 +837,7 @@ app.post('/api/personas/generate', async (req, res) => {
   }
 });
 
-app.post('/api/opportunities/generate', async (req, res) => {
+app.post('/api/opportunities/generate', llmLimiter, async (req, res) => {
   try {
     const { companyId, model } = req.body ?? {};
     const report = await generateOpportunities(supabase, { companyId, model });
@@ -793,17 +852,14 @@ app.post('/api/opportunities/generate', async (req, res) => {
   }
 });
 
-app.get('/api/opportunities', async (req, res) => {
+app.get('/api/opportunities', softAuth, async (req: AuthRequest, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+    const fallback = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+    const companyId = await resolveCompany(req.userId, fallback) ?? fallback;
     const report = await getOpportunityDashboard(supabase, companyId);
-
-    res.json({
-      success: true,
-      data: report,
-    });
+    res.json({ success: true, data: report });
   } catch (error) {
-    console.error('Error fetching opportunities:', error);
+    logger.error({ err: error }, 'Error fetching opportunities');
     res.status(500).json({ error: 'Failed to fetch opportunities' });
   }
 });
@@ -847,7 +903,7 @@ app.post('/api/opportunities/:id/refine', async (req, res) => {
   }
 });
 
-app.post('/api/opportunities/create-from-goal', async (req, res) => {
+app.post('/api/opportunities/create-from-goal', llmLimiter, async (req, res) => {
   try {
     const { goal, companyId, model } = req.body;
 
@@ -908,7 +964,7 @@ app.get('/api/personas/:personaName', async (req, res) => {
 // ============================================
 
 // POST /api/campaigns/generate
-app.post('/api/campaigns/generate', async (req, res) => {
+app.post('/api/campaigns/generate', llmLimiter, async (req, res) => {
   try {
     const { opportunityId, companyId, model } = req.body ?? {};
 
@@ -1080,18 +1136,20 @@ app.post('/api/webhooks/channel-status', async (req, res) => {
 // ANALYTICS
 // ============================================
 
+const ANALYTICS_TTL = 5 * 60 * 1000; // 5 minutes
+
 // GET /api/analytics/intelligence-brief
 app.get('/api/analytics/intelligence-brief', async (req, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-    const brief = await generateIntelligenceBrief(supabase, companyId);
-
-    res.json({
-      success: true,
-      data: brief,
-    });
+    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : 'global';
+    const key = `intelligence-brief:${companyId}`;
+    const cached = getCached<unknown>(key);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+    const brief = await generateIntelligenceBrief(supabase, companyId === 'global' ? undefined : companyId);
+    setCached(key, brief, ANALYTICS_TTL);
+    res.json({ success: true, data: brief });
   } catch (error) {
-    console.error('Error generating intelligence brief:', error);
+    logger.error({ err: error }, 'Error generating intelligence brief');
     res.status(500).json({ error: 'Failed to generate intelligence brief' });
   }
 });
@@ -1099,14 +1157,13 @@ app.get('/api/analytics/intelligence-brief', async (req, res) => {
 // GET /api/analytics/campaign-funnel
 app.get('/api/analytics/campaign-funnel', async (req, res) => {
   try {
+    const cached = getCached<unknown>('campaign-funnel');
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const funnel = await getCampaignFunnel(supabase);
-
-    res.json({
-      success: true,
-      data: funnel,
-    });
+    setCached('campaign-funnel', funnel, ANALYTICS_TTL);
+    res.json({ success: true, data: funnel });
   } catch (error) {
-    console.error('Error fetching campaign funnel:', error);
+    logger.error({ err: error }, 'Error fetching campaign funnel');
     res.status(500).json({ error: 'Failed to fetch campaign funnel' });
   }
 });
@@ -1114,14 +1171,13 @@ app.get('/api/analytics/campaign-funnel', async (req, res) => {
 // GET /api/analytics/opportunity-pipeline
 app.get('/api/analytics/opportunity-pipeline', async (req, res) => {
   try {
+    const cached = getCached<unknown>('opportunity-pipeline');
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const pipeline = await getOpportunityPipeline(supabase);
-
-    res.json({
-      success: true,
-      data: pipeline,
-    });
+    setCached('opportunity-pipeline', pipeline, ANALYTICS_TTL);
+    res.json({ success: true, data: pipeline });
   } catch (error) {
-    console.error('Error fetching opportunity pipeline:', error);
+    logger.error({ err: error }, 'Error fetching opportunity pipeline');
     res.status(500).json({ error: 'Failed to fetch opportunity pipeline' });
   }
 });
@@ -1129,14 +1185,13 @@ app.get('/api/analytics/opportunity-pipeline', async (req, res) => {
 // GET /api/analytics/channel-performance
 app.get('/api/analytics/channel-performance', async (req, res) => {
   try {
+    const cached = getCached<unknown>('channel-performance');
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const performance = await getChannelPerformance(supabase);
-
-    res.json({
-      success: true,
-      data: performance,
-    });
+    setCached('channel-performance', performance, ANALYTICS_TTL);
+    res.json({ success: true, data: performance });
   } catch (error) {
-    console.error('Error fetching channel performance:', error);
+    logger.error({ err: error }, 'Error fetching channel performance');
     res.status(500).json({ error: 'Failed to fetch channel performance' });
   }
 });
@@ -1144,14 +1199,13 @@ app.get('/api/analytics/channel-performance', async (req, res) => {
 // GET /api/analytics/opportunity-distribution
 app.get('/api/analytics/opportunity-distribution', async (req, res) => {
   try {
+    const cached = getCached<unknown>('opportunity-distribution');
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const distribution = await getOpportunityDistribution(supabase);
-
-    res.json({
-      success: true,
-      data: distribution,
-    });
+    setCached('opportunity-distribution', distribution, ANALYTICS_TTL);
+    res.json({ success: true, data: distribution });
   } catch (error) {
-    console.error('Error fetching opportunity distribution:', error);
+    logger.error({ err: error }, 'Error fetching opportunity distribution');
     res.status(500).json({ error: 'Failed to fetch opportunity distribution' });
   }
 });
@@ -1160,14 +1214,14 @@ app.get('/api/analytics/opportunity-distribution', async (req, res) => {
 app.get('/api/analytics/opportunity-trend', async (req, res) => {
   try {
     const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const key = `opportunity-trend:${days}`;
+    const cached = getCached<unknown>(key);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const trend = await getOpportunityTrend(supabase, days);
-
-    res.json({
-      success: true,
-      data: trend,
-    });
+    setCached(key, trend, ANALYTICS_TTL);
+    res.json({ success: true, data: trend });
   } catch (error) {
-    console.error('Error fetching opportunity trend:', error);
+    logger.error({ err: error }, 'Error fetching opportunity trend');
     res.status(500).json({ error: 'Failed to fetch opportunity trend' });
   }
 });
@@ -1176,14 +1230,14 @@ app.get('/api/analytics/opportunity-trend', async (req, res) => {
 app.get('/api/analytics/activity-feed', async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const key = `activity-feed:${limit}`;
+    const cached = getCached<unknown>(key);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const feed = await getActivityFeed(supabase, limit);
-
-    res.json({
-      success: true,
-      data: feed,
-    });
+    setCached(key, feed, ANALYTICS_TTL);
+    res.json({ success: true, data: feed });
   } catch (error) {
-    console.error('Error fetching activity feed:', error);
+    logger.error({ err: error }, 'Error fetching activity feed');
     res.status(500).json({ error: 'Failed to fetch activity feed' });
   }
 });
@@ -1191,14 +1245,13 @@ app.get('/api/analytics/activity-feed', async (req, res) => {
 // GET /api/analytics/recommended-actions
 app.get('/api/analytics/recommended-actions', async (req, res) => {
   try {
+    const cached = getCached<unknown>('recommended-actions');
+    if (cached) return res.json({ success: true, data: cached, cached: true });
     const actions = await getRecommendedActions(supabase);
-
-    res.json({
-      success: true,
-      data: actions,
-    });
+    setCached('recommended-actions', actions, ANALYTICS_TTL);
+    res.json({ success: true, data: actions });
   } catch (error) {
-    console.error('Error fetching recommended actions:', error);
+    logger.error({ err: error }, 'Error fetching recommended actions');
     res.status(500).json({ error: 'Failed to fetch recommended actions' });
   }
 });
