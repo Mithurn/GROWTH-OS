@@ -540,22 +540,19 @@ export async function generateCustomerAttributes(
     throw new Error(`Failed to load orders: ${ordersError.message}`);
   }
 
-  // order_items are linked to orders — filter via the fetched order IDs
+  // order_items are linked to orders — chunk .in() to avoid URL length limits
   const orderIds = (ordersData ?? []).map((o: any) => o.id);
-
+  const ORDER_ITEM_CHUNK = 200;
   let orderItemsData: any[] = [];
-  let orderItemsError: any = null;
-  if (orderIds.length > 0) {
-    const result = await supabase
+
+  for (let i = 0; i < orderIds.length; i += ORDER_ITEM_CHUNK) {
+    const chunk = orderIds.slice(i, i + ORDER_ITEM_CHUNK);
+    const { data, error } = await supabase
       .from('order_items')
       .select('order_id, product_id, quantity, unit_price')
-      .in('order_id', orderIds);
-    orderItemsData = result.data ?? [];
-    orderItemsError = result.error;
-  }
-
-  if (orderItemsError) {
-    throw new Error(`Failed to load order items: ${orderItemsError.message}`);
+      .in('order_id', chunk);
+    if (error) throw new Error(`Failed to load order items: ${error.message}`);
+    orderItemsData = orderItemsData.concat(data ?? []);
   }
 
   let productsQuery = supabase.from('products').select('id, category, price');
