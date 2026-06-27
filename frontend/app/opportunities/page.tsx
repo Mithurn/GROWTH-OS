@@ -133,7 +133,7 @@ export default function OpportunitiesPage() {
         if (data.totalOpportunities > 0) {
           setReport(data);
         } else {
-          const gen = await generateOpportunities(companyId);
+          const gen = await generateOpportunities();
           if (!mounted) return;
           setReport(gen.data as OpportunityReport);
         }
@@ -216,7 +216,7 @@ export default function OpportunitiesPage() {
     try {
       setCreatingGoal(true);
       setGoal('');
-      await createOpportunityFromGoal(trimmed, companyId);
+      await createOpportunityFromGoal(trimmed);
       const res = await getOpportunityDashboard();
       setReport(res.data as OpportunityReport);
     } catch {
