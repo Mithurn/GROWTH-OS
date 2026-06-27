@@ -151,27 +151,29 @@ app.post('/api/onboarding/business', softAuth, async (req: AuthRequest, res) => 
   try {
     const { companyName, industry } = req.body;
 
+    // If user already has a company, return it — prevents duplicates on re-run
+    if (req.userId) {
+      const { data: existing } = await supabase
+        .from('companies')
+        .select('id, company_name, industry')
+        .eq('user_id', req.userId)
+        .maybeSingle();
+      if (existing) return res.json({ success: true, data: existing });
+    }
+
     const { data, error } = await supabase
       .from('companies')
-      .upsert(
-        {
-          company_name: companyName,
-          industry,
-          ...(req.userId ? { user_id: req.userId } : {}),
-        },
-        { onConflict: 'company_name' },
-      )
+      .insert({
+        company_name: companyName,
+        industry,
+        ...(req.userId ? { user_id: req.userId } : {}),
+      })
       .select('id, company_name, industry')
       .single();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    res.json({
-      success: true,
-      data,
-    });
+    res.json({ success: true, data });
   } catch (error) {
     console.error('Error saving business info:', error);
     res.status(500).json({ error: 'Failed to save business info' });
@@ -416,10 +418,10 @@ app.post('/api/upload/orders', upload.single('file'), async (req, res) => {
 });
 
 // POST /api/process-ingestion
-app.post('/api/process-ingestion', upload.fields([
+app.post('/api/process-ingestion', softAuth, upload.fields([
   { name: 'customers', maxCount: 1 },
   { name: 'orders', maxCount: 1 }
-]), async (req, res) => {
+]), async (req: AuthRequest, res) => {
   const sessionId = Date.now().toString();
 
   try {
@@ -429,15 +431,17 @@ app.post('/api/process-ingestion', upload.fields([
       return res.status(400).json({ error: 'Both customer and order files required' });
     }
 
-    // Initialize status
-    ingestionStatus[sessionId] = {
-      step: 'validating',
-      progress: 0,
-      message: 'Starting ingestion...'
-    };
+    // Resolve which company this ingestion belongs to
+    const bodyCompanyId = typeof req.body.companyId === 'string' ? req.body.companyId : undefined;
+    const companyId = await resolveCompany(req.userId, bodyCompanyId);
 
-    // Start async processing
-    processIngestion(sessionId, files.customers[0].buffer, files.orders[0].buffer);
+    if (!companyId) {
+      return res.status(400).json({ error: 'companyId is required — complete onboarding first' });
+    }
+
+    ingestionStatus[sessionId] = { step: 'validating', progress: 0, message: 'Starting ingestion...' };
+
+    processIngestion(sessionId, files.customers[0].buffer, files.orders[0].buffer, companyId);
 
     res.json({ success: true, sessionId });
   } catch (error) {
@@ -454,82 +458,58 @@ app.get('/api/ingestion-status/:sessionId', (req, res) => {
 });
 
 // Async ingestion process
-async function processIngestion(sessionId: string, customerBuffer: Buffer, orderBuffer: Buffer) {
+async function processIngestion(sessionId: string, customerBuffer: Buffer, orderBuffer: Buffer, companyId: string) {
   try {
-    // Step 1: Validate
     updateStatus(sessionId, 'validating', 10, 'Validating data...');
     await sleep(500);
 
-    // Step 2: Parse CSVs
     updateStatus(sessionId, 'parsing', 20, 'Parsing CSV files...');
     const customers = await parseCSV(customerBuffer);
     const orders = await parseCSV(orderBuffer);
 
-    // Step 3: Seed products (if not already seeded)
+    // Seed products extracted from the uploaded CSV (company-scoped)
     updateStatus(sessionId, 'seeding_products', 30, 'Seeding products...');
-    await seedProductsIfNeeded();
+    await seedProductsFromCSV(companyId, orders);
 
-    // Step 4: Import customers
     updateStatus(sessionId, 'importing_customers', 40, 'Importing customers...');
-    const customerMap = await importCustomers(customers);
+    const customerMap = await importCustomers(customers, companyId);
 
-    // Step 5: Import orders
     updateStatus(sessionId, 'importing_orders', 60, 'Importing orders and products...');
-    const orderImportSummary = await importOrders(orders, customerMap);
-    updateStatus(
-      sessionId,
-      'importing_orders',
-      72,
-      `Imported ${orderImportSummary.ordersInserted} orders and ${orderImportSummary.orderItemsInserted} order items...`,
-    );
+    const orderImportSummary = await importOrders(orders, customerMap, companyId);
+    updateStatus(sessionId, 'importing_orders', 72,
+      `Imported ${orderImportSummary.ordersInserted} orders and ${orderImportSummary.orderItemsInserted} order items...`);
 
-    // Step 6: Calculate metrics
     updateStatus(sessionId, 'calculating_metrics', 80, 'Calculating customer metrics...');
-    const metricsReport = await generateCustomerMetricsWithVerification();
-    updateStatus(
-      sessionId,
-      'validating_metrics',
-      95,
-      `Validated ${metricsReport.totalMetricsRecords}/${metricsReport.totalCustomers} customer metrics records...`,
-    );
+    const metricsReport = await generateCustomerMetricsWithVerification(companyId);
+    updateStatus(sessionId, 'validating_metrics', 85,
+      `Validated ${metricsReport.totalMetricsRecords}/${metricsReport.totalCustomers} customer metrics records...`);
 
-    // Step 7: Calculate attributes
     updateStatus(sessionId, 'calculating_attributes', 90, 'Calculating customer attributes...');
-    const attributesReport = await generateCustomerAttributesWithVerification();
-    updateStatus(
-      sessionId,
-      'validating_attributes',
-      93,
-      `Validated ${attributesReport.totalAttributesRecords}/${attributesReport.totalCustomers} customer attributes records...`,
-    );
+    const attributesReport = await generateCustomerAttributesWithVerification(companyId);
+    updateStatus(sessionId, 'validating_attributes', 93,
+      `Validated ${attributesReport.totalAttributesRecords}/${attributesReport.totalCustomers} customer attributes records...`);
 
-    // Step 7.5: Generate personas
     updateStatus(sessionId, 'generating_personas', 95, 'Generating customer personas with AI...');
     try {
       const personasReport = await generatePersonas(supabase, {
+        companyId,
         logger: {
           info: (msg) => console.log(`[personas] ${msg}`),
           warn: (msg) => console.warn(`[personas] ${msg}`),
           error: (msg) => console.error(`[personas] ${msg}`),
         },
       });
-      updateStatus(
-        sessionId,
-        'personas_complete',
-        98,
-        `Generated ${personasReport.totalPersonas} personas for ${personasReport.personasAssigned} customers...`,
-      );
+      updateStatus(sessionId, 'personas_complete', 98,
+        `Generated ${personasReport.totalPersonas} personas for ${personasReport.personasAssigned} customers...`);
     } catch (personaError) {
       console.error('Persona generation failed, continuing with ingestion:', personaError);
       updateStatus(sessionId, 'personas_skipped', 98, 'Skipped persona generation (non-critical)');
     }
 
-    // Step 8: Complete
     updateStatus(sessionId, 'completed', 100, 'Ingestion complete!');
-
   } catch (error) {
     console.error('Ingestion error:', error);
-    updateStatus(sessionId, 'error', 0, `Error: ${error}`);
+    updateStatus(sessionId, 'error', 0, `Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -541,101 +521,68 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function generateCustomerMetricsWithVerification() {
-  const firstPass = await generateCustomerMetrics(supabase);
+async function generateCustomerMetricsWithVerification(companyId: string) {
+  const firstPass = await generateCustomerMetrics(supabase, { companyId });
+  if (firstPass.totalMetricsRecords >= firstPass.totalCustomers) return firstPass;
 
-  if (firstPass.totalMetricsRecords >= firstPass.totalCustomers) {
-    console.log(
-      `[customer_metrics] Verified ${firstPass.totalMetricsRecords}/${firstPass.totalCustomers} records on first pass`,
-    );
-    return firstPass;
-  }
-
-  console.warn(
-    `[customer_metrics] Incomplete metrics after first pass (${firstPass.totalMetricsRecords}/${firstPass.totalCustomers}), retrying once...`,
-  );
-
+  console.warn(`[customer_metrics] Incomplete after first pass, retrying...`);
   await sleep(1000);
-  const secondPass = await generateCustomerMetrics(supabase);
-
+  const secondPass = await generateCustomerMetrics(supabase, { companyId });
   if (secondPass.totalMetricsRecords < secondPass.totalCustomers) {
-    throw new Error(
-      `Customer metrics still incomplete after retry: ${secondPass.totalMetricsRecords}/${secondPass.totalCustomers}`,
-    );
+    throw new Error(`Customer metrics incomplete after retry: ${secondPass.totalMetricsRecords}/${secondPass.totalCustomers}`);
   }
-
-  console.log(
-    `[customer_metrics] Verified ${secondPass.totalMetricsRecords}/${secondPass.totalCustomers} records after retry`,
-  );
   return secondPass;
 }
 
-async function generateCustomerAttributesWithVerification() {
-  const firstPass = await generateCustomerAttributes(supabase);
+async function generateCustomerAttributesWithVerification(companyId: string) {
+  const firstPass = await generateCustomerAttributes(supabase, { companyId });
+  if (firstPass.totalAttributesRecords >= firstPass.totalCustomers) return firstPass;
 
-  if (firstPass.totalAttributesRecords >= firstPass.totalCustomers) {
-    console.log(
-      `[customer_attributes] Verified ${firstPass.totalAttributesRecords}/${firstPass.totalCustomers} records on first pass`,
-    );
-    return firstPass;
-  }
-
-  console.warn(
-    `[customer_attributes] Incomplete attributes after first pass (${firstPass.totalAttributesRecords}/${firstPass.totalCustomers}), retrying once...`,
-  );
-
+  console.warn(`[customer_attributes] Incomplete after first pass, retrying...`);
   await sleep(1000);
-  const secondPass = await generateCustomerAttributes(supabase);
-
+  const secondPass = await generateCustomerAttributes(supabase, { companyId });
   if (secondPass.totalAttributesRecords < secondPass.totalCustomers) {
-    throw new Error(
-      `Customer attributes still incomplete after retry: ${secondPass.totalAttributesRecords}/${secondPass.totalCustomers}`,
-    );
+    throw new Error(`Customer attributes incomplete after retry: ${secondPass.totalAttributesRecords}/${secondPass.totalCustomers}`);
   }
-
-  console.log(
-    `[customer_attributes] Verified ${secondPass.totalAttributesRecords}/${secondPass.totalCustomers} records after retry`,
-  );
   return secondPass;
 }
 
-async function seedProductsIfNeeded() {
-  // Check if products already exist
-  const { count, error } = await supabase
+// Extract unique products from CSV rows and upsert them as company-scoped records.
+// This replaces the global product-seed approach so each company owns their product catalog.
+async function seedProductsFromCSV(companyId: string, orders: any[]) {
+  const seen = new Set<string>();
+  const toInsert: any[] = [];
+
+  for (const row of orders) {
+    const sku = row.product_sku?.trim();
+    if (!sku || seen.has(sku)) continue;
+    seen.add(sku);
+    toInsert.push({
+      sku,
+      product_name: row.product_name?.trim() || sku,
+      category: row.category?.trim() || 'General',
+      subcategory: row.subcategory?.trim() || null,
+      price: parseFloat(row.unit_price || row.price || row.amount || '0') || 0,
+      company_id: companyId,
+    });
+  }
+
+  if (toInsert.length === 0) {
+    console.warn('[products] No product SKUs found in orders CSV');
+    return;
+  }
+
+  const { error } = await supabase
     .from('products')
-    .select('*', { count: 'exact', head: true });
+    .upsert(toInsert, { onConflict: 'sku,company_id', ignoreDuplicates: true });
 
-  if (error) {
-    throw new Error(`Failed to inspect products table: ${error.message}`);
-  }
-
-  if (count === 0) {
-    const seeded = await seedProducts(supabase);
-
-    if (!seeded || seeded.length === 0) {
-      throw new Error('Product seeding returned no rows');
-    }
-
-    const { count: verifyCount, error: verifyError } = await supabase
-      .from('products')
-      .select('*', { count: 'exact', head: true });
-
-    if (verifyError) {
-      throw new Error(`Failed to verify seeded products: ${verifyError.message}`);
-    }
-
-    if ((verifyCount ?? 0) === 0) {
-      throw new Error('Product seeding did not persist any rows');
-    }
-
-    console.log(`[products] Seeded ${verifyCount} products`);
-  }
+  if (error) throw new Error(`Failed to seed products: ${error.message}`);
+  console.log(`[products] Seeded/verified ${toInsert.length} products for company ${companyId}`);
 }
 
-async function importCustomers(customers: any[]) {
+async function importCustomers(customers: any[], companyId: string) {
   const customerMap = new Map<string, string>(); // external_id -> supabase_id
 
-  // Insert in batches
   for (let i = 0; i < customers.length; i += 100) {
     const batch = customers.slice(i, i + 100);
 
@@ -650,13 +597,13 @@ async function importCustomers(customers: any[]) {
         gender: c.gender,
         city: c.city,
         state: c.state,
-        signup_date: c.signup_date
+        signup_date: c.signup_date,
+        company_id: companyId,
       })))
       .select('id, external_customer_id');
 
     if (error) throw error;
 
-    // Map external_id to supabase id
     data.forEach((customer: any) => {
       customerMap.set(customer.external_customer_id, customer.id);
     });
@@ -665,8 +612,8 @@ async function importCustomers(customers: any[]) {
   return customerMap;
 }
 
-async function importOrders(orders: any[], customerMap: Map<string, string>) {
-  const { data: products } = await supabase.from('products').select('id, sku');
+async function importOrders(orders: any[], customerMap: Map<string, string>, companyId: string) {
+  const { data: products } = await supabase.from('products').select('id, sku').eq('company_id', companyId);
   const productMap = new Map(products?.map(p => [p.sku, p.id]) || []);
 
   if (productMap.size === 0) {
@@ -715,6 +662,7 @@ async function importOrders(orders: any[], customerMap: Map<string, string>) {
       order_date: items[0].order_date,
       total_amount: totalAmount,
       channel: items[0].channel || 'Website',
+      company_id: companyId,
     });
 
     for (const item of items) {

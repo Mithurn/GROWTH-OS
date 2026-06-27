@@ -8,6 +8,7 @@ export interface CustomerMetricsLogger {
 
 export interface CustomerMetricsRecord {
   customer_id: string;
+  company_id?: string;
   total_orders: number;
   total_spent: number;
   avg_order_value: number;
@@ -70,6 +71,7 @@ interface CustomerAggregate {
 interface GenerateCustomerMetricsOptions {
   batchSize?: number;
   logger?: CustomerMetricsLogger;
+  companyId?: string;
 }
 
 const DEFAULT_BATCH_SIZE = 100;
@@ -353,22 +355,22 @@ export async function generateCustomerMetrics(
 ): Promise<CustomerMetricsReport> {
   const logger = options.logger ?? defaultLogger;
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+  const { companyId } = options;
   const now = new Date();
 
   logger.info('[customer_metrics] Starting generation pipeline');
 
-  const { data: customersData, error: customersError } = await supabase
-    .from('customers')
-    .select('id, first_name, last_name')
-    .order('created_at', { ascending: true });
+  let customersQuery = supabase.from('customers').select('id, first_name, last_name').order('created_at', { ascending: true });
+  if (companyId) customersQuery = customersQuery.eq('company_id', companyId);
+  const { data: customersData, error: customersError } = await customersQuery;
 
   if (customersError) {
     throw new Error(`Failed to load customers: ${customersError.message}`);
   }
 
-  const { data: ordersData, error: ordersError } = await supabase
-    .from('orders')
-    .select('customer_id, total_amount, order_date');
+  let ordersQuery = supabase.from('orders').select('customer_id, total_amount, order_date');
+  if (companyId) ordersQuery = ordersQuery.eq('company_id', companyId);
+  const { data: ordersData, error: ordersError } = await ordersQuery;
 
   if (ordersError) {
     throw new Error(`Failed to load orders: ${ordersError.message}`);
@@ -382,7 +384,10 @@ export async function generateCustomerMetrics(
   );
 
   const orderAggregates = aggregateOrdersByCustomer(orders);
-  const metrics = customers.map((customer) => buildMetrics(customer, orderAggregates.get(customer.id), now));
+  const metrics = customers.map((customer) => ({
+    ...buildMetrics(customer, orderAggregates.get(customer.id), now),
+    ...(companyId ? { company_id: companyId } : {}),
+  }));
   const zeroOrderCustomers = metrics.filter((metric) => metric.total_orders === 0).length;
 
   logger.info('[customer_metrics] Computed metrics for all customers');

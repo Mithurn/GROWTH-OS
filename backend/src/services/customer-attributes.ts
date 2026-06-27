@@ -8,6 +8,7 @@ export interface CustomerAttributesLogger {
 
 export interface CustomerAttributesRecord {
   customer_id: string;
+  company_id?: string;
   favorite_category: string | null;
   second_favorite_category: string | null;
   preferred_channel: string | null;
@@ -115,6 +116,7 @@ interface CustomerContext {
 interface GenerateCustomerAttributesOptions {
   batchSize?: number;
   logger?: CustomerAttributesLogger;
+  companyId?: string;
 }
 
 const DEFAULT_BATCH_SIZE = 100;
@@ -516,38 +518,48 @@ export async function generateCustomerAttributes(
 ): Promise<CustomerAttributesReport> {
   const logger = options.logger ?? defaultLogger;
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+  const { companyId } = options;
   const now = new Date();
 
   logger.info('[customer_attributes] Starting generation pipeline');
 
-  const { data: customersData, error: customersError } = await supabase
-    .from('customers')
-    .select('id, first_name, last_name')
-    .order('created_at', { ascending: true });
+  let customersQuery = supabase.from('customers').select('id, first_name, last_name').order('created_at', { ascending: true });
+  if (companyId) customersQuery = customersQuery.eq('company_id', companyId);
+  const { data: customersData, error: customersError } = await customersQuery;
 
   if (customersError) {
     throw new Error(`Failed to load customers: ${customersError.message}`);
   }
 
-  const { data: ordersData, error: ordersError } = await supabase
-    .from('orders')
-    .select('id, customer_id, order_date, channel');
+  let ordersQuery = supabase.from('orders').select('id, customer_id, order_date, channel');
+  if (companyId) ordersQuery = ordersQuery.eq('company_id', companyId);
+  const { data: ordersData, error: ordersError } = await ordersQuery;
 
   if (ordersError) {
     throw new Error(`Failed to load orders: ${ordersError.message}`);
   }
 
-  const { data: orderItemsData, error: orderItemsError } = await supabase
-    .from('order_items')
-    .select('order_id, product_id, quantity, unit_price');
+  // order_items are linked to orders — filter via the fetched order IDs
+  const orderIds = (ordersData ?? []).map((o: any) => o.id);
+
+  let orderItemsData: any[] = [];
+  let orderItemsError: any = null;
+  if (orderIds.length > 0) {
+    const result = await supabase
+      .from('order_items')
+      .select('order_id, product_id, quantity, unit_price')
+      .in('order_id', orderIds);
+    orderItemsData = result.data ?? [];
+    orderItemsError = result.error;
+  }
 
   if (orderItemsError) {
     throw new Error(`Failed to load order items: ${orderItemsError.message}`);
   }
 
-  const { data: productsData, error: productsError } = await supabase
-    .from('products')
-    .select('id, category, price');
+  let productsQuery = supabase.from('products').select('id, category, price');
+  if (companyId) productsQuery = productsQuery.eq('company_id', companyId);
+  const { data: productsData, error: productsError } = await productsQuery;
 
   if (productsError) {
     throw new Error(`Failed to load products: ${productsError.message}`);
@@ -555,7 +567,7 @@ export async function generateCustomerAttributes(
 
   const customers = (customersData ?? []) as CustomerRow[];
   const orders = (ordersData ?? []) as OrderRow[];
-  const orderItems = (orderItemsData ?? []) as OrderItemRow[];
+  const orderItems = orderItemsData as OrderItemRow[];
   const products = (productsData ?? []) as ProductRow[];
 
   logger.info(
@@ -579,6 +591,7 @@ export async function generateCustomerAttributes(
 
   const attributes: CustomerAttributesRecord[] = attributesWithStats.map((row) => ({
     customer_id: row.customer_id,
+    ...(companyId ? { company_id: companyId } : {}),
     favorite_category: row.favorite_category,
     second_favorite_category: row.second_favorite_category,
     preferred_channel: row.preferred_channel,
