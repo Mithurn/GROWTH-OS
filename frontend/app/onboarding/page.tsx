@@ -260,15 +260,15 @@ export default function OnboardingPage() {
       if (!useDemoData) {
         const goalLabel = GOAL_LABELS[goal] || goal;
         await Promise.all([
-          saveOnboardingProfile(storedCompanyId, {
+          saveOnboardingProfile({
             companyName,
             industry,
             primaryGoal: goalLabel,
             operatingMode: mode,
           }).catch(() => {}),
-          generateOpportunities(storedCompanyId).catch(() => {}),
+          generateOpportunities().catch(() => {}),
         ]);
-        await createAgent(storedCompanyId, goalLabel, {
+        await createAgent(goalLabel, {
           channels: ['WhatsApp', 'Email'],
           involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
           max_budget: 100000,
