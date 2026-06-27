@@ -23,11 +23,8 @@ async function apiFetch(url: string, options: RequestInit = {}, timeoutMs = 1200
 }
 
 export async function saveBusinessInfo(companyName: string, industry: string) {
-  const response = await fetch(`${API_BASE_URL}/onboarding/business`, {
+  const response = await apiFetch(`${API_BASE_URL}/onboarding/business`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ companyName, industry }),
   });
 
@@ -121,15 +118,18 @@ export async function uploadOrderCSV(file: File) {
   return response.json();
 }
 
-export async function startIngestion(customerFile: File, orderFile: File) {
+export async function startIngestion(customerFile: File, orderFile: File, companyId: string) {
   const formData = new FormData();
   formData.append('customers', customerFile);
   formData.append('orders', orderFile);
+  formData.append('companyId', companyId);
 
-  const response = await fetch(`${API_BASE_URL}/process-ingestion`, {
+  const token = await getAuthToken();
+  const response = await fetchWithTimeout(`${API_BASE_URL}/process-ingestion`, {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
-  });
+  }, 30000);
 
   if (!response.ok) {
     throw new Error('Failed to start ingestion');
