@@ -56,7 +56,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
         setOpportunity(oppRes.data.opportunity);
 
         // Generate campaign draft
-        const campRes = await generateCampaign(opportunityId, companyId || undefined);
+        const campRes = await generateCampaign(opportunityId);
         if (!campRes.success) throw new Error('Failed to generate campaign');
         
         setCampaign(campRes.data.campaign);
@@ -90,7 +90,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
       const companyId = window.localStorage.getItem('growthOS_company_id');
       
       // Save campaign
-      const saveRes = await saveCampaign(opportunityId, campaign, companyId || undefined);
+      const saveRes = await saveCampaign(opportunityId, campaign);
       if (!saveRes.success) throw new Error('Failed to save campaign');
       
       router.push('/opportunities');

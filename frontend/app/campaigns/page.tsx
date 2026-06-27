@@ -183,9 +183,9 @@ function CampaignsContent() {
         setSelectedChannel((existing.channel as Channel) ?? 'WhatsApp');
       } else {
         setIsGenerating(true);
-        const genRes = await generateCampaign(opportunityId, companyId);
+        const genRes = await generateCampaign(opportunityId);
         const draft = genRes.data.campaign;
-        const saveRes = await saveCampaign(opportunityId, draft, companyId);
+        const saveRes = await saveCampaign(opportunityId, draft);
         const saved = saveRes.data;
         setSavedCampaign(saved);
         setCurrentMessage(saved.message_content);

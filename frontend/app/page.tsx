@@ -234,7 +234,7 @@ export default function HomePage() {
     const seed = async () => {
       try {
         if (!companyId) return;
-        const data = await getActivityStream(companyId, 10);
+        const data = await getActivityStream(10);
         if (data.success && Array.isArray(data.data)) {
           setActivityItems(data.data);
         }
@@ -324,7 +324,7 @@ export default function HomePage() {
     setQueryError(null);
     try {
       const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
-      const result = await createOpportunityFromGoal(submittedQuery, companyId);
+      const result = await createOpportunityFromGoal(submittedQuery);
       const data = await getOpportunityDashboard();
       if (data.success && data.data.topOpportunities) {
         setOpportunities(data.data.topOpportunities);
