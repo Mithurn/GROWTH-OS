@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -37,14 +38,8 @@ import {
 
 function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-1.5">
-      <div className="flex flex-wrap w-5 h-5 gap-0.5">
-        <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-        <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-        <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-        <div className="w-[9px] h-[9px] rounded-full bg-[#3B82F6]" />
-      </div>
-      <span className="text-[22px] font-semibold text-[#3B82F6] tracking-tight leading-none">GrowthOS</span>
+    <Link href="/">
+      <Image src="/logo.png" alt="GrowthOS" width={120} height={40} className="object-contain" />
     </Link>
   );
 }
