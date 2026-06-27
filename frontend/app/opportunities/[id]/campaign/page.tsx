@@ -19,7 +19,7 @@ import {
   RefreshCw,
   ShoppingBag
 } from 'lucide-react';
-import { generateCampaign, getOpportunityCustomers, saveCampaign, launchCampaign, refineCampaignMessage } from '@/lib/api';
+import { generateCampaign, getOpportunityCustomers, saveCampaign, launchCampaign, refineCampaign } from '@/lib/api';
 
 function formatCurrency(value: number): string {
   if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
@@ -74,12 +74,8 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
     if (!chatQuery.trim() || !campaign) return;
     try {
       setIsRefining(true);
-      const result = await refineCampaignMessage(
-        campaign.campaign_content,
-        chatQuery.trim(),
-        campaign.offer ?? '',
-      );
-      setCampaign({ ...campaign, campaign_content: result.data.refined_message });
+      const result = await refineCampaign(campaign.id, chatQuery.trim(), campaign.channel);
+      setCampaign({ ...campaign, campaign_content: result.data.message_content });
       setChatQuery('');
     } catch (err: any) {
       console.error('Refine failed:', err);
@@ -338,8 +334,8 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                   if (!campaign || isRefining) return;
                   try {
                     setIsRefining(true);
-                    const result = await refineCampaignMessage(campaign.campaign_content, action, campaign.offer ?? '');
-                    setCampaign({ ...campaign, campaign_content: result.data.refined_message });
+                    const result = await refineCampaign(campaign.id, action, campaign.channel);
+                    setCampaign({ ...campaign, campaign_content: result.data.message_content });
                     setChatQuery('');
                   } catch { /* silent */ } finally { setIsRefining(false); }
                 }}
