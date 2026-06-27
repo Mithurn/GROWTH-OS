@@ -38,6 +38,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // New user hasn't finished onboarding — send them there
+  const onboardingDone = user.user_metadata?.onboarding_complete === true;
+  const onOnboarding = pathname.startsWith('/onboarding');
+
+  if (!onboardingDone && !onOnboarding) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/onboarding';
+    return NextResponse.redirect(url);
+  }
+
   return response;
 }
 
