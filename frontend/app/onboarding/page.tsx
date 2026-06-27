@@ -224,7 +224,7 @@ export default function OnboardingPage() {
         }
       } else {
         // 1. Kick off ingestion pipeline with both CSV files
-        const { sessionId } = await startIngestion(customerFile!, orderFile!, storedCompanyId);
+        const { sessionId } = await startIngestion(customerFile!, orderFile!);
 
         // 2. Poll until backend pipeline completes
         let ingestionDone = false;
