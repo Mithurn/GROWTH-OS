@@ -207,7 +207,7 @@ export default function HomePage() {
             setColdStart(true);
             await new Promise(r => setTimeout(r, 5000));
           }
-          const data = await getOpportunityDashboard(companyId);
+          const data = await getOpportunityDashboard();
           if (data.success && data.data.topOpportunities) {
             setOpportunities(data.data.topOpportunities);
           }
@@ -325,7 +325,7 @@ export default function HomePage() {
     try {
       const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
       const result = await createOpportunityFromGoal(submittedQuery, companyId);
-      const data = await getOpportunityDashboard(companyId);
+      const data = await getOpportunityDashboard();
       if (data.success && data.data.topOpportunities) {
         setOpportunities(data.data.topOpportunities);
       }

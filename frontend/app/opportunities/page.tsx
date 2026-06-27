@@ -127,7 +127,7 @@ export default function OpportunitiesPage() {
       try {
         setLoading(true);
         setError(null);
-        const res = await getOpportunityDashboard(companyId);
+        const res = await getOpportunityDashboard();
         const data = res.data as OpportunityReport;
         if (!mounted) return;
         if (data.totalOpportunities > 0) {
@@ -139,7 +139,7 @@ export default function OpportunitiesPage() {
         }
         // Load campaign statuses to show cues on each opportunity
         try {
-          const campRes = await getCampaigns(companyId);
+          const campRes = await getCampaigns();
           const map: Record<string, string> = {};
           (campRes.data ?? []).forEach((c: any) => {
             if (c.opportunity_id) map[c.opportunity_id] = c.status;
@@ -217,7 +217,7 @@ export default function OpportunitiesPage() {
       setCreatingGoal(true);
       setGoal('');
       await createOpportunityFromGoal(trimmed, companyId);
-      const res = await getOpportunityDashboard(companyId);
+      const res = await getOpportunityDashboard();
       setReport(res.data as OpportunityReport);
     } catch {
       setError('Failed to create opportunity. Try again.');
