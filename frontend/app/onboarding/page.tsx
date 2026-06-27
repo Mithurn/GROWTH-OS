@@ -302,9 +302,7 @@ export default function OnboardingPage() {
         </header>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="max-w-md w-full text-center">
-            <div className="w-14 h-14 rounded-2xl bg-[#5B4FFF] flex items-center justify-center mx-auto mb-8">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
+            <Image src="/favicon.png" alt="GrowthOS" width={56} height={56} className="mx-auto mb-8 rounded-2xl" />
             <h1 className="text-4xl font-black text-[#1A1A1A] mb-4 tracking-tight leading-tight">
               Welcome to GrowthOS
             </h1>
@@ -500,38 +498,81 @@ export default function OnboardingPage() {
                 Upload your customers and orders as CSV files. GrowthOS will analyse them instantly.
               </p>
 
-              <div className="space-y-3 mb-6 pointer-events-none opacity-50">
-                <div className="border-2 border-dashed rounded-xl p-5 border-[#E5E7EB]">
+              {/* Hidden file inputs */}
+              <input
+                ref={customerInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={e => setCustomerFile(e.target.files?.[0] ?? null)}
+              />
+              <input
+                ref={orderInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={e => setOrderFile(e.target.files?.[0] ?? null)}
+              />
+
+              <div className="space-y-3 mb-6">
+                <button
+                  type="button"
+                  onClick={() => customerInputRef.current?.click()}
+                  className={`w-full border-2 border-dashed rounded-xl p-5 text-left transition-all hover:border-[#5B4FFF] hover:bg-[#F8F7FF] ${customerFile ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB]'}`}
+                >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#F3F4F6]">
-                      <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${customerFile ? 'bg-[#EEF2FF]' : 'bg-[#F3F4F6]'}`}>
+                      {customerFile ? <Check className="h-5 w-5 text-[#5B4FFF]" /> : <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />}
                     </div>
                     <div>
                       <div className="text-sm font-bold text-[#1A1A1A]">Upload Customers CSV</div>
-                      <div className="text-xs text-[#9CA3AF] mt-0.5">customer_id, name, email, phone, city...</div>
+                      <div className="text-xs text-[#9CA3AF] mt-0.5">
+                        {customerFile ? customerFile.name : 'customer_id, name, email, phone, city...'}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </button>
 
-                <div className="border-2 border-dashed rounded-xl p-5 border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => orderInputRef.current?.click()}
+                  className={`w-full border-2 border-dashed rounded-xl p-5 text-left transition-all hover:border-[#5B4FFF] hover:bg-[#F8F7FF] ${orderFile ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB]'}`}
+                >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#F3F4F6]">
-                      <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${orderFile ? 'bg-[#EEF2FF]' : 'bg-[#F3F4F6]'}`}>
+                      {orderFile ? <Check className="h-5 w-5 text-[#5B4FFF]" /> : <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />}
                     </div>
                     <div>
                       <div className="text-sm font-bold text-[#1A1A1A]">Upload Orders CSV</div>
-                      <div className="text-xs text-[#9CA3AF] mt-0.5">order_id, customer_id, date, amount, product...</div>
+                      <div className="text-xs text-[#9CA3AF] mt-0.5">
+                        {orderFile ? orderFile.name : 'order_id, customer_id, date, amount, product...'}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </button>
               </div>
 
+              {uploadError && (
+                <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">{uploadError}</p>
+              )}
+
               <button
-                disabled
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 opacity-40 cursor-not-allowed mb-3"
+                onClick={handleDataUpload}
+                disabled={!customerFile || !orderFile || uploading}
+                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed mb-3"
               >
-                Upload & Continue <ArrowRight className="h-4 w-4" />
+                {uploading ? (
+                  <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Validating...</>
+                ) : (
+                  <>Upload & Continue <ArrowRight className="h-4 w-4" /></>
+                )}
               </button>
+
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 h-px bg-[#E5E7EB]" />
+                <span className="text-xs text-[#9CA3AF]">or</span>
+                <div className="flex-1 h-px bg-[#E5E7EB]" />
+              </div>
 
               <button
                 onClick={() => {
@@ -539,9 +580,9 @@ export default function OnboardingPage() {
                   setUseDemoData(true);
                   next();
                 }}
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors"
+                className="w-full border-2 border-[#E5E7EB] text-[#374151] text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:border-[#5B4FFF] hover:text-[#5B4FFF] transition-colors"
               >
-                Connect Pre-loaded Demo Data <ArrowRight className="h-4 w-4" />
+                Use Pre-loaded Demo Data <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           )}
