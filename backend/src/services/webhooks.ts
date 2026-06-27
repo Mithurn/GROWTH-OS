@@ -1,8 +1,12 @@
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isDuplicateWebhook } from '../lib/redis';
+import { logger } from '../lib/logger';
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'growthOS-webhook-secret-dev';
+const WEBHOOK_SECRET: string = (() => {
+  if (!process.env.WEBHOOK_SECRET) throw new Error('WEBHOOK_SECRET env var is required');
+  return process.env.WEBHOOK_SECRET;
+})();
 
 export interface WebhookEvent {
   eventId: string;
@@ -96,9 +100,7 @@ export async function processWebhook(
 
   if (event.status === 'FAILED') {
     if (!FAILED_ALLOWED_FROM.has(comm.status)) {
-      console.warn(
-        `[Webhook] Rejected FAILED callback for ${event.communicationId}: current state is ${comm.status} (already succeeded)`
-      );
+      logger.warn({ communicationId: event.communicationId, currentState: comm.status }, 'Webhook: rejected FAILED callback — already succeeded');
       await supabase.from('processed_webhook_events').insert({
         id: crypto.randomUUID(),
         event_id: event.eventId,
@@ -109,9 +111,7 @@ export async function processWebhook(
   } else {
     const incomingPos = STATE_ORDER[event.status] ?? 0;
     if (incomingPos <= currentPos) {
-      console.warn(
-        `[Webhook] Rejected out-of-order transition for ${event.communicationId}: ${comm.status}(${currentPos}) → ${event.status}(${incomingPos})`
-      );
+      logger.warn({ communicationId: event.communicationId, from: comm.status, to: event.status }, 'Webhook: rejected out-of-order transition');
       await supabase.from('processed_webhook_events').insert({
         id: crypto.randomUUID(),
         event_id: event.eventId,
@@ -174,9 +174,7 @@ export async function processWebhook(
     throw new Error(`Failed to mark event as processed: ${processedError.message}`);
   }
 
-  console.log(
-    `[Webhook] ✓ Processed ${event.status} for ${event.communicationId} (seq ${event.sequenceNumber})`
-  );
+  logger.info({ status: event.status, communicationId: event.communicationId, seq: event.sequenceNumber }, 'Webhook processed');
 
   return {
     success: true,

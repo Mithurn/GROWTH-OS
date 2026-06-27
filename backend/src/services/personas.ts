@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { openRouterConfig } from '../config/openrouter';
+import { logger as rootLogger } from '../lib/logger';
 
 export interface PersonaLogger {
   info: (message: string, ...args: unknown[]) => void;
@@ -127,9 +128,9 @@ interface RawPersonaResponse {
 }
 
 const defaultLogger: PersonaLogger = {
-  info: console.log.bind(console),
-  warn: console.warn.bind(console),
-  error: console.error.bind(console),
+  info:  (msg, ...args) => rootLogger.info(args[0] ?? {}, msg),
+  warn:  (msg, ...args) => rootLogger.warn(args[0] ?? {}, msg),
+  error: (msg, ...args) => rootLogger.error(args[0] ?? {}, msg),
 };
 
 const ETHNIC_CATEGORIES = new Set([

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import OpenAI from 'openai';
 import { openRouterConfig } from '../config/openrouter';
+import { logger } from '../lib/logger';
 import { getSegmentCache, setSegmentCache } from '../lib/redis';
 import { parseWithRetry } from '../lib/ai';
 
@@ -60,13 +61,13 @@ export async function discoverOpportunities(
   agentId: string,
   goal: string,
 ): Promise<DiscoveredOpportunity[]> {
-  console.log(`🔍 Discovering opportunities for company ${companyId}`);
+  logger.info({ companyId }, 'Discovering opportunities');
 
   try {
     const analytics = await getCustomerAnalytics(companyId);
 
     if (!analytics || analytics.totalCustomers === 0) {
-      console.log('No customer data available for analysis');
+      logger.info('No customer data available for opportunity analysis');
       return [];
     }
 
@@ -79,7 +80,7 @@ export async function discoverOpportunities(
 
     const cached = await getSegmentCache(cacheHash);
     if (cached) {
-      console.log(`[OpportunityDiscovery] Cache hit (${cacheHash}), skipping LLM call`);
+      logger.info({ cacheHash }, 'OpportunityDiscovery: cache hit, skipping LLM call');
       return JSON.parse(cached) as DiscoveredOpportunity[];
     }
 
@@ -87,7 +88,7 @@ export async function discoverOpportunities(
     await setSegmentCache(cacheHash, JSON.stringify(result));
     return result;
   } catch (error) {
-    console.error('Error in opportunity discovery:', error);
+    logger.error({ err: error }, 'Error in opportunity discovery');
     return [];
   }
 }
@@ -158,14 +159,14 @@ async function getCustomerAnalytics(companyId: string) {
       avgSpend: averageMetrics._avg.totalSpent || 0,
       avgOrderValue: averageMetrics._avg.avgOrderValue || 0,
       avgOrders: averageMetrics._avg.totalOrders || 0,
-      personas: personaData.map(p => ({
+      personas: personaData.map((p: { personaName: string; personaDescription: string | null; _count: { id: number } }) => ({
         name: p.personaName,
         description: p.personaDescription,
         count: p._count.id,
       })),
     };
   } catch (error) {
-    console.error('Error getting customer analytics:', error);
+    logger.error({ err: error }, 'Error getting customer analytics');
     throw error;
   }
 }
@@ -241,7 +242,7 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
         });
 
         if (existing) {
-          console.log(`Opportunity ${oppData.opportunity_key} already exists`);
+          logger.info({ key: oppData.opportunity_key }, 'Opportunity already exists, skipping');
           continue;
         }
 
@@ -293,17 +294,15 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
           audienceSize: opportunity.audienceSize,
         });
 
-        console.log(
-          `✅ Created opportunity: ${oppData.title} (${audienceCustomerIds.length} customers, ₹${oppData.potential_revenue})`,
-        );
+        logger.info({ title: oppData.title, customers: audienceCustomerIds.length, revenue: oppData.potential_revenue }, 'Opportunity created');
       } catch (error) {
-        console.error(`Error creating opportunity ${oppData.opportunity_key}:`, error);
+        logger.error({ err: error, key: oppData.opportunity_key }, 'Error creating opportunity');
       }
     }
 
     return createdOpportunities;
   } catch (error) {
-    console.error('Error in AI analysis:', error);
+    logger.error({ err: error }, 'Error in AI analysis');
     return [];
   }
 }
@@ -336,12 +335,12 @@ async function getAudienceSize(opportunityType: OpportunityType): Promise<number
         // TypeScript exhaustiveness check — this branch is unreachable if the
         // enum is complete, but we log and return 0 rather than blast all customers.
         const exhaustive: never = opportunityType;
-        console.error(`[opportunity-discovery] Unhandled opportunity type: ${exhaustive}`);
+        logger.error({ opportunityType: exhaustive }, 'opportunity-discovery: unhandled opportunity type');
         return 0;
       }
     }
   } catch (error) {
-    console.error('Error getting audience size:', error);
+    logger.error({ err: error }, 'Error getting audience size');
     return 0;
   }
 }
@@ -389,14 +388,14 @@ async function getAudienceCustomers(
 
       default: {
         const exhaustive: never = opportunityType;
-        console.error(`[opportunity-discovery] Unhandled opportunity type: ${exhaustive}`);
+        logger.error({ opportunityType: exhaustive }, 'opportunity-discovery: unhandled opportunity type');
         return [];
       }
     }
 
     return rows.map(r => r.customerId);
   } catch (error) {
-    console.error('Error getting audience customers:', error);
+    logger.error({ err: error }, 'Error getting audience customers');
     return [];
   }
 }

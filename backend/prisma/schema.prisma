@@ -14,12 +14,25 @@ datasource db {
 // PHASE 1: Core Tables
 // ============================================
 
+model Profile {
+  id        String   @id // = Supabase auth.uid()
+  companyId String   @map("company_id")
+  role      String   @default("owner") // 'owner' | 'member'
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("profiles")
+}
+
 model Customer {
   id                   String   @id @default(uuid())
+  companyId            String   @map("company_id")
   externalCustomerId   String?  @map("external_customer_id")
   firstName            String   @map("first_name")
   lastName             String?  @map("last_name")
-  email                String?  @unique
+  email                String?
   phone                String?
   gender               String?
   city                 String?
@@ -28,6 +41,7 @@ model Customer {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   orders               Order[]
   customerMetrics      CustomerMetrics?
   customerAttributes   CustomerAttributes?
@@ -35,6 +49,7 @@ model Customer {
   opportunities        OpportunityCustomer[]
   communications       Communication[]
 
+  @@index([companyId])
   @@index([email])
   @@index([phone])
   @@map("customers")
@@ -42,6 +57,7 @@ model Customer {
 
 model Company {
   id           String   @id @default(uuid())
+  userId       String?  @unique @map("user_id") // Supabase auth UID of owner
   companyName  String   @unique @map("company_name")
   industry     String?
   onboardingProfile Json? @map("onboarding_profile")
@@ -49,27 +65,51 @@ model Company {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  profiles     Profile[]
+  customers    Customer[]
+  products     Product[]
   personas     Persona[]
   opportunities Opportunity[]
   campaigns    Campaign[]
   agents       Agent[]
+  ingestionSessions IngestionSession[]
 
   @@index([companyName])
   @@map("companies")
 }
 
 model Product {
-  id           String  @id @default(uuid())
-  sku          String  @unique
-  productName  String  @map("product_name")
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  sku          String   @map("sku")
+  productName  String   @map("product_name")
   category     String?
-  subcategory  String? @map("subcategory")
-  price        Decimal @db.Decimal(10, 2)
+  subcategory  String?  @map("subcategory")
+  price        Decimal  @db.Decimal(10, 2)
   createdAt    DateTime @default(now()) @map("created_at")
 
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   orderItems   OrderItem[]
 
+  @@unique([companyId, sku])
+  @@index([companyId])
   @@map("products")
+}
+
+model IngestionSession {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  status       String   @default("pending") // pending | processing | complete | error
+  step         String?
+  progress     Int      @default(0)
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("ingestion_sessions")
 }
 
 model Order {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import multer from 'multer';
 import csvParser from 'csv-parser';
 import { createClient } from '@supabase/supabase-js';
@@ -8,7 +9,6 @@ import { Readable } from 'stream';
 import WebSocket from 'ws';
 import 'dotenv/config';
 import rateLimit from 'express-rate-limit';
-import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { fashionProducts, seedProducts } from './data-generator/products';
 import { generateCustomerAttributes } from './services/customer-attributes';
@@ -35,12 +35,25 @@ import { prisma } from './lib/prisma';
 import { startConversation, sendMessage, getConversation } from './services/onboarding-chat';
 import { getCached, setCached } from './lib/cache';
 import { subscribeToActivity } from './lib/activity-emitter';
-import { requireAuth, softAuth, type AuthRequest } from './middleware/auth';
-
-export const logger = pino({
-  level: process.env.LOG_LEVEL ?? 'info',
-  ...(process.env.NODE_ENV !== 'production' && { transport: { target: 'pino-pretty' } }),
-});
+import { requireAuth, resolveCompanyMiddleware, softAuth, type AuthRequest } from './middleware/auth';
+import { logger } from './lib/logger';
+import { validateBody } from './middleware/validate';
+import { errorHandler } from './middleware/errorHandler';
+import {
+  OnboardingBusinessSchema,
+  OnboardingProfileSchema,
+  ConversationMessageSchema,
+  OnboardingCompleteSchema,
+  GeneratePersonasSchema,
+  GenerateOpportunitiesSchema,
+  RefineOpportunitySchema,
+  CreateOpportunityFromGoalSchema,
+  GenerateCampaignSchema,
+  SaveCampaignSchema,
+  RefineCampaignSchema,
+  CreateAgentSchema,
+  PatchAgentSchema,
+} from './lib/schemas';
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -63,7 +76,18 @@ const llmLimiter = rateLimit({
 });
 
 // ── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors());
+app.use((_req, res, next) => {
+  res.setHeader('x-request-id', `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  next();
+});
+app.use(helmet());
+app.use(cors({
+  origin: [
+    process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    /\.vercel\.app$/,  // allow all Vercel preview deployments
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 app.use('/api', generalLimiter);
@@ -79,21 +103,6 @@ const supabase = createClient(
   }
 );
 
-// In-memory storage for ingestion status
-const ingestionStatus: Record<string, any> = {};
-
-// Look up a company by authenticated user_id, falling back to the provided companyId
-async function resolveCompany(userId?: string, fallbackCompanyId?: string): Promise<string | null> {
-  if (userId) {
-    const { data } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (data?.id) return data.id;
-  }
-  return fallbackCompanyId ?? null;
-}
 
 // Helper: Parse CSV from buffer
 function parseCSV(buffer: Buffer): Promise<any[]> {
@@ -115,86 +124,77 @@ app.get('/health', (_req, res) => {
 });
 
 // GET /api/sse/activity — SSE stream for real-time agent activity
-app.get('/api/sse/activity', (req, res) => {
-  const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : '';
-  const unsubscribe = subscribeToActivity(res, companyId);
+app.get('/api/sse/activity', requireAuth, resolveCompanyMiddleware, (req: AuthRequest, res) => {
+  const unsubscribe = subscribeToActivity(res, req.companyId!);
   req.on('close', unsubscribe);
 });
 
 // GET /api/companies/:id
-app.get('/api/companies/:id', async (req, res) => {
+app.get('/api/companies/:id', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
+
+    if (id !== req.companyId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const { data, error } = await supabase
       .from('companies')
       .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    console.error('Error fetching company:', error);
-    res.status(500).json({ error: 'Failed to fetch company' });
-  }
-});
-
-// POST /api/onboarding/business
-app.post('/api/onboarding/business', softAuth, async (req: AuthRequest, res) => {
-  try {
-    const { companyName, industry } = req.body;
-
-    // If user already has a company, return it — prevents duplicates on re-run
-    if (req.userId) {
-      const { data: existing } = await supabase
-        .from('companies')
-        .select('id, company_name, industry')
-        .eq('user_id', req.userId)
-        .maybeSingle();
-      if (existing) return res.json({ success: true, data: existing });
-    }
-
-    const { data, error } = await supabase
-      .from('companies')
-      .insert({
-        company_name: companyName,
-        industry,
-        ...(req.userId ? { user_id: req.userId } : {}),
-      })
-      .select('id, company_name, industry')
+      .eq('id', req.companyId)
       .single();
 
     if (error) throw error;
 
     res.json({ success: true, data });
   } catch (error) {
-    console.error('Error saving business info:', error);
+    logger.error({ err: error }, 'Error fetching company');
+    res.status(500).json({ error: 'Failed to fetch company' });
+  }
+});
+
+// POST /api/onboarding/business
+app.post('/api/onboarding/business', requireAuth, validateBody(OnboardingBusinessSchema), async (req: AuthRequest, res) => {
+  try {
+    const { companyName, industry } = req.body;
+
+    // If user already has a company, return it — prevents duplicates on re-run
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('company_id, companies(id, company_name, industry)')
+      .eq('id', req.userId!)
+      .maybeSingle();
+
+    if (existing?.companies) {
+      return res.json({ success: true, data: existing.companies });
+    }
+
+    const { data: company, error } = await supabase
+      .from('companies')
+      .insert({ company_name: companyName, industry, user_id: req.userId })
+      .select('id, company_name, industry')
+      .single();
+
+    if (error) throw error;
+
+    // Create profile linking this user to the new company
+    await supabase.from('profiles').insert({
+      id: req.userId,
+      company_id: company.id,
+      role: 'owner',
+    });
+
+    res.json({ success: true, data: company });
+  } catch (error) {
+    logger.error({ err: error }, 'Error saving business info');
     res.status(500).json({ error: 'Failed to save business info' });
   }
 });
 
 // POST /api/onboarding/profile
-app.post('/api/onboarding/profile', async (req, res) => {
+app.post('/api/onboarding/profile', requireAuth, resolveCompanyMiddleware, validateBody(OnboardingProfileSchema), async (req: AuthRequest, res) => {
   try {
-    const {
-      companyId,
-      profile,
-    } = req.body ?? {};
-
-    if (!companyId || typeof companyId !== 'string') {
-      return res.status(400).json({ error: 'companyId is required' });
-    }
-
-    if (!profile || typeof profile !== 'object') {
-      return res.status(400).json({ error: 'profile is required' });
-    }
+    const { profile } = req.body;
 
     const { data, error } = await supabase
       .from('companies')
@@ -203,49 +203,34 @@ app.post('/api/onboarding/profile', async (req, res) => {
         onboarding_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', companyId)
+      .eq('id', req.companyId)
       .select('id, company_name, industry, onboarding_profile, onboarding_completed_at')
       .single();
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
-    res.json({
-      success: true,
-      data,
-    });
+    res.json({ success: true, data });
   } catch (error) {
-    console.error('Error saving onboarding profile:', error);
+    logger.error({ err: error }, 'Error saving onboarding profile');
     res.status(500).json({ error: 'Failed to save onboarding profile' });
   }
 });
 
 // POST /api/onboarding/conversation/start
-app.post('/api/onboarding/conversation/start', async (req, res) => {
+app.post('/api/onboarding/conversation/start', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const { companyId } = req.body;
-
-    if (!companyId) {
-      return res.status(400).json({ error: 'companyId is required' });
-    }
-
-    const conversation = await startConversation(supabase, companyId);
-
-    res.json({
-      success: true,
-      data: conversation,
-    });
+    const conversation = await startConversation(supabase, req.companyId!);
+    res.json({ success: true, data: conversation });
   } catch (error) {
-    console.error('Error starting conversation:', error);
+    logger.error({ err: error }, 'Error starting conversation');
     res.status(500).json({ error: 'Failed to start conversation' });
   }
 });
 
 // POST /api/onboarding/conversation/:id/message
-app.post('/api/onboarding/conversation/:id/message', async (req, res) => {
+app.post('/api/onboarding/conversation/:id/message', requireAuth, validateBody(ConversationMessageSchema), async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const { message } = req.body;
 
     if (!message || typeof message !== 'string') {
@@ -253,47 +238,35 @@ app.post('/api/onboarding/conversation/:id/message', async (req, res) => {
     }
 
     const conversation = await sendMessage(supabase, id, message);
-
-    res.json({
-      success: true,
-      data: conversation,
-    });
+    res.json({ success: true, data: conversation });
   } catch (error) {
-    console.error('Error sending message:', error);
+    logger.error({ err: error }, 'Error sending message');
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
 
 // GET /api/onboarding/conversation/:id
-app.get('/api/onboarding/conversation/:id', async (req, res) => {
+app.get('/api/onboarding/conversation/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const conversation = await getConversation(supabase, id);
 
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    res.json({
-      success: true,
-      data: conversation,
-    });
+    res.json({ success: true, data: conversation });
   } catch (error) {
-    console.error('Error fetching conversation:', error);
+    logger.error({ err: error }, 'Error fetching conversation');
     res.status(500).json({ error: 'Failed to fetch conversation' });
   }
 });
 
 // POST /api/onboarding/complete
-app.post('/api/onboarding/complete', async (req, res) => {
+app.post('/api/onboarding/complete', requireAuth, resolveCompanyMiddleware, validateBody(OnboardingCompleteSchema), async (req: AuthRequest, res) => {
   try {
-    const { conversationId, companyId } = req.body;
+    const { conversationId } = req.body;
 
-    if (!conversationId || !companyId) {
-      return res.status(400).json({ error: 'conversationId and companyId are required' });
-    }
-
-    // Get the completed conversation
     const conversation = await getConversation(supabase, conversationId);
 
     if (!conversation) {
@@ -306,7 +279,6 @@ app.post('/api/onboarding/complete', async (req, res) => {
 
     const extractedData = conversation.extractedData;
 
-    // Save onboarding profile to company
     const { data: company, error: companyError } = await supabase
       .from('companies')
       .update({
@@ -314,46 +286,36 @@ app.post('/api/onboarding/complete', async (req, res) => {
         onboarding_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', companyId)
+      .eq('id', req.companyId)
       .select()
       .single();
 
-    if (companyError) {
-      throw companyError;
-    }
+    if (companyError) throw companyError;
 
-    // Create an agent with the user's preferences
     const priority = extractedData.priority?.[0] || 'Increase revenue';
     const channels = extractedData.channels || ['WhatsApp', 'Email'];
     const involvement = extractedData.involvement?.[0] || 'review major campaigns only';
 
-    // Create agent using Prisma
     const agent = await prisma.agent.create({
       data: {
-        companyId,
+        companyId: req.companyId!,
         name: `${priority} Agent`,
         goal: priority,
         status: 'discovering',
         guardrails: {
           channels,
-          involvement, // 'autopilot', 'review major campaigns only', or 'review every campaign'
+          involvement,
           max_budget: 100000,
           frequency_cap: 3,
         },
       },
     });
 
-    console.log(`✅ Created agent for company ${companyId}: ${agent.name}`);
+    logger.info({ companyId: req.companyId, agentId: agent.id }, 'Onboarding complete, agent created');
 
-    res.json({
-      success: true,
-      data: {
-        company,
-        agent,
-      },
-    });
+    res.json({ success: true, data: { company, agent } });
   } catch (error) {
-    console.error('Error completing onboarding:', error);
+    logger.error({ err: error }, 'Error completing onboarding');
     res.status(500).json({ error: 'Failed to complete onboarding' });
   }
 });
@@ -379,7 +341,7 @@ app.post('/api/upload/customers', upload.single('file'), async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error parsing customer CSV:', error);
+    logger.error({ err: error }, 'Error parsing customer CSV');
     res.status(500).json({ error: 'Failed to parse customer CSV' });
   }
 });
@@ -412,18 +374,16 @@ app.post('/api/upload/orders', upload.single('file'), async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error parsing orders CSV:', error);
+    logger.error({ err: error }, 'Error parsing orders CSV');
     res.status(500).json({ error: 'Failed to parse orders CSV' });
   }
 });
 
 // POST /api/process-ingestion
-app.post('/api/process-ingestion', softAuth, upload.fields([
+app.post('/api/process-ingestion', requireAuth, resolveCompanyMiddleware, upload.fields([
   { name: 'customers', maxCount: 1 },
   { name: 'orders', maxCount: 1 }
 ]), async (req: AuthRequest, res) => {
-  const sessionId = Date.now().toString();
-
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
@@ -431,90 +391,102 @@ app.post('/api/process-ingestion', softAuth, upload.fields([
       return res.status(400).json({ error: 'Both customer and order files required' });
     }
 
-    // Resolve which company this ingestion belongs to
-    const bodyCompanyId = typeof req.body.companyId === 'string' ? req.body.companyId : undefined;
-    const companyId = await resolveCompany(req.userId, bodyCompanyId);
+    const session = await prisma.ingestionSession.create({
+      data: { companyId: req.companyId!, status: 'pending', step: 'Starting...', progress: 0 },
+    });
 
-    if (!companyId) {
-      return res.status(400).json({ error: 'companyId is required — complete onboarding first' });
-    }
+    processIngestion(session.id, files.customers[0].buffer, files.orders[0].buffer, req.companyId!);
 
-    ingestionStatus[sessionId] = { step: 'validating', progress: 0, message: 'Starting ingestion...' };
-
-    processIngestion(sessionId, files.customers[0].buffer, files.orders[0].buffer, companyId);
-
-    res.json({ success: true, sessionId });
+    res.json({ success: true, sessionId: session.id });
   } catch (error) {
-    console.error('Error starting ingestion:', error);
+    logger.error({ err: error }, 'Error starting ingestion');
     res.status(500).json({ error: 'Failed to start ingestion' });
   }
 });
 
 // GET /api/ingestion-status/:sessionId
-app.get('/api/ingestion-status/:sessionId', (req, res) => {
-  const { sessionId } = req.params;
-  const status = ingestionStatus[sessionId] || { step: 'not_found', progress: 0 };
-  res.json(status);
+app.get('/api/ingestion-status/:sessionId', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const sessionId = req.params["sessionId"] as string;
+    const session = await prisma.ingestionSession.findUnique({ where: { id: sessionId } });
+    if (!session) return res.json({ step: 'not_found', progress: 0 });
+    res.json({ step: session.step, progress: session.progress, message: session.step, status: session.status, error: session.errorMessage });
+  } catch (error) {
+    logger.error({ err: error }, 'Error fetching ingestion status');
+    res.status(500).json({ error: 'Failed to fetch ingestion status' });
+  }
 });
 
 // Async ingestion process
 async function processIngestion(sessionId: string, customerBuffer: Buffer, orderBuffer: Buffer, companyId: string) {
   try {
-    updateStatus(sessionId, 'validating', 10, 'Validating data...');
+    await updateStatus(sessionId, 'validating', 10, 'Validating data...');
     await sleep(500);
 
-    updateStatus(sessionId, 'parsing', 20, 'Parsing CSV files...');
+    await updateStatus(sessionId, 'parsing', 20, 'Parsing CSV files...');
     const customers = await parseCSV(customerBuffer);
     const orders = await parseCSV(orderBuffer);
 
-    // Seed products extracted from the uploaded CSV (company-scoped)
-    updateStatus(sessionId, 'seeding_products', 30, 'Seeding products...');
+    await updateStatus(sessionId, 'seeding_products', 30, 'Seeding products...');
     await seedProductsFromCSV(companyId, orders);
 
-    updateStatus(sessionId, 'importing_customers', 40, 'Importing customers...');
+    await updateStatus(sessionId, 'importing_customers', 40, 'Importing customers...');
     const customerMap = await importCustomers(customers, companyId);
 
-    updateStatus(sessionId, 'importing_orders', 60, 'Importing orders and products...');
+    await updateStatus(sessionId, 'importing_orders', 60, 'Importing orders and products...');
     const orderImportSummary = await importOrders(orders, customerMap, companyId);
-    updateStatus(sessionId, 'importing_orders', 72,
+    await updateStatus(sessionId, 'importing_orders', 72,
       `Imported ${orderImportSummary.ordersInserted} orders and ${orderImportSummary.orderItemsInserted} order items...`);
 
-    updateStatus(sessionId, 'calculating_metrics', 80, 'Calculating customer metrics...');
+    await updateStatus(sessionId, 'calculating_metrics', 80, 'Calculating customer metrics...');
     const metricsReport = await generateCustomerMetricsWithVerification(companyId);
-    updateStatus(sessionId, 'validating_metrics', 85,
+    await updateStatus(sessionId, 'validating_metrics', 85,
       `Validated ${metricsReport.totalMetricsRecords}/${metricsReport.totalCustomers} customer metrics records...`);
 
-    updateStatus(sessionId, 'calculating_attributes', 90, 'Calculating customer attributes...');
+    await updateStatus(sessionId, 'calculating_attributes', 90, 'Calculating customer attributes...');
     const attributesReport = await generateCustomerAttributesWithVerification(companyId);
-    updateStatus(sessionId, 'validating_attributes', 93,
+    await updateStatus(sessionId, 'validating_attributes', 93,
       `Validated ${attributesReport.totalAttributesRecords}/${attributesReport.totalCustomers} customer attributes records...`);
 
-    updateStatus(sessionId, 'generating_personas', 95, 'Generating customer personas with AI...');
+    await updateStatus(sessionId, 'generating_personas', 95, 'Generating customer personas with AI...');
     try {
       const personasReport = await generatePersonas(supabase, {
         companyId,
         logger: {
-          info: (msg) => console.log(`[personas] ${msg}`),
-          warn: (msg) => console.warn(`[personas] ${msg}`),
-          error: (msg) => console.error(`[personas] ${msg}`),
+          info: (msg) => logger.info(msg),
+          warn: (msg) => logger.warn(msg),
+          error: (msg) => logger.error(msg),
         },
       });
-      updateStatus(sessionId, 'personas_complete', 98,
+      await updateStatus(sessionId, 'personas_complete', 98,
         `Generated ${personasReport.totalPersonas} personas for ${personasReport.personasAssigned} customers...`);
     } catch (personaError) {
-      console.error('Persona generation failed, continuing with ingestion:', personaError);
-      updateStatus(sessionId, 'personas_skipped', 98, 'Skipped persona generation (non-critical)');
+      logger.warn({ err: personaError }, 'Persona generation failed, continuing with ingestion');
+      await updateStatus(sessionId, 'personas_skipped', 98, 'Skipped persona generation (non-critical)');
     }
 
-    updateStatus(sessionId, 'completed', 100, 'Ingestion complete!');
+    await prisma.ingestionSession.update({
+      where: { id: sessionId },
+      data: { status: 'complete', step: 'Ingestion complete!', progress: 100 },
+    });
   } catch (error) {
-    console.error('Ingestion error:', error);
-    updateStatus(sessionId, 'error', 0, `Error: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error({ err: error, sessionId }, 'Ingestion error');
+    await prisma.ingestionSession.update({
+      where: { id: sessionId },
+      data: {
+        status: 'error',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        progress: 0,
+      },
+    }).catch(() => {});
   }
 }
 
-function updateStatus(sessionId: string, step: string, progress: number, message: string) {
-  ingestionStatus[sessionId] = { step, progress, message };
+async function updateStatus(sessionId: string, step: string, progress: number, _message: string) {
+  await prisma.ingestionSession.update({
+    where: { id: sessionId },
+    data: { status: 'processing', step, progress },
+  });
 }
 
 function sleep(ms: number) {
@@ -525,7 +497,7 @@ async function generateCustomerMetricsWithVerification(companyId: string) {
   const firstPass = await generateCustomerMetrics(supabase, { companyId });
   if (firstPass.totalMetricsRecords >= firstPass.totalCustomers) return firstPass;
 
-  console.warn(`[customer_metrics] Incomplete after first pass, retrying...`);
+  logger.warn('customer_metrics incomplete after first pass, retrying...');
   await sleep(1000);
   const secondPass = await generateCustomerMetrics(supabase, { companyId });
   if (secondPass.totalMetricsRecords < secondPass.totalCustomers) {
@@ -538,7 +510,7 @@ async function generateCustomerAttributesWithVerification(companyId: string) {
   const firstPass = await generateCustomerAttributes(supabase, { companyId });
   if (firstPass.totalAttributesRecords >= firstPass.totalCustomers) return firstPass;
 
-  console.warn(`[customer_attributes] Incomplete after first pass, retrying...`);
+  logger.warn('customer_attributes incomplete after first pass, retrying...');
   await sleep(1000);
   const secondPass = await generateCustomerAttributes(supabase, { companyId });
   if (secondPass.totalAttributesRecords < secondPass.totalCustomers) {
@@ -568,7 +540,7 @@ async function seedProductsFromCSV(companyId: string, orders: any[]) {
   }
 
   if (toInsert.length === 0) {
-    console.warn('[products] No product SKUs found in orders CSV');
+    logger.warn('No product SKUs found in orders CSV');
     return;
   }
 
@@ -577,7 +549,7 @@ async function seedProductsFromCSV(companyId: string, orders: any[]) {
     .upsert(toInsert, { onConflict: 'sku,company_id', ignoreDuplicates: true });
 
   if (error) throw new Error(`Failed to seed products: ${error.message}`);
-  console.log(`[products] Seeded/verified ${toInsert.length} products for company ${companyId}`);
+  logger.info({ count: toInsert.length, companyId }, 'Products seeded');
 }
 
 async function importCustomers(customers: any[], companyId: string) {
@@ -636,6 +608,7 @@ async function importOrders(orders: any[], customerMap: Map<string, string>, com
     order_date: string;
     total_amount: number;
     channel: string;
+    company_id: string;
   }> = [];
 
   const orderItemsToInsert: Array<{
@@ -668,7 +641,7 @@ async function importOrders(orders: any[], customerMap: Map<string, string>, com
     for (const item of items) {
       const productId = productMap.get(item.product_sku);
       if (!productId) {
-        console.warn(`[order_items] Unknown SKU ${item.product_sku} in order ${orderId}`);
+        logger.warn({ sku: item.product_sku, orderId }, 'Unknown SKU in order, skipping item');
         skippedItems++;
         continue;
       }
@@ -689,7 +662,7 @@ async function importOrders(orders: any[], customerMap: Map<string, string>, com
   for (let i = 0; i < ordersToInsert.length; i += CHUNK) {
     const { error } = await supabase.from('orders').insert(ordersToInsert.slice(i, i + CHUNK));
     if (error) {
-      console.error(`[orders] Bulk insert error (chunk ${i / CHUNK}):`, error);
+      logger.error({ err: error, chunk: i / CHUNK }, 'Orders bulk insert error');
       skippedOrders += Math.min(CHUNK, ordersToInsert.length - i);
     } else {
       ordersInserted += Math.min(CHUNK, ordersToInsert.length - i);
@@ -699,57 +672,58 @@ async function importOrders(orders: any[], customerMap: Map<string, string>, com
   for (let i = 0; i < orderItemsToInsert.length; i += CHUNK) {
     const { error } = await supabase.from('order_items').insert(orderItemsToInsert.slice(i, i + CHUNK));
     if (error) {
-      console.error(`[order_items] Bulk insert error (chunk ${i / CHUNK}):`, error);
+      logger.error({ err: error, chunk: i / CHUNK }, 'Order items bulk insert error');
     } else {
       orderItemsInserted += Math.min(CHUNK, orderItemsToInsert.length - i);
     }
   }
 
-  console.log(
-    `[orders] Imported ${ordersInserted} orders and ${orderItemsInserted} order items. ` +
-      `Skipped ${skippedOrders} orders and ${skippedItems} line items.`,
-  );
+  logger.info({ ordersInserted, orderItemsInserted, skippedOrders, skippedItems }, 'Orders import complete');
 
   return { ordersInserted, orderItemsInserted, skippedOrders, skippedItems };
 }
 
 // GET /api/intelligence-preview
-app.get('/api/intelligence-preview', async (req, res) => {
+app.get('/api/intelligence-preview', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    // Get total counts
+    const companyId = req.companyId!;
+
     const { count: totalCustomers } = await supabase
       .from('customers')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId);
 
     const { count: totalOrders } = await supabase
       .from('orders')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .in('customer_id', supabase.from('customers').select('id').eq('company_id', companyId) as any);
 
-    // Get revenue
     const { data: revenueData } = await supabase
       .from('orders')
-      .select('total_amount');
+      .select('total_amount')
+      .in('customer_id', supabase.from('customers').select('id').eq('company_id', companyId) as any);
 
     const revenue = revenueData?.reduce((sum, o) => sum + parseFloat(o.total_amount.toString()), 0) || 0;
     const avgOrderValue = totalOrders ? revenue / totalOrders : 0;
 
-    // Real customer health from days_since_last_order
+    // Real customer health from customer_metrics (days_since_last_order)
     const { data: healthData } = await supabase
-      .from('customer_attributes')
-      .select('days_since_last_order');
+      .from('customer_metrics')
+      .select('days_since_last_order')
+      .in('customer_id', supabase.from('customers').select('id').eq('company_id', companyId) as any);
 
     let active = 0, atRisk = 0, dormant = 0;
     for (const row of healthData ?? []) {
-      const days = row.days_since_last_order ?? 0;
-      if (days <= 60) active++;
-      else if (days <= 180) atRisk++;
+      const days = row.days_since_last_order ?? 999;
+      if (days <= 30) active++;
+      else if (days <= 90) atRisk++;
       else dormant++;
     }
 
-    // Get top customers
     const { data: topCustomers } = await supabase
       .from('customer_metrics')
       .select('customer_id, total_spent, customers(first_name, last_name)')
+      .in('customer_id', supabase.from('customers').select('id').eq('company_id', companyId) as any)
       .order('total_spent', { ascending: false })
       .limit(3);
 
@@ -761,50 +735,40 @@ app.get('/api/intelligence-preview', async (req, res) => {
       customerHealth: { active, dormant, atRisk },
       topCustomers: topCustomers?.map((c: any) => ({
         name: `${c.customers.first_name} ${c.customers.last_name}`,
-        totalSpent: c.total_spent
-      })) || []
+        totalSpent: c.total_spent,
+      })) || [],
     });
   } catch (error) {
-    console.error('Error fetching intelligence:', error);
+    logger.error({ err: error }, 'Error fetching intelligence');
     res.status(500).json({ error: 'Failed to fetch intelligence' });
   }
 });
 
-app.post('/api/personas/generate', llmLimiter, async (req, res) => {
+app.post('/api/personas/generate', requireAuth, resolveCompanyMiddleware, llmLimiter, validateBody(GeneratePersonasSchema), async (req: AuthRequest, res) => {
   try {
-    const { companyId, model } = req.body ?? {};
-    const report = await generatePersonas(supabase, { companyId, model });
-
-    res.json({
-      success: true,
-      data: report,
-    });
+    const { model } = req.body ?? {};
+    const report = await generatePersonas(supabase, { companyId: req.companyId!, model });
+    res.json({ success: true, data: report });
   } catch (error) {
-    console.error('Error generating personas:', error);
+    logger.error({ err: error }, 'Error generating personas');
     res.status(500).json({ error: 'Failed to generate personas' });
   }
 });
 
-app.post('/api/opportunities/generate', llmLimiter, async (req, res) => {
+app.post('/api/opportunities/generate', requireAuth, resolveCompanyMiddleware, llmLimiter, validateBody(GenerateOpportunitiesSchema), async (req: AuthRequest, res) => {
   try {
-    const { companyId, model } = req.body ?? {};
-    const report = await generateOpportunities(supabase, { companyId, model });
-
-    res.json({
-      success: true,
-      data: report,
-    });
+    const { model } = req.body ?? {};
+    const report = await generateOpportunities(supabase, { companyId: req.companyId!, model });
+    res.json({ success: true, data: report });
   } catch (error) {
-    console.error('Error generating opportunities:', error);
+    logger.error({ err: error }, 'Error generating opportunities');
     res.status(500).json({ error: 'Failed to generate opportunities' });
   }
 });
 
-app.get('/api/opportunities', softAuth, async (req: AuthRequest, res) => {
+app.get('/api/opportunities', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const fallback = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-    const companyId = await resolveCompany(req.userId, fallback) ?? fallback;
-    const report = await getOpportunityDashboard(supabase, companyId);
+    const report = await getOpportunityDashboard(supabase, req.companyId!);
     res.json({ success: true, data: report });
   } catch (error) {
     logger.error({ err: error }, 'Error fetching opportunities');
@@ -812,97 +776,59 @@ app.get('/api/opportunities', softAuth, async (req: AuthRequest, res) => {
   }
 });
 
-app.get('/api/opportunities/:opportunityId', async (req, res) => {
+app.get('/api/opportunities/:opportunityId', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { opportunityId } = req.params;
+    const opportunityId = req.params["opportunityId"] as string;
     const result = await getOpportunityCustomers(supabase, opportunityId);
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error fetching opportunity details:', error);
+    logger.error({ err: error }, 'Error fetching opportunity details');
     res.status(500).json({ error: 'Failed to fetch opportunity details' });
   }
 });
 
-app.post('/api/opportunities/:id/refine', async (req, res) => {
+app.post('/api/opportunities/:id/refine', requireAuth, validateBody(RefineOpportunitySchema), async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const { modifier } = req.body;
 
-    if (!modifier || typeof modifier !== 'string' || modifier.trim().length === 0) {
-      return res.status(400).json({ error: 'modifier is required and must be a non-empty string' });
-    }
-
     const opportunity = await refineOpportunity(supabase, id, modifier.trim());
-
-    res.json({
-      success: true,
-      data: opportunity,
-    });
+    res.json({ success: true, data: opportunity });
   } catch (error) {
-    console.error('Error refining opportunity:', error);
-    res.status(500).json({
-      error: 'Failed to refine opportunity',
-      details: error instanceof Error ? error.message : String(error),
-    });
+    logger.error({ err: error }, 'Error refining opportunity');
+    res.status(500).json({ error: 'Failed to refine opportunity', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
-app.post('/api/opportunities/create-from-goal', llmLimiter, async (req, res) => {
+app.post('/api/opportunities/create-from-goal', requireAuth, resolveCompanyMiddleware, llmLimiter, validateBody(CreateOpportunityFromGoalSchema), async (req: AuthRequest, res) => {
   try {
-    const { goal, companyId, model } = req.body;
+    const { goal, model } = req.body;
 
-    if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
-      return res.status(400).json({ error: 'Goal is required and must be a non-empty string' });
-    }
-
-    const opportunity = await createOpportunityFromGoal(supabase, goal.trim(), { companyId, model });
-
-    res.json({
-      success: true,
-      data: opportunity,
-    });
+    const opportunity = await createOpportunityFromGoal(supabase, goal.trim(), { companyId: req.companyId!, model });
+    res.json({ success: true, data: opportunity });
   } catch (error) {
-    console.error('Error creating opportunity from goal:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    console.error('Error message:', error instanceof Error ? error.message : String(error));
-    res.status(500).json({
-      error: 'Failed to create opportunity from goal',
-      details: error instanceof Error ? error.message : String(error)
-    });
+    logger.error({ err: error }, 'Error creating opportunity from goal');
+    res.status(500).json({ error: 'Failed to create opportunity from goal', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
-app.get('/api/personas', async (req, res) => {
+app.get('/api/personas', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-    const distribution = await getPersonaDistribution(supabase, companyId);
-
-    res.json({
-      success: true,
-      data: distribution,
-    });
+    const distribution = await getPersonaDistribution(supabase, req.companyId!);
+    res.json({ success: true, data: distribution });
   } catch (error) {
-    console.error('Error fetching personas:', error);
+    logger.error({ err: error }, 'Error fetching personas');
     res.status(500).json({ error: 'Failed to fetch personas' });
   }
 });
 
-app.get('/api/personas/:personaName', async (req, res) => {
+app.get('/api/personas/:personaName', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const personaName = decodeURIComponent(req.params.personaName);
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-    const result = await getPersonaCustomers(supabase, personaName, companyId);
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    const personaName = decodeURIComponent(req.params["personaName"] as string);
+    const result = await getPersonaCustomers(supabase, personaName, req.companyId!);
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error fetching persona customers:', error);
+    logger.error({ err: error }, 'Error fetching persona customers');
     res.status(500).json({ error: 'Failed to fetch persona customers' });
   }
 });
@@ -912,137 +838,105 @@ app.get('/api/personas/:personaName', async (req, res) => {
 // ============================================
 
 // POST /api/campaigns/generate
-app.post('/api/campaigns/generate', llmLimiter, async (req, res) => {
+app.post('/api/campaigns/generate', requireAuth, resolveCompanyMiddleware, llmLimiter, validateBody(GenerateCampaignSchema), async (req: AuthRequest, res) => {
   try {
-    const { opportunityId, companyId, model } = req.body ?? {};
-
-    if (!opportunityId) {
-      return res.status(400).json({ error: 'opportunityId is required' });
-    }
-
-    const result = await generateCampaign(supabase, { opportunityId, companyId, model });
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    const { opportunityId, model } = req.body;
+    const result = await generateCampaign(supabase, { opportunityId, companyId: req.companyId!, model });
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error generating campaign:', error);
+    logger.error({ err: error }, 'Error generating campaign');
     res.status(500).json({ error: 'Failed to generate campaign' });
   }
 });
 
 // POST /api/campaigns
-app.post('/api/campaigns', async (req, res) => {
+app.post('/api/campaigns', requireAuth, resolveCompanyMiddleware, validateBody(SaveCampaignSchema), async (req: AuthRequest, res) => {
   try {
-    const { opportunityId, campaign, companyId } = req.body ?? {};
+    const { opportunityId, campaign } = req.body ?? {};
 
     if (!opportunityId || !campaign) {
       return res.status(400).json({ error: 'opportunityId and campaign are required' });
     }
 
-    const result = await saveCampaign(supabase, opportunityId, campaign, companyId);
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    const result = await saveCampaign(supabase, opportunityId, campaign, req.companyId!);
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error saving campaign:', error);
+    logger.error({ err: error }, 'Error saving campaign');
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save campaign' });
   }
 });
 
 // GET /api/campaigns
-app.get('/api/campaigns', async (req, res) => {
+app.get('/api/campaigns', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-    const campaigns = await getCampaigns(supabase, companyId);
-
-    res.json({
-      success: true,
-      data: campaigns,
-    });
+    const page = Math.max(1, parseInt(req.query["page"] as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query["limit"] as string) || 20));
+    const { data, total } = await getCampaigns(supabase, req.companyId!, { page, limit });
+    res.json({ success: true, data, meta: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
-    console.error('Error fetching campaigns:', error);
+    logger.error({ err: error }, 'Error fetching campaigns');
     res.status(500).json({ error: 'Failed to fetch campaigns' });
   }
 });
 
 // GET /api/campaigns/:id
-app.get('/api/campaigns/:id', async (req, res) => {
+app.get('/api/campaigns/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const campaign = await getCampaignById(supabase, id);
-
-    res.json({
-      success: true,
-      data: campaign,
-    });
+    res.json({ success: true, data: campaign });
   } catch (error) {
-    console.error('Error fetching campaign:', error);
+    logger.error({ err: error }, 'Error fetching campaign');
     res.status(500).json({ error: 'Failed to fetch campaign' });
   }
 });
 
 // GET /api/campaigns/:id/analytics
-app.get('/api/campaigns/:id/analytics', async (req, res) => {
+app.get('/api/campaigns/:id/analytics', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const analytics = await getCampaignAnalytics(supabase, id);
     res.json({ success: true, data: analytics });
   } catch (error) {
-    console.error('Error fetching campaign analytics:', error);
+    logger.error({ err: error }, 'Error fetching campaign analytics');
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to fetch campaign analytics' });
   }
 });
 
 // POST /api/campaigns/:id/refine
-app.post('/api/campaigns/:id/refine', async (req, res) => {
+app.post('/api/campaigns/:id/refine', requireAuth, validateBody(RefineCampaignSchema), async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
-    const { modifier = '', channel } = req.body ?? {};
+    const id = req.params["id"] as string;
+    const { modifier, channel } = req.body;
 
     const result = await refineCampaignMessage(supabase, id, modifier, channel ?? undefined);
-
     res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error refining campaign message:', error);
-    res.status(500).json({
-      error: 'Failed to refine campaign message',
-      details: error instanceof Error ? error.message : String(error),
-    });
+    logger.error({ err: error }, 'Error refining campaign message');
+    res.status(500).json({ error: 'Failed to refine campaign message', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
 // POST /api/campaigns/:id/approve
-app.post('/api/campaigns/:id/approve', async (req, res) => {
+app.post('/api/campaigns/:id/approve', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const campaign = await approveCampaign(supabase, id);
-
-    res.json({
-      success: true,
-      data: campaign,
-    });
+    res.json({ success: true, data: campaign });
   } catch (error) {
-    console.error('Error approving campaign:', error);
+    logger.error({ err: error }, 'Error approving campaign');
     res.status(500).json({ error: 'Failed to approve campaign' });
   }
 });
 
 // POST /api/campaigns/:id/launch
-app.post('/api/campaigns/:id/launch', async (req, res) => {
+app.post('/api/campaigns/:id/launch', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const result = await launchCampaign(supabase, id);
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error launching campaign:', error);
+    logger.error({ err: error }, 'Error launching campaign');
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to launch campaign' });
   }
 });
@@ -1065,7 +959,7 @@ app.post('/api/webhooks/channel-status', async (req, res) => {
     const isValid = verifySignature(payload, signature);
 
     if (!isValid) {
-      console.warn('[Webhook] Invalid signature received');
+      logger.warn('Webhook invalid signature received');
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
@@ -1075,7 +969,7 @@ app.post('/api/webhooks/channel-status', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error('[Webhook] Processing error:', error);
+    logger.error({ err: error }, 'Webhook processing error');
     res.status(500).json({ error: 'Failed to process webhook' });
   }
 });
@@ -1087,13 +981,12 @@ app.post('/api/webhooks/channel-status', async (req, res) => {
 const ANALYTICS_TTL = 5 * 60 * 1000; // 5 minutes
 
 // GET /api/analytics/intelligence-brief
-app.get('/api/analytics/intelligence-brief', async (req, res) => {
+app.get('/api/analytics/intelligence-brief', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : 'global';
-    const key = `intelligence-brief:${companyId}`;
+    const key = `intelligence-brief:${req.companyId}`;
     const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const brief = await generateIntelligenceBrief(supabase, companyId === 'global' ? undefined : companyId);
+    const brief = await generateIntelligenceBrief(supabase, req.companyId!);
     setCached(key, brief, ANALYTICS_TTL);
     res.json({ success: true, data: brief });
   } catch (error) {
@@ -1103,12 +996,13 @@ app.get('/api/analytics/intelligence-brief', async (req, res) => {
 });
 
 // GET /api/analytics/campaign-funnel
-app.get('/api/analytics/campaign-funnel', async (req, res) => {
+app.get('/api/analytics/campaign-funnel', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const cached = getCached<unknown>('campaign-funnel');
+    const key = `campaign-funnel:${req.companyId}`;
+    const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const funnel = await getCampaignFunnel(supabase);
-    setCached('campaign-funnel', funnel, ANALYTICS_TTL);
+    const funnel = await getCampaignFunnel(supabase, req.companyId!);
+    setCached(key, funnel, ANALYTICS_TTL);
     res.json({ success: true, data: funnel });
   } catch (error) {
     logger.error({ err: error }, 'Error fetching campaign funnel');
@@ -1117,12 +1011,13 @@ app.get('/api/analytics/campaign-funnel', async (req, res) => {
 });
 
 // GET /api/analytics/opportunity-pipeline
-app.get('/api/analytics/opportunity-pipeline', async (req, res) => {
+app.get('/api/analytics/opportunity-pipeline', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const cached = getCached<unknown>('opportunity-pipeline');
+    const key = `opportunity-pipeline:${req.companyId}`;
+    const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const pipeline = await getOpportunityPipeline(supabase);
-    setCached('opportunity-pipeline', pipeline, ANALYTICS_TTL);
+    const pipeline = await getOpportunityPipeline(supabase, req.companyId!);
+    setCached(key, pipeline, ANALYTICS_TTL);
     res.json({ success: true, data: pipeline });
   } catch (error) {
     logger.error({ err: error }, 'Error fetching opportunity pipeline');
@@ -1131,12 +1026,13 @@ app.get('/api/analytics/opportunity-pipeline', async (req, res) => {
 });
 
 // GET /api/analytics/channel-performance
-app.get('/api/analytics/channel-performance', async (req, res) => {
+app.get('/api/analytics/channel-performance', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const cached = getCached<unknown>('channel-performance');
+    const key = `channel-performance:${req.companyId}`;
+    const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const performance = await getChannelPerformance(supabase);
-    setCached('channel-performance', performance, ANALYTICS_TTL);
+    const performance = await getChannelPerformance(supabase, req.companyId!);
+    setCached(key, performance, ANALYTICS_TTL);
     res.json({ success: true, data: performance });
   } catch (error) {
     logger.error({ err: error }, 'Error fetching channel performance');
@@ -1145,12 +1041,13 @@ app.get('/api/analytics/channel-performance', async (req, res) => {
 });
 
 // GET /api/analytics/opportunity-distribution
-app.get('/api/analytics/opportunity-distribution', async (req, res) => {
+app.get('/api/analytics/opportunity-distribution', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const cached = getCached<unknown>('opportunity-distribution');
+    const key = `opportunity-distribution:${req.companyId}`;
+    const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const distribution = await getOpportunityDistribution(supabase);
-    setCached('opportunity-distribution', distribution, ANALYTICS_TTL);
+    const distribution = await getOpportunityDistribution(supabase, req.companyId!);
+    setCached(key, distribution, ANALYTICS_TTL);
     res.json({ success: true, data: distribution });
   } catch (error) {
     logger.error({ err: error }, 'Error fetching opportunity distribution');
@@ -1159,13 +1056,13 @@ app.get('/api/analytics/opportunity-distribution', async (req, res) => {
 });
 
 // GET /api/analytics/opportunity-trend
-app.get('/api/analytics/opportunity-trend', async (req, res) => {
+app.get('/api/analytics/opportunity-trend', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
     const days = req.query.days ? parseInt(req.query.days as string) : 30;
-    const key = `opportunity-trend:${days}`;
+    const key = `opportunity-trend:${req.companyId}:${days}`;
     const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const trend = await getOpportunityTrend(supabase, days);
+    const trend = await getOpportunityTrend(supabase, days, req.companyId!);
     setCached(key, trend, ANALYTICS_TTL);
     res.json({ success: true, data: trend });
   } catch (error) {
@@ -1175,13 +1072,13 @@ app.get('/api/analytics/opportunity-trend', async (req, res) => {
 });
 
 // GET /api/analytics/activity-feed
-app.get('/api/analytics/activity-feed', async (req, res) => {
+app.get('/api/analytics/activity-feed', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
-    const key = `activity-feed:${limit}`;
+    const key = `activity-feed:${req.companyId}:${limit}`;
     const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const feed = await getActivityFeed(supabase, limit);
+    const feed = await getActivityFeed(supabase, limit, req.companyId!);
     setCached(key, feed, ANALYTICS_TTL);
     res.json({ success: true, data: feed });
   } catch (error) {
@@ -1191,12 +1088,13 @@ app.get('/api/analytics/activity-feed', async (req, res) => {
 });
 
 // GET /api/analytics/recommended-actions
-app.get('/api/analytics/recommended-actions', async (req, res) => {
+app.get('/api/analytics/recommended-actions', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const cached = getCached<unknown>('recommended-actions');
+    const key = `recommended-actions:${req.companyId}`;
+    const cached = getCached<unknown>(key);
     if (cached) return res.json({ success: true, data: cached, cached: true });
-    const actions = await getRecommendedActions(supabase);
-    setCached('recommended-actions', actions, ANALYTICS_TTL);
+    const actions = await getRecommendedActions(supabase, req.companyId!);
+    setCached(key, actions, ANALYTICS_TTL);
     res.json({ success: true, data: actions });
   } catch (error) {
     logger.error({ err: error }, 'Error fetching recommended actions');
@@ -1209,189 +1107,128 @@ app.get('/api/analytics/recommended-actions', async (req, res) => {
 // ============================================
 
 // POST /api/agents
-app.post('/api/agents', async (req, res) => {
+app.post('/api/agents', requireAuth, resolveCompanyMiddleware, validateBody(CreateAgentSchema), async (req: AuthRequest, res) => {
   try {
-    const { companyId, goal, guardrails } = req.body;
+    const { goal, guardrails } = req.body;
 
-    if (!companyId || !goal) {
-      return res.status(400).json({ error: 'companyId and goal are required' });
-    }
-
-    // Create agent
     const agent = await prisma.agent.create({
       data: {
-        companyId,
+        companyId: req.companyId!,
         name: `${goal.substring(0, 30)} Agent`,
         goal,
         status: 'discovering',
-        guardrails: guardrails || {
-          max_budget: 50000,
-          frequency_cap: 3,
-          channels: ['whatsapp', 'email']
-        },
-        performance: {
-          revenue: 0,
-          conversion_rate: 0,
-          customers_reached: 0
-        }
-      }
+        guardrails: guardrails || { max_budget: 50000, frequency_cap: 3, channels: ['whatsapp', 'email'] },
+        performance: { revenue: 0, conversion_rate: 0, customers_reached: 0 },
+      },
     });
 
-    // Trigger agent run immediately
     agentOrchestrator.runAgentOnce(agent.id).catch(err => {
-      console.error('Error running agent:', err);
+      logger.error({ err, agentId: agent.id }, 'Error running agent');
     });
 
-    res.json({
-      success: true,
-      data: agent,
-    });
+    res.json({ success: true, data: agent });
   } catch (error) {
-    console.error('Error creating agent:', error);
+    logger.error({ err: error }, 'Error creating agent');
     res.status(500).json({ error: 'Failed to create agent' });
   }
 });
 
 // GET /api/agents
-app.get('/api/agents', async (req, res) => {
+app.get('/api/agents', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-
-    const agents = await prisma.agent.findMany({
-      where: companyId ? { companyId } : {},
-      include: {
-        _count: {
-          select: {
-            opportunities: true,
-            campaigns: true,
-            actions: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
-
-    res.json({
-      success: true,
-      data: agents,
-    });
+    const page = Math.max(1, parseInt(req.query["page"] as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query["limit"] as string) || 20));
+    const where = { companyId: req.companyId! };
+    const [agents, total] = await Promise.all([
+      prisma.agent.findMany({
+        where,
+        include: { _count: { select: { opportunities: true, campaigns: true, actions: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.agent.count({ where }),
+    ]);
+    res.json({ success: true, data: agents, meta: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
-    console.error('Error fetching agents:', error);
+    logger.error({ err: error }, 'Error fetching agents');
     res.status(500).json({ error: 'Failed to fetch agents' });
   }
 });
 
 // GET /api/agents/:id
-app.get('/api/agents/:id', async (req, res) => {
+app.get('/api/agents/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
-
+    const id = req.params["id"] as string;
     const agent = await prisma.agent.findUnique({
       where: { id },
       include: {
-        opportunities: {
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        },
-        campaigns: {
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        },
-        actions: {
-          orderBy: { createdAt: 'desc' },
-          take: 20
-        }
-      }
+        opportunities: { orderBy: { createdAt: 'desc' }, take: 10 },
+        campaigns: { orderBy: { createdAt: 'desc' }, take: 10 },
+        actions: { orderBy: { createdAt: 'desc' }, take: 20 },
+      },
     });
 
-    if (!agent) {
-      return res.status(404).json({ error: 'Agent not found' });
-    }
-
-    res.json({
-      success: true,
-      data: agent,
-    });
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    res.json({ success: true, data: agent });
   } catch (error) {
-    console.error('Error fetching agent:', error);
+    logger.error({ err: error }, 'Error fetching agent');
     res.status(500).json({ error: 'Failed to fetch agent' });
   }
 });
 
 // POST /api/agents/:id/run
-app.post('/api/agents/:id/run', async (req, res) => {
+app.post('/api/agents/:id/run', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
-
-    // Trigger manual agent run
+    const id = req.params["id"] as string;
     await agentOrchestrator.runAgentOnce(id);
-
-    res.json({
-      success: true,
-      message: 'Agent execution triggered'
-    });
+    res.json({ success: true, message: 'Agent execution triggered' });
   } catch (error) {
-    console.error('Error running agent:', error);
+    logger.error({ err: error }, 'Error running agent');
     res.status(500).json({ error: 'Failed to run agent' });
   }
 });
 
 // PATCH /api/agents/:id
-app.patch('/api/agents/:id', async (req, res) => {
+app.patch('/api/agents/:id', requireAuth, validateBody(PatchAgentSchema), async (req: AuthRequest, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params["id"] as string;
     const { status, guardrails } = req.body;
-
     const agent = await prisma.agent.update({
       where: { id },
-      data: {
-        status: status || undefined,
-        guardrails: guardrails || undefined
-      }
+      data: { status: status || undefined, guardrails: guardrails || undefined },
     });
-
-    res.json({
-      success: true,
-      data: agent,
-    });
+    res.json({ success: true, data: agent });
   } catch (error) {
-    console.error('Error updating agent:', error);
+    logger.error({ err: error }, 'Error updating agent');
     res.status(500).json({ error: 'Failed to update agent' });
   }
 });
 
 // GET /api/activity-stream
-app.get('/api/activity-stream', async (req, res) => {
+app.get('/api/activity-stream', requireAuth, resolveCompanyMiddleware, async (req: AuthRequest, res) => {
   try {
-    const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-
-    if (!companyId) {
-      return res.status(400).json({ error: 'companyId is required' });
-    }
-
-    const actions = await getRecentActions(companyId, limit);
-
-    res.json({
-      success: true,
-      data: actions,
-    });
+    const page = Math.max(1, parseInt(req.query["page"] as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query["limit"] as string) || 50));
+    const actions = await getRecentActions(req.companyId!, limit, page);
+    res.json({ success: true, data: actions });
   } catch (error) {
-    console.error('Error fetching activity stream:', error);
+    logger.error({ err: error }, 'Error fetching activity stream');
     res.status(500).json({ error: 'Failed to fetch activity stream' });
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`🚀 Backend server running on http://0.0.0.0:${PORT}`);
+// Centralized error handler — must be registered after all routes
+app.use(errorHandler);
 
-  // Start the Agent Orchestrator
-  // Run every 5 minutes (300000ms) in production
-  // For demo/testing, you can set this to 60000ms (1 minute)
-  startWorkers();
-  agentOrchestrator.start(21600000); // 6 hours — preserves free-tier quota
-  console.log('🤖 Agent Orchestrator started');
-});
+export { app };
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    logger.info({ port: PORT }, 'Backend server started');
+    startWorkers();
+    agentOrchestrator.start(21600000); // 6 hours — preserves free-tier quota
+    logger.info('Agent Orchestrator started');
+  });
+}

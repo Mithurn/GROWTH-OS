@@ -1,9 +1,10 @@
 import { prisma } from '../lib/prisma';
 import { emitActivity } from '../lib/activity-emitter';
+import { logger } from '../lib/logger';
 
 interface LogActionParams {
   agentId: string;
-  actionType: 'discovered_opportunity' | 'launched_campaign' | 'sent_messages' | 'achieved_milestone' | 'paused' | 'resumed';
+  actionType: 'discovered_opportunity' | 'created_campaign' | 'launched_campaign' | 'sent_messages' | 'achieved_milestone' | 'paused' | 'resumed';
   description: string;
   details?: any;
 }
@@ -35,7 +36,7 @@ export async function logAgentAction(params: LogActionParams) {
     });
     return action;
   } catch (error) {
-    console.error('Error logging agent action:', error);
+    logger.error({ err: error }, 'Error logging agent action');
     throw error;
   }
 }
@@ -43,7 +44,7 @@ export async function logAgentAction(params: LogActionParams) {
 /**
  * Get recent agent actions for activity feed
  */
-export async function getRecentActions(companyId: string, limit: number = 50) {
+export async function getRecentActions(companyId: string, limit: number = 50, page: number = 1) {
   try {
     const actions = await prisma.agentAction.findMany({
       where: {
@@ -61,12 +62,13 @@ export async function getRecentActions(companyId: string, limit: number = 50) {
       orderBy: {
         createdAt: 'desc'
       },
+      skip: (page - 1) * limit,
       take: limit
     });
 
     return actions;
   } catch (error) {
-    console.error('Error fetching recent actions:', error);
+    logger.error({ err: error }, 'Error fetching recent actions');
     throw error;
   }
 }
@@ -88,7 +90,7 @@ export async function getAgentActions(agentId: string, limit: number = 100) {
 
     return actions;
   } catch (error) {
-    console.error('Error fetching agent actions:', error);
+    logger.error({ err: error }, 'Error fetching agent actions');
     throw error;
   }
 }

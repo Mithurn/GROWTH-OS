@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import OpenAI from 'openai';
 import { openRouterConfig } from '../config/openrouter';
+import { logger } from '../lib/logger';
 
 const openai = new OpenAI({
   apiKey: openRouterConfig.apiKey,
@@ -21,7 +22,7 @@ export async function createCampaignForOpportunity(
   agentId: string,
   guardrails: { channels?: string[] }
 ) {
-  console.log(`📋 Creating campaign for opportunity ${opportunityId}`);
+  logger.info({ opportunityId }, 'Creating campaign');
 
   try {
     // Get opportunity details
@@ -75,11 +76,11 @@ export async function createCampaignForOpportunity(
       }
     });
 
-    console.log(`✅ Created campaign: ${campaign.name}`);
+    logger.info({ campaignName: campaign.name }, 'Campaign created');
 
     return campaign;
   } catch (error) {
-    console.error('Error creating campaign:', error);
+    logger.error({ err: error }, 'Error creating campaign');
     throw error;
   }
 }
@@ -165,7 +166,7 @@ Example format:
     const strategy = JSON.parse(content);
     return strategy;
   } catch (error) {
-    console.error('Error generating campaign strategy:', error);
+    logger.error({ err: error }, 'Error generating campaign strategy');
 
     // Fallback strategy
     return {
@@ -253,7 +254,7 @@ export async function generatePersonalizedMessage(
 
     return message;
   } catch (error) {
-    console.error('Error generating personalized message:', error);
+    logger.error({ err: error }, 'Error generating personalized message');
     return `Hi, we have a special offer for you!`;
   }
 }

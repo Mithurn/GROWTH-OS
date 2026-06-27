@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { logger } from '../lib/logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -251,7 +252,7 @@ If any field is unclear, use an empty array. Return ONLY the JSON, no other text
       involvement: Array.isArray(extracted.involvement) ? extracted.involvement : [],
     };
   } catch (error) {
-    console.error('Failed to parse extracted data:', error);
+    logger.error({ err: error }, 'Failed to parse extracted data');
     // Return default values
     return {
       priority: [],
