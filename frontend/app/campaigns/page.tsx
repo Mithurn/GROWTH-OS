@@ -157,8 +157,8 @@ function CampaignsContent() {
     setError(null);
     try {
       const [dashRes, campaignsRes] = await Promise.all([
-        getOpportunityDashboard(companyId),
-        getCampaigns(companyId),
+        getOpportunityDashboard(),
+        getCampaigns(),
       ]);
 
       const opp = (dashRes.data.opportunityDistribution ?? []).find(
@@ -205,7 +205,7 @@ function CampaignsContent() {
     if (!companyId || opportunityId) return;
     setLoading(true);
     try {
-      const res = await getCampaigns(companyId);
+      const res = await getCampaigns();
       const list = res.data ?? [];
       setCampaigns(list);
       if (list.length > 0) setSelectedCampaign(list[0]);
