@@ -253,30 +253,28 @@ export default function OnboardingPage() {
         }
       }
 
-      // 3. In parallel: save brand profile + generate opportunities
-      // Item 4 "Setting up your AI growth team" becomes active
-      const goalLabel = GOAL_LABELS[goal] || goal;
-      await Promise.all([
-        saveOnboardingProfile(storedCompanyId, {
-          companyName,
-          industry,
-          primaryGoal: goalLabel,
-          operatingMode: mode,
-        }),
-        generateOpportunities(storedCompanyId).catch(() => {
-          // Non-blocking — opportunities page will regenerate if this fails
-        }),
-      ]);
-
-      // 4. Create AI agent
-      await createAgent(storedCompanyId, goalLabel, {
-        channels: ['WhatsApp', 'Email'],
-        involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
-        max_budget: 100000,
-        frequency_cap: 3,
-      });
-
+      // 3. For real data: save profile + kick off opportunities + create agent
+      //    For demo data: skip — everything is pre-loaded in the demo company
       setDoneItems([0, 1, 2, 3, 4]);
+
+      if (!useDemoData) {
+        const goalLabel = GOAL_LABELS[goal] || goal;
+        await Promise.all([
+          saveOnboardingProfile(storedCompanyId, {
+            companyName,
+            industry,
+            primaryGoal: goalLabel,
+            operatingMode: mode,
+          }).catch(() => {}),
+          generateOpportunities(storedCompanyId).catch(() => {}),
+        ]);
+        await createAgent(storedCompanyId, goalLabel, {
+          channels: ['WhatsApp', 'Email'],
+          involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
+          max_budget: 100000,
+          frequency_cap: 3,
+        }).catch(() => {});
+      }
 
       // Brief pause so the user sees "Setting up your AI growth team" tick
       await new Promise(r => setTimeout(r, 800));
@@ -288,7 +286,7 @@ export default function OnboardingPage() {
 
       router.push('/');
     } catch (err) {
-      setSetupError(err instanceof Error ? err.message : 'Setup failed. Please try again.');
+      setSetupError(err instanceof Error ? err.message : typeof err === 'string' ? err : 'Setup failed. Please try again.');
       setIsSettingUp(false);
     }
   }
