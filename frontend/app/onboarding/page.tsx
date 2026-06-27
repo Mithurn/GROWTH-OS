@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -286,6 +287,9 @@ export default function OnboardingPage() {
       await new Promise(r => setTimeout(r, 800));
       setDoneItems([0, 1, 2, 3, 4, 5]);
       await new Promise(r => setTimeout(r, 600));
+
+      // Mark onboarding complete so middleware lets them through
+      await createClient().auth.updateUser({ data: { onboarding_complete: true } });
 
       router.push('/');
     } catch (err) {
