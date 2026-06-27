@@ -1,4 +1,26 @@
+import { getAuthToken } from './supabase/client';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
+async function authHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
+  const token = await getAuthToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
+
+async function apiFetch(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
+  const headers = await authHeaders((options.headers as Record<string, string>) ?? {});
+  return fetchWithTimeout(url, { ...options, headers }, timeoutMs);
+}
 
 export async function saveBusinessInfo(companyName: string, industry: string) {
   const response = await fetch(`${API_BASE_URL}/onboarding/business`, {
@@ -185,72 +207,40 @@ export async function generateOpportunities(companyId?: string, model?: string) 
 
 export async function getOpportunityDashboard(companyId?: string) {
   const url = new URL(`${API_BASE_URL}/opportunities`);
-  if (companyId) {
-    url.searchParams.set('companyId', companyId);
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch opportunities');
-  }
-
+  if (companyId) url.searchParams.set('companyId', companyId);
+  const response = await apiFetch(url.toString(), {}, 12000);
+  if (!response.ok) throw new Error('Failed to fetch opportunities');
   return response.json();
 }
 
 export async function getOpportunityCustomers(opportunityId: string) {
-  const response = await fetch(`${API_BASE_URL}/opportunities/${encodeURIComponent(opportunityId)}`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch opportunity details');
-  }
-
+  const response = await apiFetch(`${API_BASE_URL}/opportunities/${encodeURIComponent(opportunityId)}`);
+  if (!response.ok) throw new Error('Failed to fetch opportunity details');
   return response.json();
 }
 
 export async function createOpportunityFromGoal(goal: string, companyId?: string, model?: string) {
-  const response = await fetch(`${API_BASE_URL}/opportunities/create-from-goal`, {
+  const response = await apiFetch(`${API_BASE_URL}/opportunities/create-from-goal`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ goal, companyId, model }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to create opportunity from goal');
-  }
-
+  }, 60000);
+  if (!response.ok) throw new Error('Failed to create opportunity from goal');
   return response.json();
 }
 
 export async function getPersonaDistribution(companyId?: string) {
   const url = new URL(`${API_BASE_URL}/personas`);
-  if (companyId) {
-    url.searchParams.set('companyId', companyId);
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch personas');
-  }
-
+  if (companyId) url.searchParams.set('companyId', companyId);
+  const response = await apiFetch(url.toString());
+  if (!response.ok) throw new Error('Failed to fetch personas');
   return response.json();
 }
 
 export async function getPersonaCustomers(personaName: string, companyId?: string) {
   const url = new URL(`${API_BASE_URL}/personas/${encodeURIComponent(personaName)}`);
-  if (companyId) {
-    url.searchParams.set('companyId', companyId);
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch persona customers');
-  }
-
+  if (companyId) url.searchParams.set('companyId', companyId);
+  const response = await apiFetch(url.toString());
+  if (!response.ok) throw new Error('Failed to fetch persona customers');
   return response.json();
 }
 
@@ -259,95 +249,50 @@ export async function getPersonaCustomers(personaName: string, companyId?: strin
 // ============================================
 
 export async function generateCampaign(opportunityId: string, companyId?: string, model?: string) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 90000);
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/campaigns/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ opportunityId, companyId, model }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) throw new Error('Failed to generate campaign');
-    return response.json();
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw new Error('Campaign generation timed out — the server is waking up, please try again in a moment.');
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
+  const response = await apiFetch(`${API_BASE_URL}/campaigns/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ opportunityId, companyId, model }),
+  }, 90000);
+  if (!response.ok) throw new Error('Failed to generate campaign');
+  return response.json();
 }
 
 export async function saveCampaign(opportunityId: string, campaign: any, companyId?: string) {
-  const response = await fetch(`${API_BASE_URL}/campaigns`, {
+  const response = await apiFetch(`${API_BASE_URL}/campaigns`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ opportunityId, campaign, companyId }),
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to save campaign');
-  }
-
+  if (!response.ok) throw new Error('Failed to save campaign');
   return response.json();
 }
 
 export async function getCampaigns(companyId?: string) {
   const url = new URL(`${API_BASE_URL}/campaigns`);
-  if (companyId) {
-    url.searchParams.set('companyId', companyId);
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch campaigns');
-  }
-
+  if (companyId) url.searchParams.set('companyId', companyId);
+  const response = await apiFetch(url.toString());
+  if (!response.ok) throw new Error('Failed to fetch campaigns');
   return response.json();
 }
 
 export async function getCampaignById(campaignId: string) {
-  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch campaign');
-  }
-
+  const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}`);
+  if (!response.ok) throw new Error('Failed to fetch campaign');
   return response.json();
 }
 
 export async function approveCampaign(campaignId: string) {
-  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/approve`, {
+  const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/approve`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to approve campaign');
-  }
-
+  if (!response.ok) throw new Error('Failed to approve campaign');
   return response.json();
 }
 
 export async function launchCampaign(campaignId: string) {
-  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/launch`, {
+  const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/launch`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to launch campaign');
-  }
-
+  if (!response.ok) throw new Error('Failed to launch campaign');
   return response.json();
 }
 
@@ -356,89 +301,51 @@ export async function launchCampaign(campaignId: string) {
 // ============================================
 
 export async function createAgent(companyId: string, goal: string, guardrails?: any) {
-  const response = await fetch(`${API_BASE_URL}/agents`, {
+  const response = await apiFetch(`${API_BASE_URL}/agents`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ companyId, goal, guardrails }),
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to create agent');
-  }
-
+  if (!response.ok) throw new Error('Failed to create agent');
   return response.json();
 }
 
 export async function getAgents(companyId?: string) {
   const url = new URL(`${API_BASE_URL}/agents`);
-  if (companyId) {
-    url.searchParams.set('companyId', companyId);
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch agents');
-  }
-
+  if (companyId) url.searchParams.set('companyId', companyId);
+  const response = await apiFetch(url.toString());
+  if (!response.ok) throw new Error('Failed to fetch agents');
   return response.json();
 }
 
 export async function getAgent(agentId: string) {
-  const response = await fetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`);
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch agent');
-  }
-
+  const response = await apiFetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`);
+  if (!response.ok) throw new Error('Failed to fetch agent');
   return response.json();
 }
 
 export async function runAgent(agentId: string) {
-  const response = await fetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/run`, {
+  const response = await apiFetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/run`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to run agent');
-  }
-
+  if (!response.ok) throw new Error('Failed to run agent');
   return response.json();
 }
 
 export async function updateAgent(agentId: string, updates: { status?: string; guardrails?: any }) {
-  const response = await fetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`, {
+  const response = await apiFetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify(updates),
   });
-
-  if (!response.ok) {
-    throw new Error('Failed to update agent');
-  }
-
+  if (!response.ok) throw new Error('Failed to update agent');
   return response.json();
 }
 
 export async function getActivityStream(companyId: string, limit?: number) {
   const url = new URL(`${API_BASE_URL}/activity-stream`);
   url.searchParams.set('companyId', companyId);
-  if (limit) {
-    url.searchParams.set('limit', limit.toString());
-  }
-
-  const response = await fetch(url.toString());
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch activity stream');
-  }
+  if (limit) url.searchParams.set('limit', limit.toString());
+  const response = await apiFetch(url.toString(), {}, 8000);
+  if (!response.ok) throw new Error('Failed to fetch activity stream');
 
   return response.json();
 }
@@ -466,24 +373,6 @@ export async function refineCampaign(campaignId: string, modifier: string, chann
 
   if (!response.ok) {
     throw new Error('Failed to refine campaign message');
-  }
-
-  return response.json();
-}
-
-export async function refineCampaignMessage(
-  currentMessage: string,
-  instruction: string,
-  offer: string = '',
-) {
-  const response = await fetch(`${API_BASE_URL}/campaigns/refine-message`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ currentMessage, instruction, offer }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to refine message');
   }
 
   return response.json();

@@ -6,7 +6,7 @@ import { NavHeader } from './nav-header';
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname.startsWith('/onboarding')) {
+  if (pathname.startsWith('/onboarding') || pathname.startsWith('/login') || pathname.startsWith('/auth')) {
     return <>{children}</>;
   }
 

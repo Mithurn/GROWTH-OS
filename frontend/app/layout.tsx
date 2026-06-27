@@ -5,6 +5,11 @@ import { MainLayout } from "@/components/main-layout";
 export const metadata: Metadata = {
   title: "GrowthOS",
   description: "AI Growth Copilot for retail marketers",
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({

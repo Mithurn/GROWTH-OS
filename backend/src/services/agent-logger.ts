@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { emitActivity } from '../lib/activity-emitter';
 
 interface LogActionParams {
   agentId: string;
@@ -24,7 +25,14 @@ export async function logAgentAction(params: LogActionParams) {
       }
     });
 
-    console.log(`📝 Logged action: ${description}`);
+    emitActivity({
+      id: action.id,
+      agentId: action.agentId,
+      actionType: action.actionType,
+      description: action.description,
+      details: (action.details as Record<string, unknown>) ?? {},
+      createdAt: action.createdAt,
+    });
     return action;
   } catch (error) {
     console.error('Error logging agent action:', error);

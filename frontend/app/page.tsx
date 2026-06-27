@@ -164,6 +164,7 @@ export default function HomePage() {
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(true);
+  const [coldStart, setColdStart] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -195,43 +196,81 @@ export default function HomePage() {
     fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
   }, []);
 
-  // Fetch opportunities
+  // Fetch opportunities with cold-start retry
   useEffect(() => {
     const run = async () => {
-      try {
-        const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
-        const data = await getOpportunityDashboard(companyId);
-        if (data.success && data.data.topOpportunities) {
-          setOpportunities(data.data.topOpportunities);
+      const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
+      const MAX_RETRIES = 4;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 0) {
+            setColdStart(true);
+            await new Promise(r => setTimeout(r, 5000));
+          }
+          const data = await getOpportunityDashboard(companyId);
+          if (data.success && data.data.topOpportunities) {
+            setOpportunities(data.data.topOpportunities);
+          }
+          setColdStart(false);
+          setLoading(false);
+          return;
+        } catch {
+          if (attempt === MAX_RETRIES - 1) {
+            setError('Unable to reach backend. Try refreshing in a moment.');
+            setColdStart(false);
+            setLoading(false);
+          }
         }
-      } catch {
-        setError('Unable to load opportunities. Check backend connection.');
-      } finally {
-        setLoading(false);
       }
     };
     run();
   }, []);
 
-  // Fetch activity stream
+  // Activity stream via SSE (falls back to one-shot fetch if SSE unavailable)
   useEffect(() => {
-    const run = async () => {
+    const companyId = window.localStorage.getItem('growthOS_company_id');
+
+    // Seed initial items from REST so there's something to show immediately
+    const seed = async () => {
       try {
-        const companyId = window.localStorage.getItem('growthOS_company_id');
         if (!companyId) return;
         const data = await getActivityStream(companyId, 10);
         if (data.success && Array.isArray(data.data)) {
           setActivityItems(data.data);
         }
       } catch {
-        // silently fail — activity stream is non-critical
+        // non-critical
       } finally {
         setActivityLoading(false);
       }
     };
-    run();
-    const interval = setInterval(run, 30000);
-    return () => clearInterval(interval);
+    seed();
+
+    // Open SSE connection for live updates
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+    const url = companyId
+      ? `${API_BASE}/sse/activity?companyId=${encodeURIComponent(companyId)}`
+      : `${API_BASE}/sse/activity`;
+    const es = new EventSource(url);
+
+    es.onmessage = (event) => {
+      try {
+        const action = JSON.parse(event.data) as ActivityItem;
+        setActivityItems(prev => {
+          if (prev.some(a => a.id === action.id)) return prev;
+          return [action, ...prev].slice(0, 50);
+        });
+        setActivityLoading(false);
+      } catch {
+        // ignore malformed events
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+    };
+
+    return () => es.close();
   }, []);
 
   const handleSubmitQuery = async () => {
@@ -337,7 +376,9 @@ export default function HomePage() {
             {loading ? (
               <span className="inline-flex items-center gap-2">
                 <span className="h-4 w-4 border-2 border-[#5B4FFF] border-t-transparent rounded-full animate-spin" />
-                Scanning for opportunities…
+                {coldStart
+                  ? 'AI engine is warming up — this takes about 30 seconds on first load…'
+                  : 'Scanning for opportunities…'}
               </span>
             ) : (
               'GrowthOS analyzed customer behavior, campaign performance, and revenue signals while you were away.'
