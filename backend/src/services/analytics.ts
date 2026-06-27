@@ -78,14 +78,23 @@ export interface RecommendedAction {
 
 export async function generateIntelligenceBrief(
   supabase: SupabaseClient,
-  companyId?: string
+  companyId: string
 ): Promise<IntelligenceBrief> {
-  // Gather all relevant data
-  const [opportunities, campaigns, communications, events] = await Promise.all([
-    supabase.from('opportunities').select('*').limit(100),
-    supabase.from('campaigns').select('*').limit(50),
-    supabase.from('communications').select('*').limit(500),
-    supabase.from('communication_events').select('*').limit(1000),
+  const [opportunities, campaigns] = await Promise.all([
+    supabase.from('opportunities').select('*').eq('company_id', companyId).limit(100),
+    supabase.from('campaigns').select('*').eq('company_id', companyId).limit(50),
+  ]);
+
+  const campaignIds = campaigns.data?.map(c => c.id) || [];
+  const [communications, events] = await Promise.all([
+    campaignIds.length > 0
+      ? supabase.from('communications').select('*').in('campaign_id', campaignIds).limit(500)
+      : Promise.resolve({ data: [] }),
+    campaignIds.length > 0
+      ? supabase.from('communication_events').select('*').in('communication_id',
+          supabase.from('communications').select('id').in('campaign_id', campaignIds) as any
+        ).limit(1000)
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Build context for AI
@@ -193,7 +202,7 @@ Be specific with numbers. Use Indian Rupee format (₹). Keep it concise and act
       recommendation: parsed.recommendation || { action: '', potentialRevenue: 0 },
     };
   } catch (err) {
-    console.error('Failed to parse intelligence brief:', err);
+    // Failed to parse AI response, fall through to deterministic fallback
 
     // Fallback to basic analytics
     return {
@@ -221,11 +230,13 @@ Be specific with numbers. Use Indian Rupee format (₹). Keep it concise and act
 // ============================================
 
 export async function getCampaignFunnel(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  companyId: string
 ): Promise<CampaignFunnelData> {
   const { data: events } = await supabase
     .from('communication_events')
-    .select('event_type');
+    .select('event_type, communications(campaign_id, campaigns(company_id))')
+    .filter('communications.campaigns.company_id', 'eq', companyId);
 
   const counts = {
     sent: 0,
@@ -252,11 +263,12 @@ export async function getCampaignFunnel(
 // ============================================
 
 export async function getOpportunityPipeline(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  companyId: string
 ): Promise<OpportunityPipelineData> {
   const [opportunities, campaigns] = await Promise.all([
-    supabase.from('opportunities').select('id, status, opportunity_id'),
-    supabase.from('campaigns').select('opportunity_id, status'),
+    supabase.from('opportunities').select('id, status').eq('company_id', companyId),
+    supabase.from('campaigns').select('opportunity_id, status').eq('company_id', companyId),
   ]);
 
   const oppData = opportunities.data || [];
@@ -286,15 +298,20 @@ export async function getOpportunityPipeline(
 // ============================================
 
 export async function getChannelPerformance(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  companyId: string
 ): Promise<ChannelPerformance[]> {
-  const { data: communications } = await supabase
-    .from('communications')
-    .select('id, channel');
+  const { data: campaigns } = await supabase.from('campaigns').select('id').eq('company_id', companyId);
+  const campaignIds = campaigns?.map(c => c.id) || [];
 
-  const { data: events } = await supabase
-    .from('communication_events')
-    .select('communication_id, event_type');
+  const { data: communications } = campaignIds.length > 0
+    ? await supabase.from('communications').select('id, channel').in('campaign_id', campaignIds)
+    : { data: [] };
+
+  const commIds = communications?.map(c => c.id) || [];
+  const { data: events } = commIds.length > 0
+    ? await supabase.from('communication_events').select('communication_id, event_type').in('communication_id', commIds)
+    : { data: [] };
 
   // Build communication -> events map
   const commEvents = new Map<string, Set<string>>();
@@ -346,11 +363,13 @@ export async function getChannelPerformance(
 // ============================================
 
 export async function getOpportunityDistribution(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  companyId: string
 ): Promise<OpportunityDistribution[]> {
   const { data: opportunities } = await supabase
     .from('opportunities')
-    .select('opportunity_type, potential_revenue');
+    .select('opportunity_type, potential_revenue')
+    .eq('company_id', companyId);
 
   const distribution = new Map<string, { count: number; revenue: number }>();
 
@@ -380,11 +399,13 @@ export async function getOpportunityDistribution(
 
 export async function getOpportunityTrend(
   supabase: SupabaseClient,
-  days: number = 30
+  days: number = 30,
+  companyId: string = ''
 ): Promise<OpportunityTrendPoint[]> {
   const { data: opportunities } = await supabase
     .from('opportunities')
     .select('created_at, opportunity_type')
+    .eq('company_id', companyId)
     .order('created_at', { ascending: true });
 
   // Group by date
@@ -406,13 +427,19 @@ export async function getOpportunityTrend(
 
 export async function getActivityFeed(
   supabase: SupabaseClient,
-  limit: number = 20
+  limit: number = 20,
+  companyId: string = ''
 ): Promise<ActivityFeedItem[]> {
-  const [opportunities, campaigns, events] = await Promise.all([
-    supabase.from('opportunities').select('*').order('created_at', { ascending: false }).limit(10),
-    supabase.from('campaigns').select('*').order('created_at', { ascending: false }).limit(10),
-    supabase.from('communication_events').select('*, communications(campaign_id)').order('event_timestamp', { ascending: false }).limit(50),
+  const [opportunities, campaigns] = await Promise.all([
+    supabase.from('opportunities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(10),
+    supabase.from('campaigns').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(10),
   ]);
+  const campaignIds = campaigns.data?.map(c => c.id) || [];
+  const events = campaignIds.length > 0
+    ? await supabase.from('communication_events').select('*, communications(campaign_id)').in('communication_id',
+        supabase.from('communications').select('id').in('campaign_id', campaignIds) as any
+      ).order('event_timestamp', { ascending: false }).limit(50)
+    : { data: [] };
 
   const feed: ActivityFeedItem[] = [];
 
@@ -476,12 +503,13 @@ export async function getActivityFeed(
 // ============================================
 
 export async function getRecommendedActions(
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  companyId: string = ''
 ): Promise<RecommendedAction[]> {
-  // Get unaddressed opportunities
   const { data: opportunities } = await supabase
     .from('opportunities')
     .select('*')
+    .eq('company_id', companyId)
     .eq('status', 'Detected')
     .order('potential_revenue', { ascending: false })
     .limit(5);

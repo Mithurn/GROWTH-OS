@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { openRouterConfig } from '../config/openrouter';
 import { checkAndIncrFrequencyCap } from '../lib/redis';
+import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
 
 export interface CampaignGenerationRequest {
@@ -202,7 +203,7 @@ export async function generateCampaign(
     );
     return { campaign };
   } catch (err: any) {
-    console.warn('[Campaign] AI unavailable, using deterministic fallback:', err?.message ?? err);
+    logger.warn({ err: err?.message ?? err }, 'Campaign: AI unavailable, using deterministic fallback');
     return { campaign: buildFallbackCampaign(opportunity, company) };
   }
 }
@@ -422,14 +423,14 @@ export async function launchCampaign(
       const recipient = campaign.channel === 'Email' ? customer?.email : customer?.phone;
 
       if (!recipient) {
-        console.warn(`[Launch] Skipping ${comm.id}: no ${campaign.channel === 'Email' ? 'email' : 'phone'}`);
+        logger.warn({ commId: comm.id, channel: campaign.channel }, 'Launch: skipping — no recipient contact');
         return;
       }
 
       // Frequency cap: suppress if customer has already received 2+ messages today
       const suppressed = await checkAndIncrFrequencyCap(comm.customer_id);
       if (suppressed) {
-        console.log(`[Launch] Frequency cap hit for customer ${comm.customer_id}, suppressing`);
+        logger.info({ customerId: comm.customer_id }, 'Launch: frequency cap hit, suppressing');
         await supabase.from('communications').update({
           status: 'FAILED',
           failure_reason: 'Suppressed: frequency cap exceeded (2 messages/day)',
@@ -467,9 +468,9 @@ export async function launchCampaign(
         .update({ provider_message_id: result.providerMessageId })
         .eq('id', comm.id);
 
-      console.log(`[Launch] ✓ ${comm.id} → ${result.providerMessageId}`);
+      logger.info({ commId: comm.id, providerMessageId: result.providerMessageId }, 'Launch: sent');
     } catch (error) {
-      console.error(`[Launch] Failed ${comm.id}:`, error);
+      logger.error({ err: error, commId: comm.id }, 'Launch: failed to send');
       await supabase
         .from('communications')
         .update({
@@ -522,23 +523,26 @@ export async function launchCampaign(
 export async function getCampaigns(
   supabase: SupabaseClient,
   companyId?: string,
-): Promise<CampaignWithMetrics[]> {
+  opts: { page?: number; limit?: number } = {},
+): Promise<{ data: CampaignWithMetrics[]; total: number }> {
   const company = await ensureCompanyRow(supabase, companyId);
+  const limit = opts.limit ?? 20;
+  const page = opts.page ?? 1;
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
-  const { data: campaigns, error } = await supabase
+  const { data: campaigns, error, count } = await supabase
     .from('campaigns')
-    .select(`
-      *,
-      opportunities(audience_size)
-    `)
+    .select(`*, opportunities(audience_size)`, { count: 'exact' })
     .eq('company_id', company.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) {
     throw new Error(`Failed to load campaigns: ${error.message}`);
   }
 
-  // Get communication counts for each campaign
+  // Get communication counts for each campaign in this page
   const campaignsWithMetrics = await Promise.all(
     (campaigns ?? []).map(async (campaign: any) => {
       const { data: events } = await supabase
@@ -569,7 +573,7 @@ export async function getCampaigns(
     })
   );
 
-  return campaignsWithMetrics as CampaignWithMetrics[];
+  return { data: campaignsWithMetrics as CampaignWithMetrics[], total: count ?? 0 };
 }
 
 export async function refineCampaignMessage(

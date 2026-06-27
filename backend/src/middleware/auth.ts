@@ -8,6 +8,7 @@ const supabase = createClient(
 
 export interface AuthRequest extends Request {
   userId?: string;
+  companyId?: string;
 }
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -22,6 +23,25 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   }
 
   req.userId = user.id;
+  next();
+}
+
+// Resolves companyId from the profiles table using the authenticated userId.
+// Must run after requireAuth. Returns 403 if the user has no company yet.
+export async function resolveCompanyMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('company_id')
+    .eq('id', req.userId!)
+    .maybeSingle();
+
+  if (!data?.company_id) {
+    return res.status(403).json({
+      error: 'No company found for this user. Please complete onboarding first.',
+    });
+  }
+
+  req.companyId = data.company_id;
   next();
 }
 

@@ -236,7 +236,7 @@ function generateOrders(customers: Customer[]): Order[] {
       if (persona === 'CROSS_SELL' && preferredCategory) {
         // Only buy from one category (90% of time) - cross-sell opportunity
         if (Math.random() > 0.1) {
-          selectedSKUs = [faker.helpers.arrayElement(PRODUCT_CATEGORIES[preferredCategory].skus)];
+          selectedSKUs = [faker.helpers.arrayElement((PRODUCT_CATEGORIES as Record<string, { skus: string[]; popular: boolean }>)[preferredCategory].skus)];
         } else {
           selectedSKUs = [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];
         }

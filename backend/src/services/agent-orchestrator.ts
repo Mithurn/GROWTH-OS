@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { enqueueOpportunityDiscovery, enqueueCampaignGeneration } from '../lib/queues';
+import { logger } from '../lib/logger';
 
 interface AgentExecutionContext {
   agentId: string;
@@ -26,12 +27,12 @@ export class AgentOrchestrator {
    */
   async start(intervalMs: number = 60000) {
     if (this.isRunning) {
-      console.log('Agent orchestrator already running');
+      logger.info('Agent orchestrator already running');
       return;
     }
 
     this.isRunning = true;
-    console.log('🤖 Starting Agent Orchestrator...');
+    logger.info('Agent Orchestrator starting');
 
     // Run immediately on start
     await this.runAllAgents();
@@ -51,7 +52,7 @@ export class AgentOrchestrator {
       this.runInterval = null;
     }
     this.isRunning = false;
-    console.log('🛑 Agent Orchestrator stopped');
+    logger.info('Agent Orchestrator stopped');
   }
 
   /**
@@ -59,7 +60,7 @@ export class AgentOrchestrator {
    */
   private async runAllAgents() {
     if (this.isProcessingAgents) {
-      console.log('⏭️  Agent run skipped — previous run still in progress');
+      logger.info('Agent run skipped — previous run still in progress');
       return;
     }
     this.isProcessingAgents = true;
@@ -76,7 +77,7 @@ export class AgentOrchestrator {
         }
       });
 
-      console.log(`🔍 Found ${agents.length} active agents`);
+      logger.info({ count: agents.length }, 'Active agents found');
 
       for (const agent of agents) {
         try {
@@ -87,11 +88,11 @@ export class AgentOrchestrator {
             guardrails: agent.guardrails as any
           });
         } catch (error) {
-          console.error(`Error executing agent ${agent.id}:`, error);
+          logger.error({ err: error, agentId: agent.id }, 'Error executing agent');
         }
       }
     } catch (error) {
-      console.error('Error in runAllAgents:', error);
+      logger.error({ err: error }, 'Error in runAllAgents');
     } finally {
       this.isProcessingAgents = false;
     }
@@ -106,7 +107,7 @@ export class AgentOrchestrator {
     const { agentId, companyId, goal, guardrails } = context;
     const involvement = (guardrails as any).involvement || 'review every campaign';
 
-    console.log(`🚀 Executing agent ${agentId} for company ${companyId}`);
+    logger.info({ agentId, companyId }, 'Executing agent');
 
     // Step 1: Enqueue opportunity discovery.
     // The worker calls the LLM, persists discoveries, then chains campaign-generation
@@ -136,7 +137,7 @@ export class AgentOrchestrator {
       });
     }
 
-    console.log(`📋 Enqueued discovery + ${existingUncampaigned.length} existing-opportunity campaign jobs`);
+    logger.info({ existingOpps: existingUncampaigned.length }, 'Enqueued discovery + existing-opportunity campaign jobs');
 
     await prisma.agent.update({
       where: { id: agentId },

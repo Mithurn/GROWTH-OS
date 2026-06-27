@@ -35,16 +35,10 @@ export async function saveBusinessInfo(companyName: string, industry: string) {
   return response.json();
 }
 
-export async function saveOnboardingProfile(
-  companyId: string,
-  profile: Record<string, unknown>,
-) {
-  const response = await fetch(`${API_BASE_URL}/onboarding/profile`, {
+export async function saveOnboardingProfile(profile: Record<string, unknown>) {
+  const response = await apiFetch(`${API_BASE_URL}/onboarding/profile`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ companyId, profile }),
+    body: JSON.stringify({ profile }),
   });
 
   if (!response.ok) {
@@ -54,13 +48,10 @@ export async function saveOnboardingProfile(
   return response.json();
 }
 
-export async function startOnboardingConversation(companyId: string) {
-  const response = await fetch(`${API_BASE_URL}/onboarding/conversation/start`, {
+export async function startOnboardingConversation() {
+  const response = await apiFetch(`${API_BASE_URL}/onboarding/conversation/start`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ companyId }),
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
@@ -71,11 +62,8 @@ export async function startOnboardingConversation(companyId: string) {
 }
 
 export async function sendConversationMessage(conversationId: string, message: string) {
-  const response = await fetch(`${API_BASE_URL}/onboarding/conversation/${conversationId}/message`, {
+  const response = await apiFetch(`${API_BASE_URL}/onboarding/conversation/${conversationId}/message`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
     body: JSON.stringify({ message }),
   });
 
@@ -118,11 +106,10 @@ export async function uploadOrderCSV(file: File) {
   return response.json();
 }
 
-export async function startIngestion(customerFile: File, orderFile: File, companyId: string) {
+export async function startIngestion(customerFile: File, orderFile: File) {
   const formData = new FormData();
   formData.append('customers', customerFile);
   formData.append('orders', orderFile);
-  formData.append('companyId', companyId);
 
   const token = await getAuthToken();
   const response = await fetchWithTimeout(`${API_BASE_URL}/process-ingestion`, {
@@ -139,7 +126,7 @@ export async function startIngestion(customerFile: File, orderFile: File, compan
 }
 
 export async function getIngestionStatus(sessionId: string) {
-  const response = await fetch(`${API_BASE_URL}/ingestion-status/${sessionId}`);
+  const response = await apiFetch(`${API_BASE_URL}/ingestion-status/${sessionId}`);
 
   if (!response.ok) {
     throw new Error('Failed to get ingestion status');
@@ -149,7 +136,7 @@ export async function getIngestionStatus(sessionId: string) {
 }
 
 export async function getIntelligencePreview() {
-  const response = await fetch(`${API_BASE_URL}/intelligence-preview`);
+  const response = await apiFetch(`${API_BASE_URL}/intelligence-preview`);
 
   if (!response.ok) {
     throw new Error('Failed to get intelligence preview');
@@ -158,13 +145,8 @@ export async function getIntelligencePreview() {
   return response.json();
 }
 
-export async function getIntelligenceBrief(companyId?: string) {
-  const url = new URL(`${API_BASE_URL}/analytics/intelligence-brief`);
-  if (companyId) {
-    url.searchParams.set('companyId', companyId);
-  }
-
-  const response = await fetch(url.toString());
+export async function getIntelligenceBrief() {
+  const response = await apiFetch(`${API_BASE_URL}/analytics/intelligence-brief`);
 
   if (!response.ok) {
     return null;
@@ -173,13 +155,10 @@ export async function getIntelligenceBrief(companyId?: string) {
   return response.json();
 }
 
-export async function generatePersonas(companyId?: string, model?: string) {
-  const response = await fetch(`${API_BASE_URL}/personas/generate`, {
+export async function generatePersonas(model?: string) {
+  const response = await apiFetch(`${API_BASE_URL}/personas/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ companyId, model }),
+    body: JSON.stringify({ model }),
   });
 
   if (!response.ok) {
@@ -189,13 +168,10 @@ export async function generatePersonas(companyId?: string, model?: string) {
   return response.json();
 }
 
-export async function generateOpportunities(companyId?: string, model?: string) {
-  const response = await fetch(`${API_BASE_URL}/opportunities/generate`, {
+export async function generateOpportunities(model?: string) {
+  const response = await apiFetch(`${API_BASE_URL}/opportunities/generate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ companyId, model }),
+    body: JSON.stringify({ model }),
   });
 
   if (!response.ok) {
@@ -205,10 +181,8 @@ export async function generateOpportunities(companyId?: string, model?: string) 
   return response.json();
 }
 
-export async function getOpportunityDashboard(companyId?: string) {
-  const url = new URL(`${API_BASE_URL}/opportunities`);
-  if (companyId) url.searchParams.set('companyId', companyId);
-  const response = await apiFetch(url.toString(), {}, 12000);
+export async function getOpportunityDashboard() {
+  const response = await apiFetch(`${API_BASE_URL}/opportunities`, {}, 12000);
   if (!response.ok) throw new Error('Failed to fetch opportunities');
   return response.json();
 }
@@ -219,27 +193,23 @@ export async function getOpportunityCustomers(opportunityId: string) {
   return response.json();
 }
 
-export async function createOpportunityFromGoal(goal: string, companyId?: string, model?: string) {
+export async function createOpportunityFromGoal(goal: string, model?: string) {
   const response = await apiFetch(`${API_BASE_URL}/opportunities/create-from-goal`, {
     method: 'POST',
-    body: JSON.stringify({ goal, companyId, model }),
+    body: JSON.stringify({ goal, model }),
   }, 60000);
   if (!response.ok) throw new Error('Failed to create opportunity from goal');
   return response.json();
 }
 
-export async function getPersonaDistribution(companyId?: string) {
-  const url = new URL(`${API_BASE_URL}/personas`);
-  if (companyId) url.searchParams.set('companyId', companyId);
-  const response = await apiFetch(url.toString());
+export async function getPersonaDistribution() {
+  const response = await apiFetch(`${API_BASE_URL}/personas`);
   if (!response.ok) throw new Error('Failed to fetch personas');
   return response.json();
 }
 
-export async function getPersonaCustomers(personaName: string, companyId?: string) {
-  const url = new URL(`${API_BASE_URL}/personas/${encodeURIComponent(personaName)}`);
-  if (companyId) url.searchParams.set('companyId', companyId);
-  const response = await apiFetch(url.toString());
+export async function getPersonaCustomers(personaName: string) {
+  const response = await apiFetch(`${API_BASE_URL}/personas/${encodeURIComponent(personaName)}`);
   if (!response.ok) throw new Error('Failed to fetch persona customers');
   return response.json();
 }
@@ -248,28 +218,30 @@ export async function getPersonaCustomers(personaName: string, companyId?: strin
 // CAMPAIGNS
 // ============================================
 
-export async function generateCampaign(opportunityId: string, companyId?: string, model?: string) {
+export async function generateCampaign(opportunityId: string, model?: string) {
   const response = await apiFetch(`${API_BASE_URL}/campaigns/generate`, {
     method: 'POST',
-    body: JSON.stringify({ opportunityId, companyId, model }),
+    body: JSON.stringify({ opportunityId, model }),
   }, 90000);
   if (!response.ok) throw new Error('Failed to generate campaign');
   return response.json();
 }
 
-export async function saveCampaign(opportunityId: string, campaign: any, companyId?: string) {
+export async function saveCampaign(opportunityId: string, campaign: any) {
   const response = await apiFetch(`${API_BASE_URL}/campaigns`, {
     method: 'POST',
-    body: JSON.stringify({ opportunityId, campaign, companyId }),
+    body: JSON.stringify({ opportunityId, campaign }),
   });
   if (!response.ok) throw new Error('Failed to save campaign');
   return response.json();
 }
 
-export async function getCampaigns(companyId?: string) {
-  const url = new URL(`${API_BASE_URL}/campaigns`);
-  if (companyId) url.searchParams.set('companyId', companyId);
-  const response = await apiFetch(url.toString());
+export async function getCampaigns(opts?: { page?: number; limit?: number }) {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  const response = await apiFetch(`${API_BASE_URL}/campaigns${qs ? `?${qs}` : ''}`);
   if (!response.ok) throw new Error('Failed to fetch campaigns');
   return response.json();
 }
@@ -300,19 +272,21 @@ export async function launchCampaign(campaignId: string) {
 // AI AGENTS
 // ============================================
 
-export async function createAgent(companyId: string, goal: string, guardrails?: any) {
+export async function createAgent(goal: string, guardrails?: any) {
   const response = await apiFetch(`${API_BASE_URL}/agents`, {
     method: 'POST',
-    body: JSON.stringify({ companyId, goal, guardrails }),
+    body: JSON.stringify({ goal, guardrails }),
   });
   if (!response.ok) throw new Error('Failed to create agent');
   return response.json();
 }
 
-export async function getAgents(companyId?: string) {
-  const url = new URL(`${API_BASE_URL}/agents`);
-  if (companyId) url.searchParams.set('companyId', companyId);
-  const response = await apiFetch(url.toString());
+export async function getAgents(opts?: { page?: number; limit?: number }) {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  const response = await apiFetch(`${API_BASE_URL}/agents${qs ? `?${qs}` : ''}`);
   if (!response.ok) throw new Error('Failed to fetch agents');
   return response.json();
 }
@@ -340,20 +314,17 @@ export async function updateAgent(agentId: string, updates: { status?: string; g
   return response.json();
 }
 
-export async function getActivityStream(companyId: string, limit?: number) {
+export async function getActivityStream(limit?: number) {
   const url = new URL(`${API_BASE_URL}/activity-stream`);
-  url.searchParams.set('companyId', companyId);
   if (limit) url.searchParams.set('limit', limit.toString());
   const response = await apiFetch(url.toString(), {}, 8000);
   if (!response.ok) throw new Error('Failed to fetch activity stream');
-
   return response.json();
 }
 
 export async function refineOpportunity(opportunityId: string, modifier: string) {
-  const response = await fetch(`${API_BASE_URL}/opportunities/${encodeURIComponent(opportunityId)}/refine`, {
+  const response = await apiFetch(`${API_BASE_URL}/opportunities/${encodeURIComponent(opportunityId)}/refine`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ modifier }),
   });
 
@@ -365,9 +336,8 @@ export async function refineOpportunity(opportunityId: string, modifier: string)
 }
 
 export async function refineCampaign(campaignId: string, modifier: string, channel?: string) {
-  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/refine`, {
+  const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/refine`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ modifier, channel }),
   });
 

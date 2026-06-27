@@ -19,7 +19,9 @@ services:
       - key: CHANNEL_SERVICE_URL
         value: "https://xeno-channel-service.onrender.com"
       - key: WEBHOOK_SECRET
-        value: "xeno-webhook-secret-prod-1234"
+        sync: false  # Set in Render dashboard — use: openssl rand -base64 32
+      - key: FRONTEND_URL
+        sync: false  # e.g. https://your-app.vercel.app
 
   - type: web
     name: xeno-channel-service
@@ -33,6 +35,6 @@ services:
       - key: CRM_WEBHOOK_URL
         value: "https://xeno-crm-backend-n6d8.onrender.com/api/webhooks/channel-status"
       - key: WEBHOOK_SECRET
-        value: "xeno-webhook-secret-prod-1234"
+        sync: false  # Must match backend WEBHOOK_SECRET exactly
       - key: FAILURE_RATE
         value: 10

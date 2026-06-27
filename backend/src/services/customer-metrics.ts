@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logger as rootLogger } from '../lib/logger';
 
 export interface CustomerMetricsLogger {
   info: (message: string, ...args: unknown[]) => void;
@@ -78,9 +79,9 @@ const DEFAULT_BATCH_SIZE = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const defaultLogger: CustomerMetricsLogger = {
-  info: console.log.bind(console),
-  warn: console.warn.bind(console),
-  error: console.error.bind(console),
+  info:  (msg, ...args) => rootLogger.info(args[0] ?? {}, msg),
+  warn:  (msg, ...args) => rootLogger.warn(args[0] ?? {}, msg),
+  error: (msg, ...args) => rootLogger.error(args[0] ?? {}, msg),
 };
 
 function toNumber(value: number | string | null | undefined): number {

@@ -17,6 +17,8 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "resend": "^6.16.0",
+    "twilio": "^6.0.2",
     "uuid": "^11.0.5"
   }
 }

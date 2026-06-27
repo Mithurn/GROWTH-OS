@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { openRouterConfig } from '../config/openrouter';
+import { logger } from '../lib/logger';
 
 export type OpportunityStatus =
   | 'Detected'
@@ -224,9 +225,9 @@ interface AIOpportunitySummary {
 }
 
 const defaultLogger: OpportunityLogger = {
-  info: console.log.bind(console),
-  warn: console.warn.bind(console),
-  error: console.error.bind(console),
+  info:  (msg, ...args) => logger.info(args[0] ?? {}, msg),
+  warn:  (msg, ...args) => logger.warn(args[0] ?? {}, msg),
+  error: (msg, ...args) => logger.error(args[0] ?? {}, msg),
 };
 
 const QUARTER_LABELS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
@@ -1497,7 +1498,7 @@ export async function createOpportunityFromGoal(
     },
   });
 
-  console.log(`[createOpportunityFromGoal] Analyzing goal: "${goal}"`);
+  logger.info({ goal }, '[createOpportunityFromGoal] Analyzing goal');
 
   // Fetch customer data to understand the business context
   const [customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById] = await Promise.all([
@@ -1587,7 +1588,7 @@ Be realistic - don't promise impossible results. Base estimates on the business 
   const content = response.choices[0]?.message?.content || '{}';
   const jsonString = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
   const aiResponse = JSON.parse(jsonString);
-  console.log('[createOpportunityFromGoal] AI Response:', aiResponse);
+  logger.info({ aiResponse }, '[createOpportunityFromGoal] AI response received');
 
   // Apply audience criteria to find matching customers
   const matchingProfiles = profiles.filter((profile) => {
@@ -1670,11 +1671,11 @@ Be realistic - don't promise impossible results. Base estimates on the business 
       .insert(opportunityCustomers);
 
     if (linkError) {
-      console.error('[createOpportunityFromGoal] Failed to link customers:', linkError);
+      logger.error({ err: linkError }, '[createOpportunityFromGoal] Failed to link customers');
     }
   }
 
-  console.log(`[createOpportunityFromGoal] Created opportunity ${insertedOpportunity.id} with ${audienceSize} customers`);
+  logger.info({ opportunityId: insertedOpportunity.id, audienceSize }, '[createOpportunityFromGoal] Created opportunity');
 
   // Return in dashboard format
   const avgSpend = effectiveProfiles.length > 0
