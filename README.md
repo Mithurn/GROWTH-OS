@@ -1,309 +1,275 @@
 <h1 align="center">
   <br>
-  <img width="120" height="120" alt="Xeno Growth OS" src="https://xeno-grow.vercel.app/logo.png" />
+  <img width="100" height="100" alt="GrowthOS" src="https://growos-ai.vercel.app/logo.png" />
   <br>
-  Xeno Growth OS
+  GrowthOS
   <br>
 </h1>
 
-<p align="center"><strong>An autonomous AI Growth Copilot — not a dashboard you fill in, but an agent that finds your revenue gaps, writes the campaign, executes it across 500 customers, and shows you live what converted.</strong></p>
+<p align="center"><strong>An autonomous AI growth agent for small businesses — not a dashboard you fill in, but an agent that finds your revenue gaps, writes the campaign, and tracks what converted.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js" alt="Next.js">
-  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
-  <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
-  <img src="https://img.shields.io/badge/OpenRouter-Dynamic_Free_Router-F59E0B?style=flat-square" alt="OpenRouter">
-  <img src="https://img.shields.io/badge/Vercel-Frontend-000000?style=flat-square&logo=vercel" alt="Vercel">
-  <img src="https://img.shields.io/badge/Render-Backend-46E3B7?style=flat-square" alt="Render">
+  <a href="https://growos-ai.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-growos--ai.vercel.app-5B4FFF?style=flat-square" alt="Live Demo"></a>
+  <img src="https://img.shields.io/badge/Next.js-App_Router-black?style=flat-square&logo=next.js" alt="Next.js">
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Supabase-RLS_on_19_tables-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
+  <img src="https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=flat-square&logo=github-actions" alt="CI">
+  <img src="https://img.shields.io/badge/Deployed-Vercel_+_Render-000000?style=flat-square&logo=vercel" alt="Deployed">
 </p>
 
 <p align="center">
-  <a href="#1-product-scoping-what-i-built--why">Scoping</a> •
-  <a href="#2-system-architecture">Architecture</a> •
-  <a href="#3-scale-assumptions--tradeoffs">Tradeoffs</a> •
-  <a href="#4-code-quality-deterministic-ai-orchestration">Code Quality</a> •
-  <a href="#5-ai-native-development-workflow">AI Workflow</a> •
-  <a href="#8-getting-started-locally">Setup</a>
+  <a href="#architecture">Architecture</a> •
+  <a href="#what-i-built">What I Built</a> •
+  <a href="#tradeoffs">Tradeoffs</a> •
+  <a href="#ai-orchestration">AI Orchestration</a> •
+  <a href="#getting-started">Getting Started</a>
 </p>
 
-**Live Demo:** https://xeno-grow.vercel.app
-**Repo:** https://github.com/Mithurn/xeno-grow
+**Live:** https://growos-ai.vercel.app — upload your own CSV and the agent runs in ~60 seconds.
 
 ---
 
-## 1. Product Scoping: What I Built & Why
+## What It Does
 
-The brief was intentionally open. My bet was this: **the hardest part of CRM isn't sending campaigns — it's knowing what to send, to whom, and why.**
+Traditional CRMs make the marketer do all the thinking: build a segment, write a message, pick a channel, schedule a send. GrowthOS inverts this.
 
-Traditional CRMs make the marketer do all the thinking: build an audience rule, write a message, pick a channel. That's a blank canvas. Xeno Growth OS inverts this.
+An **autonomous AI agent** runs every 6 hours and does the work:
 
-Instead of a segment builder, there's an **Autonomous Opportunity Engine** that runs every 5 minutes:
+1. Ingests your customer + order history (CSV upload)
+2. Computes RFM behavioural segments, purchase patterns, and category preferences
+3. Assigns AI-generated personas to each customer cluster
+4. Surfaces revenue opportunities: *"76 dormant VIPs haven't bought in 90 days — ₹1.1L recoverable"*
+5. Auto-generates campaign copy, audience definition, recommended channel, and predicted revenue
+6. Marketer reviews, refines in natural language ("make it more urgent"), approves, and launches
 
-1. Analyses unified customer behaviour — RFM scores, purchase patterns, category preferences, persona signals
-2. Proactively surfaces revenue opportunities — *"77 Dormant VIPs haven't bought in 60 days — ₹3.9L recoverable"*
-3. Auto-generates the audience definition, recommended channel, personalised message copy, and predicted revenue
-4. The marketer reviews, refines in natural language, approves, and launches — the AI handles the rest
-
-**The marketer's role shifts from building to steering.**
-
-### What I explicitly chose NOT to build
-
-| Cut | Reason |
-|-----|--------|
-| Auth / login flows | Company ID via localStorage is sufficient for a demo scope; JWT + Supabase Row Level Security is the production path |
-| Real messaging providers (Twilio, Gupshup) | The stubbed channel service is architecturally equivalent and demonstrates the async delivery lifecycle more cleanly |
-| Rule-builder segment UI | The AI-native approach makes manual segment building unnecessary — the Opportunity Engine does this automatically |
-| A/B testing, scheduling, frequency capping | Valid next features; out of scope for the time constraint |
-| Multi-tenancy | Single-tenant, single company for this scope |
-
-Cutting these freed 100% of the engineering time for the AI orchestration layer and the async webhook architecture — the parts that actually demonstrate the thinking.
+**The marketer's job shifts from building to steering.**
 
 ---
 
-## 2. System Architecture
+## Architecture
+
+Three independently deployable services:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend — Next.js App Router (Vercel)                     │
+│  Onboarding · Dashboard · Opportunities · Campaigns · Analytics │
+└────────────────────────┬────────────────────────────────────┘
+                         │ REST + Auth JWT
+┌────────────────────────▼────────────────────────────────────┐
+│  Backend API — Express.js (Render)                          │
+│  Ingestion · RFM Engine · AI Orchestrator · Campaign Launcher│
+│  requireAuth + resolveCompanyMiddleware on every route       │
+└──────────┬──────────────────────────────┬───────────────────┘
+           │ POST /send                   │ HMAC-signed webhooks
+┌──────────▼──────────┐     ┌─────────────▼───────────────────┐
+│  Channel Service    │     │  Supabase — PostgreSQL           │
+│  Node.js (Render)   │     │  RLS enforced on 19 tables       │
+│  Twilio / Resend /  │     │  companies · customers · orders  │
+│  Simulator fallback │     │  personas · opportunities        │
+└─────────────────────┘     │  campaigns · communications      │
+                            │  communication_events            │
+                            └─────────────────────────────────┘
+```
 
 ```mermaid
 graph TD
-    subgraph CLIENT["🖥️  Frontend — Next.js (Vercel)"]
-        direction TB
+    subgraph CLIENT["Frontend — Next.js (Vercel)"]
         ONB[Onboarding Wizard]
         OPP[Opportunities Page]
         CAM[Campaigns Page]
         ANA[Analytics Page]
     end
 
-    subgraph BACKEND["⚙️  Backend API — Express.js (Render)"]
-        direction TB
-        ING[Data Ingestion Service]
-        MET[Metrics + Attributes Engine]
+    subgraph BACKEND["Backend API — Express.js (Render)"]
+        ING[Data Ingestion + RFM Engine]
         PER[AI Persona Engine]
         OPP_SVC[AI Opportunity Engine]
         CAM_SVC[AI Campaign Generator]
         LAUNCH[Campaign Launcher]
         WH[Webhook Receiver]
-        AN[Analytics Engine]
     end
 
-    subgraph CHANNEL["📡  Channel Service — Node.js (Render)"]
-        direction TB
+    subgraph CHANNEL["Channel Service — Node.js (Render)"]
         QUEUE[Message Queue]
-        SIM[Delivery Simulator]
-        CB[Callback Emitter]
+        PROV[Twilio / Resend / Simulator]
+        CB[HMAC Webhook Emitter]
     end
 
-    subgraph AI["🤖  AI Layer — OpenRouter Dynamic Free Router"]
-        LLM[LLM Inference]
-    end
-
-    subgraph DB["🗄️  Supabase — PostgreSQL"]
-        direction LR
+    subgraph DB["Supabase — PostgreSQL (RLS on all tables)"]
         T1[(customers · orders · products)]
         T2[(personas · opportunities)]
-        T3[(campaigns · communications)]
-        T4[(communication_events)]
+        T3[(campaigns · communications · events)]
     end
 
-    CSV[📄 CSV Upload\ncustomers + orders] -->|multipart upload| ONB
+    CSV[CSV Upload] -->|multipart| ONB
     ONB -->|POST /api/process-ingestion| ING
     ING --> T1
-    T1 --> MET
-    MET -->|attributes + RFM scores| T1
     T1 --> PER
-
-    PER -->|prompt| LLM
-    LLM -->|persona assignments| T2
+    PER -->|LLM| T2
     T2 --> OPP_SVC
-    OPP_SVC -->|prompt| LLM
-    LLM -->|opportunity objects| T2
-    T2 -->|GET /api/opportunities| OPP
-
-    OPP -->|select opportunity| CAM
-    CAM -->|POST /api/campaigns/generate| CAM_SVC
-    CAM_SVC -->|prompt| LLM
-    LLM -->|campaign draft| T3
-    CAM -->|POST /api/campaigns/:id/launch| LAUNCH
-    LAUNCH -->|write communications QUEUED| T3
-
-    LAUNCH -->|POST /send per customer| QUEUE
-    QUEUE --> SIM
-    SIM -->|simulate DELIVERED / READ / CLICKED / FAILED| CB
-    CB -->|POST /api/webhooks/channel-status| WH
-    WH -->|upsert events| T4
-
-    T3 --> AN
-    T4 --> AN
-    T2 --> AN
-    AN -->|GET /api/campaigns/:id/analytics| ANA
-    ANA -->|polls every 5s while LIVE| AN
-
-    style CLIENT fill:#0D1117,stroke:#3B82F6,color:#93C5FD
-    style BACKEND fill:#0D1117,stroke:#10B981,color:#6EE7B7
-    style CHANNEL fill:#0D1117,stroke:#8B5CF6,color:#C4B5FD
-    style AI fill:#0D1117,stroke:#F59E0B,color:#FCD34D
-    style DB fill:#0D1117,stroke:#F87171,color:#FCA5A5
-    style CSV fill:#1E2D3D,stroke:#3B82F6,color:#93C5FD
+    OPP_SVC -->|LLM| T2
+    T2 --> OPP
+    OPP --> CAM
+    CAM -->|LLM| CAM_SVC
+    CAM_SVC --> T3
+    CAM -->|launch| LAUNCH
+    LAUNCH --> T3
+    LAUNCH -->|POST /send| QUEUE
+    QUEUE --> PROV
+    PROV --> CB
+    CB -->|POST /webhooks/channel-status| WH
+    WH --> T3
+    T3 --> ANA
 ```
-
-Three decoupled services, each independently deployable and replaceable:
-
-- **Frontend (Vercel)** — Next.js 16 App Router. Stateless; all data from the backend API.
-- **Backend API (Render)** — Express.js. Owns all business logic, AI orchestration, data ingestion, and webhook reception.
-- **Channel Service (Render)** — Standalone Node.js process. Owns delivery simulation and fires HMAC-signed webhooks back to the backend asynchronously.
-
-The channel service is a **separate process by design** — it mirrors how real-world CRMs integrate with providers like Twilio or Gupshup. Swapping the stub for a real provider requires zero changes to the CRM backend.
-
-### AI Layer — OpenRouter Dynamic Free Router
-
-Rather than hardcoding a single model, all AI calls use `openrouter/free` — a live load-balancer that routes each request to the fastest, least-congested free model at that exact millisecond. Automatic failover, zero cost, no single point of failure.
-
-<p align="center">
-  <img src="https://img.shields.io/badge/NVIDIA-Nemotron_Nano_120B-76B900?style=flat-square&logo=nvidia&logoColor=white" alt="NVIDIA Nemotron">
-  <img src="https://img.shields.io/badge/Meta-Llama_3.1_8B-0467DF?style=flat-square&logo=meta&logoColor=white" alt="Meta Llama">
-  <img src="https://img.shields.io/badge/Google-Gemma_4_31B-4285F4?style=flat-square&logo=google&logoColor=white" alt="Google Gemma">
-  <img src="https://img.shields.io/badge/Liquid_AI-LFM_2.5_1.2B-8B5CF6?style=flat-square&logoColor=white" alt="Liquid AI LFM">
-  <img src="https://img.shields.io/badge/Poolside-Laguna_XS_2-EC4899?style=flat-square&logoColor=white" alt="Poolside Laguna">
-  <img src="https://img.shields.io/badge/Alibaba-Qwen3_Coder-FF6A00?style=flat-square&logoColor=white" alt="Qwen3">
-</p>
-
-| Provider | Model | Context | Strengths |
-|---|---|---|---|
-| 🟢 NVIDIA | Nemotron Nano 120B 2 VL | 1M tokens | Deep reasoning, multimodal |
-| 🔵 Meta | Llama 3.1 8B Instruct | 128K tokens | Fast inference, native tool calling |
-| 🔵 Google | Gemma 4 31B IT | 262K tokens | All-around logic, structured output |
-| 🟣 Liquid AI | LFM 2.5 1.2B Instruct | 32K tokens | Ultra-fast, low-latency responses |
-| 🩷 Poolside | Laguna XS 2 | 64K tokens | Code-optimised generation |
-| 🟠 Alibaba | Qwen3 Coder | 128K tokens | JSON schema adherence, code generation |
 
 ---
 
-## 3. Scale Assumptions & Tradeoffs
+## What I Built
 
-> *"I'd do X at scale but did Y for this scope"*
+### Auth + Multi-Tenancy
+- **Supabase Auth** — email/password with JWT-based sessions
+- **`requireAuth` middleware** on every Express route — rejects requests without a valid JWT
+- **`resolveCompanyMiddleware`** resolves `companyId` exclusively from the authenticated user's DB profile — never trusted from the client request
+- **Row-Level Security** enabled on all 19 Supabase tables — enforced at the database layer regardless of application code
+- **Full multi-tenancy** — multiple companies can sign up; all data is completely isolated
+
+### Data Ingestion Pipeline
+- CSV upload (customers + orders) via multipart form, streamed to Supabase
+- Chunked `.in()` queries (batches of 200) to stay within Supabase URL length limits at scale
+- RFM score computation: recency, frequency, monetary value per customer
+- Customer attribute enrichment: average order value, category preferences, purchase intervals
+- Persona assignment: LLM clusters customers into 4–6 behavioural archetypes per company
+- Background processing — persona + agent setup is fire-and-forget; dashboard unlocks as soon as first opportunity is ready
+
+### AI Orchestration
+Every AI step uses a strict **prompt → JSON parse → Zod validate → DB write** contract. The LLM never outputs free-form text that touches the UI directly.
+
+| Step | Schema enforced | Fallback |
+|---|---|---|
+| Persona Engine | `{ persona_name, description, reasoning }` | Skip assignment, log |
+| Opportunity Engine | Full typed opportunity object with numeric revenue fields | Discard, continue |
+| Campaign Generator | `{ name, message_content, channel, objective, offer }` | Return error to frontend |
+
+### Autonomous Agent
+- Agent orchestrator runs every **6 hours** via `setInterval` on backend startup
+- Discovers new opportunities, enqueues BullMQ jobs for campaign generation
+- Falls back to inline execution when Redis is unavailable (no silent failures)
+- Logs every action to `agent_actions` table — surfaced as a live activity feed on the dashboard
+
+### Campaign Delivery
+- Channel Service is a **separate process** — mirrors how real CRMs integrate with providers like Twilio/Resend
+- Provider selection per channel: Twilio (WhatsApp/SMS), Resend (Email), Simulator fallback when no API keys set
+- Frequency cap: max 2 messages/customer/day — suppressed with reason logged
+- **Delivery state machine**: `QUEUED → SENT → DELIVERED → READ → CLICKED / FAILED`
+- **HMAC-SHA256 webhook verification** — backend rejects any unsigned or tampered callback
+- **Idempotency** — `processed_webhook_events` dedup table prevents duplicate processing
+- **Out-of-order safety** — `sequenceNumber` ensures status only advances forward
+
+### Frontend Performance
+- **SWR cache** — module-level in-memory cache with per-endpoint TTLs; repeat page visits return data in <16ms while a background refresh runs silently
+- Parallel data fetching — opportunities + campaigns fetched with `Promise.all`, not sequentially
+- Cold-start mitigation — health ping warms both Render services on dashboard load
+
+### CI / CD
+- **GitHub Actions** — three parallel jobs on every push: backend typecheck + 12 integration tests, frontend typecheck, channel-service typecheck
+- **Vercel** — automatic deploy from main branch
+- **Render** — `render.yaml` declarative config for both backend services
+
+---
+
+## Tradeoffs
 
 | Concern | What I did | What I'd do at scale |
-|---------|-----------|---------------------|
-| **Analytics delivery** | 5s polling on the analytics page | WebSockets or Supabase Realtime subscriptions |
-| **Webhook ingestion** | Inline Supabase upsert per webhook event | Push to SQS / Kafka; worker pool consumes and batches writes |
-| **AI calls** | Sequential, per-request (persona → opportunity → campaign) | Background job queue (Bull/BullMQ) with retries, backoff, and dead-letter |
-| **Auth** | Company ID stored in localStorage | JWTs + Supabase Row Level Security on every table |
-| **Campaign launch** | `Promise.allSettled` — all sends in parallel | Chunked batching with per-chunk rate limiting and backpressure |
-| **Webhook reliability** | 3 retries with 15s / 30s / 60s backoff | Exponential backoff with jitter; dead-letter queue for failed events |
-| **Cold starts** | Health-ping on page load to pre-warm Render free tier | Paid tier with always-on instances; or serverless with provisioned concurrency |
-
-The webhook loop has three production-grade properties even at this scope:
-- **Idempotency** — each event carries a unique `event_id`; the receiver deduplicates before writing via `processed_webhook_events` table
-- **Out-of-order safety** — events carry a `sequenceNumber`; status only advances forward, never backwards
-- **HMAC signature verification** — every webhook is signed with a shared secret; the backend rejects any unsigned or tampered request with 401
-
----
-
-## 4. Code Quality: Deterministic AI Orchestration
-
-A major challenge with LLMs in production is unpredictable text outputs breaking application state. Every AI step in this codebase uses a strict **structured prompt → JSON parse → validate → store** pattern. The LLM never outputs free-form text that touches the UI directly.
-
-```
-Prompt (strict schema contract)
-    ↓
-LLM response (raw string)
-    ↓
-JSON.parse() → schema validation
-    ↓
-Safe write to PostgreSQL
-    ↓
-Typed API response to frontend
-```
-
-| Pipeline Step | Prompt enforces | Fallback if malformed |
 |---|---|---|
-| Persona Engine | `{ persona_name, description, reasoning }` per customer | Skip assignment, log error |
-| Opportunity Engine | Full opportunity object with typed numeric fields | Discard opportunity, continue |
-| Campaign Generator | `{ name, message_content, channel, objective, expected_outcome }` | Return error to frontend |
-| Analytics Insights | `{ learnings: string[], nextAction: { title, potentialRevenue, confidence } }` | Return empty insights, never crash |
-
-Key files: `backend/src/services/opportunities.ts`, `backend/src/services/campaigns.ts`, `backend/src/services/personas.ts`
-
----
-
-## 5. AI-Native Development Workflow
-
-This project was built treating the developer as **Principal Architect** and AI agents as **Implementers**:
-
-| Phase | Who | What |
-|-------|-----|------|
-| System design | Human | Defined the 3-service architecture, async webhook loop, database schema, and AI pipeline upfront — before writing a line of code |
-| Architectural validation | Human + AI | Used Claude as a sounding board to pressure-test decisions (e.g. polling vs. WebSockets, inline upserts vs. a queue) and explicitly surface the tradeoffs |
-| Implementation | AI Agents | Claude Code and Google Stitch used as autonomous coding agents to scaffold the Next.js frontend, wire up Express routes, generate the Tailwind/shadcn UI, and implement the channel service |
-| Review & hardening | Human | All AI output rigorously reviewed — especially webhook idempotency logic, HMAC verification, sequence number enforcement, and structured prompt contracts |
-
-The result: a fully functional, production-aware system built at a speed that would be impossible without AI tooling — while maintaining full understanding of every architectural decision.
+| **Message delivery** | Simulator fallback when no provider keys set; Twilio/Resend wired and ready | Add provider keys; no code changes needed |
+| **Job queue** | BullMQ + inline fallback when Redis unavailable | Dedicated Redis instance; workers on separate processes |
+| **Analytics realtime** | 5s polling on campaign analytics page | Supabase Realtime subscriptions |
+| **Webhook ingestion** | Inline Supabase upsert per event | SQS/Kafka + worker pool for batched writes |
+| **Cold starts** | Health ping pre-warms Render free tier | Paid always-on instances |
+| **Campaign launch rate** | `Promise.allSettled` — all sends in parallel | Chunked batching with per-chunk rate limiting |
 
 ---
 
-## 6. Data Model
+## Data Model
 
 ```
 companies
-    └── customers (external_customer_id, RFM metrics, persona)
-        └── orders → order_items → products
-
-    └── personas (AI-assigned segment per customer)
-    └── opportunities (AI-detected, linked to persona distribution)
-        └── opportunity_customers (audience join table)
-        └── campaigns (AI-generated, linked to opportunity)
-            └── communications (one per recipient, status tracked)
-                └── communication_events (QUEUED → SENT → DELIVERED → READ → CLICKED / FAILED)
-                └── processed_webhook_events (idempotency dedup table)
+  └── profiles          (user → company mapping, enforces multi-tenancy)
+  └── customers         (external_id, RFM scores, persona assignment)
+      └── orders → order_items → products
+  └── personas          (AI-generated behavioural archetypes)
+  └── opportunities     (AI-detected, linked to persona distribution)
+      └── opportunity_customers   (audience join table)
+      └── campaigns     (AI-generated copy, channel, status)
+          └── communications      (one row per recipient, status tracked)
+              └── communication_events   (full delivery timeline)
+              └── processed_webhook_events  (idempotency dedup)
+  └── agents            (goal, guardrails, involvement level)
+      └── agent_actions (activity log — powers the live feed)
+  └── ingestion_sessions (upload progress tracking)
 ```
 
 ---
 
-## 7. Repository Structure
+## Repository Structure
 
 ```
 xeno-grow/
-├── frontend/          # Next.js 16 App Router · Tailwind CSS · Recharts
+├── frontend/                    # Next.js App Router · Tailwind · TypeScript
 │   ├── app/
-│   │   ├── page.tsx              # Home / Overview dashboard
-│   │   ├── onboarding/           # Data ingestion wizard
-│   │   ├── opportunities/        # AI opportunity discovery
-│   │   ├── campaigns/            # Campaign management
-│   │   └── analytics/            # Live campaign analytics
+│   │   ├── page.tsx             # Dashboard — opportunities + live agent activity
+│   │   ├── onboarding/          # CSV upload + ingestion progress wizard
+│   │   ├── opportunities/       # AI opportunity browser + goal input
+│   │   ├── campaigns/           # Campaign builder + channel refiner
+│   │   ├── analytics/           # Live campaign funnel + delivery stats
+│   │   ├── personas/            # Customer persona breakdown
+│   │   └── intelligence/        # AI intelligence brief
+│   ├── lib/
+│   │   ├── api.ts               # All API calls + SWR cache layer
+│   │   └── supabase/            # Auth client + token helpers
 │   └── components/
-│       └── nav-header.tsx
 │
-├── backend/           # Express.js REST API · Supabase · OpenRouter
+├── backend/                     # Express.js · Supabase · Prisma · OpenRouter
+│   ├── src/
+│   │   ├── server.ts            # All routes — requireAuth + resolveCompany on every endpoint
+│   │   ├── middleware/auth.ts   # JWT verification + company resolution
+│   │   ├── services/
+│   │   │   ├── customer-attributes.ts   # RFM + attribute engine
+│   │   │   ├── personas.ts              # AI persona generation
+│   │   │   ├── opportunity-discovery.ts # AI opportunity engine
+│   │   │   ├── campaigns.ts             # Campaign CRUD + launch + state machine
+│   │   │   ├── agent-logger.ts          # Activity feed writes
+│   │   │   └── agent-orchestrator.ts    # 6h autonomous run loop
+│   │   └── __tests__/
+│   │       └── api.test.ts      # 12 integration tests (Vitest)
+│   └── prisma/schema.prisma
+│
+├── channel-service/             # Standalone delivery service · Node.js
 │   └── src/
-│       ├── server.ts             # All API routes
-│       └── services/
-│           ├── personas.ts       # AI persona generation
-│           ├── opportunities.ts  # AI opportunity detection
-│           ├── campaigns.ts      # Campaign CRUD + launch
-│           ├── analytics.ts      # Funnel + insights engine
-│           ├── webhooks.ts       # Channel webhook receiver
-│           └── data-generator/   # Synthetic CSV generator
+│       ├── server.ts            # POST /send endpoint
+│       ├── queue.ts             # Async message processor
+│       ├── webhook.ts           # HMAC-signed callback emitter
+│       └── providers/
+│           ├── twilio.ts        # WhatsApp + SMS
+│           ├── resend.ts        # Email
+│           └── simulator.ts     # Fallback — QUEUED→SENT→DELIVERED→READ progression
 │
-├── channel-service/   # Standalone Node.js delivery simulator
-│   └── src/
-│       ├── server.ts             # /send endpoint
-│       ├── queue.ts              # Async message processor
-│       └── webhook.ts            # HMAC-signed callback emitter
-│
-└── render.yaml        # Render deployment config (backend + channel-service)
+├── .github/workflows/ci.yml     # Typecheck + test pipeline (3 parallel jobs)
+├── render.yaml                  # Declarative Render deployment config
+└── scripts/start-all.sh         # Local dev: starts all 3 services
 ```
 
 ---
 
-## 8. Getting Started Locally
+## Getting Started Locally
 
-### Prerequisites
-- Node.js v18+
-- Supabase project (PostgreSQL)
-- OpenRouter API key
+**Prerequisites:** Node.js 18+, a Supabase project, an OpenRouter API key (free at openrouter.ai)
 
 ```bash
 git clone https://github.com/Mithurn/xeno-grow
-cd xeno-grow && chmod +x scripts/start-all.sh && ./scripts/start-all.sh
+cd xeno-grow
+chmod +x scripts/start-all.sh && ./scripts/start-all.sh
 ```
 
 | Service | URL |
@@ -314,22 +280,37 @@ cd xeno-grow && chmod +x scripts/start-all.sh && ./scripts/start-all.sh
 
 ### Environment Variables
 
-**backend/.env**
-```
+**`backend/.env`**
+```env
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-OPENROUTER_API_KEY=          # OpenRouter key (get free at openrouter.ai)
+DATABASE_URL=
+OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=openrouter/free  # Dynamic router — picks fastest free model at runtime
+OPENROUTER_MODEL=openrouter/free
 CHANNEL_SERVICE_URL=http://localhost:5001
-WEBHOOK_SECRET=
+WEBHOOK_SECRET=                  # openssl rand -base64 32
+FRONTEND_URL=http://localhost:3000
 ```
 
-**channel-service/.env**
-```
+**`channel-service/.env`**
+```env
 CRM_WEBHOOK_URL=http://localhost:3001/api/webhooks/channel-status
-WEBHOOK_SECRET=
-FAILURE_RATE=10
+WEBHOOK_SECRET=                  # must match backend exactly
+FAILURE_RATE=10                  # % of simulated sends that fail
+# Optional — real sends when set:
+# RESEND_API_KEY=
+# TWILIO_ACCOUNT_SID=
+# TWILIO_AUTH_TOKEN=
+# TWILIO_PHONE_NUMBER=
+# TWILIO_WHATSAPP_NUMBER=
+```
+
+**`frontend/.env.local`**
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ```
 
 ### Generate Demo Data
@@ -338,5 +319,7 @@ FAILURE_RATE=10
 cd backend
 TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
 # Outputs: backend/generated-data/customers.csv + orders.csv
-# Upload both via the onboarding flow at /onboarding
+# Upload both via the onboarding wizard at http://localhost:3000/onboarding
 ```
+
+The agent will process your data and surface opportunities in ~60 seconds.
