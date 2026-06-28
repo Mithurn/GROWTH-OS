@@ -226,15 +226,11 @@ export default function HomePage() {
     run();
   }, []);
 
-  // Activity stream via SSE (falls back to one-shot fetch if SSE unavailable)
+  // Activity feed — poll every 10s (EventSource can't send auth headers)
   useEffect(() => {
-    const companyId = window.localStorage.getItem('growthOS_company_id');
-
-    // Seed initial items from REST so there's something to show immediately
-    const seed = async () => {
+    const poll = async () => {
       try {
-        if (!companyId) return;
-        const data = await getActivityStream(10);
+        const data = await getActivityStream(20);
         if (data.success && Array.isArray(data.data)) {
           setActivityItems(data.data);
         }
@@ -244,33 +240,10 @@ export default function HomePage() {
         setActivityLoading(false);
       }
     };
-    seed();
 
-    // Open SSE connection for live updates
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
-    const url = companyId
-      ? `${API_BASE}/sse/activity?companyId=${encodeURIComponent(companyId)}`
-      : `${API_BASE}/sse/activity`;
-    const es = new EventSource(url);
-
-    es.onmessage = (event) => {
-      try {
-        const action = JSON.parse(event.data) as ActivityItem;
-        setActivityItems(prev => {
-          if (prev.some(a => a.id === action.id)) return prev;
-          return [action, ...prev].slice(0, 50);
-        });
-        setActivityLoading(false);
-      } catch {
-        // ignore malformed events
-      }
-    };
-
-    es.onerror = () => {
-      es.close();
-    };
-
-    return () => es.close();
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSubmitQuery = async () => {

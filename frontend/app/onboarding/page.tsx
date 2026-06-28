@@ -242,6 +242,8 @@ export default function OnboardingPage() {
             continue;
           }
 
+          if (!status) continue;
+
           setIngestionMessage(status.message || '');
           const count = getDoneCount(status.step);
           setDoneItems(Array.from({ length: count }, (_, i) => i));
