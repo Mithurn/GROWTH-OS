@@ -10,7 +10,6 @@ import {
   Check,
   X,
   Activity,
-  Bot,
   Search,
   Megaphone,
   Zap,
@@ -22,7 +21,6 @@ import type { LucideIcon } from 'lucide-react';
 import {
   getOpportunityDashboard,
   getActivityStream,
-  getAgents,
   createOpportunityFromGoal,
 } from '@/lib/api';
 
@@ -58,13 +56,6 @@ interface ActivityItem {
   createdAt: string;
 }
 
-interface AgentInfo {
-  id: string;
-  name: string;
-  goal: string;
-  status: string;
-  lastRunAt?: string;
-}
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -239,7 +230,6 @@ function useTypewriter(text: string, speed = 28) {
 export default function HomePage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
-  const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(true);
   const [coldStart, setColdStart] = useState(false);
@@ -274,15 +264,6 @@ export default function HomePage() {
     fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
   }, []);
 
-  // Fetch agent info once for the status card
-  useEffect(() => {
-    getAgents({ limit: 1 })
-      .then(res => {
-        const agent = res?.data?.[0] ?? res?.[0];
-        if (agent) setAgentInfo(agent);
-      })
-      .catch(() => {});
-  }, []);
 
   // Fetch opportunities with cold-start retry
   useEffect(() => {
@@ -694,47 +675,8 @@ export default function HomePage() {
               ) : null}
             </div>
 
-            {/* ── Right: Agent Panel ── */}
-            <div className="col-span-4 space-y-4">
-
-              {/* Agent Status Card */}
-              <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-[#5B4FFF] to-[#8B7FFF] flex items-center justify-center shrink-0 shadow-sm">
-                    <Bot className="h-5 w-5 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-bold text-[#1A1A1A] truncate">
-                        {agentInfo?.name ?? 'GrowthOS Agent'}
-                      </p>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 shrink-0">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-semibold text-emerald-600">Active</span>
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#9CA3AF] truncate">
-                      {agentInfo?.goal ?? 'Analyzing your customer data…'}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 pt-4 border-t border-[#F3F4F6] grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-[#F9FAFB] px-3 py-2.5">
-                    <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1">Cadence</p>
-                    <p className="text-xs font-semibold text-[#1A1A1A]">Every 6 hours</p>
-                  </div>
-                  <div className="rounded-xl bg-[#F9FAFB] px-3 py-2.5">
-                    <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1">Actions today</p>
-                    <p className="text-xs font-semibold text-[#1A1A1A]">
-                      {activityItems.filter(a => {
-                        const d = new Date(a.createdAt);
-                        const now = new Date();
-                        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-                      }).length}
-                    </p>
-                  </div>
-                </div>
-              </div>
+            {/* ── Right: Activity Feed ── */}
+            <div className="col-span-4">
 
               {/* Activity Feed */}
               <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
@@ -745,6 +687,10 @@ export default function HomePage() {
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5B4FFF]" />
                     </div>
                     <h3 className="text-sm font-bold text-[#1A1A1A]">Activity</h3>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[10px] font-semibold text-emerald-600">Agent active</span>
+                    </span>
                   </div>
                   {activityItems.length > 0 && (
                     <button
