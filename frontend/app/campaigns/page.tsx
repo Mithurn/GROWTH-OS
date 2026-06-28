@@ -127,6 +127,7 @@ function CampaignsContent() {
   const [alreadyLaunchedId, setAlreadyLaunchedId] = useState<string | null>(null);
   const [isLaunched, setIsLaunched] = useState(false);
   const [launchBarWidth, setLaunchBarWidth] = useState(0);
+  const [showLaunchModal, setShowLaunchModal] = useState(false);
 
 
   // ── Builder mode: load opportunity + campaign ──
@@ -344,6 +345,7 @@ function CampaignsContent() {
     const conv = opportunity.predicted_conversion_rate ?? Math.round((opportunity.confidence_score ?? 75) * 0.16);
 
     return (
+      <>
       <div className="min-h-screen bg-[#FAFAFA] pb-32">
         <div className="max-w-7xl mx-auto px-6 py-6">
 
@@ -500,19 +502,58 @@ function CampaignsContent() {
               </button>
 
               <button
-                onClick={handleApproveAndLaunch}
-                disabled={isLaunching || isRefining}
+                onClick={() => setShowLaunchModal(true)}
+                disabled={isRefining}
                 className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl disabled:opacity-50 transition-all shrink-0"
                 style={{ boxShadow: '0 4px 14px 0 rgba(99,102,241,0.4)' }}
               >
-                {isLaunching
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Launching…</>
-                  : <><Rocket className="h-4 w-4" /> Approve &amp; Launch</>}
+                <Rocket className="h-4 w-4" /> Approve &amp; Launch
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── Launch contact modal ── */}
+      {showLaunchModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={() => setShowLaunchModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-5">
+              <Rocket className="h-7 w-7 text-indigo-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Ready to go live?</h2>
+            <p className="text-sm text-gray-500 mb-1">
+              This campaign is ready to launch to
+            </p>
+            <p className="text-sm font-semibold text-gray-800 mb-6">
+              {savedCampaign?.name ?? 'your audience'}
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Reach out and we'll get it live for you — usually within the hour.
+            </p>
+            <a
+              href={`mailto:openlogtech@gmail.com?subject=Launch Campaign: ${encodeURIComponent(savedCampaign?.name ?? 'Campaign')}&body=Hi, I'd like to launch the campaign "${savedCampaign?.name ?? ''}" on GrowthOS. Campaign ID: ${savedCampaign?.id ?? ''}`}
+              className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3"
+            >
+              <Mail className="h-4 w-4" />
+              Email openlogtech@gmail.com
+            </a>
+            <button
+              onClick={() => setShowLaunchModal(false)}
+              className="w-full py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 
