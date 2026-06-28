@@ -107,8 +107,6 @@ function CampaignsContent() {
   const searchParams = useSearchParams();
   const opportunityId = searchParams.get('opportunityId');
 
-  const [companyId, setCompanyId] = useState<string | undefined>(undefined);
-
   // Builder mode state
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [savedCampaign, setSavedCampaign] = useState<CampaignData | null>(null);
@@ -130,29 +128,10 @@ function CampaignsContent() {
   const [isLaunched, setIsLaunched] = useState(false);
   const [launchBarWidth, setLaunchBarWidth] = useState(0);
 
-  // ── Load company ID ──
-  useEffect(() => {
-    async function init() {
-      let cid = window.localStorage.getItem('growthOS_company_id');
-      if (!cid) {
-        try {
-          const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api'}/opportunities`);
-          const d = await r.json();
-          if (d.success && d.data.companyId) {
-            cid = d.data.companyId;
-            window.localStorage.setItem('growthOS_company_id', cid!);
-          }
-        } catch {}
-      }
-      if (cid) setCompanyId(cid);
-      else setError('Company not found. Please complete onboarding.');
-    }
-    init();
-  }, []);
 
   // ── Builder mode: load opportunity + campaign ──
   const loadBuilderData = useCallback(async () => {
-    if (!companyId || !opportunityId) return;
+    if (!opportunityId) return;
     setLoading(true);
     setError(null);
     try {
@@ -198,11 +177,11 @@ function CampaignsContent() {
     } finally {
       setLoading(false);
     }
-  }, [companyId, opportunityId]);
+  }, [opportunityId]);
 
   // ── List mode: load campaigns ──
   const loadCampaigns = useCallback(async () => {
-    if (!companyId || opportunityId) return;
+    if (opportunityId) return;
     setLoading(true);
     try {
       const res = await getCampaigns();
@@ -214,13 +193,12 @@ function CampaignsContent() {
     } finally {
       setLoading(false);
     }
-  }, [companyId, opportunityId]);
+  }, [opportunityId]);
 
   useEffect(() => {
-    if (!companyId) return;
     if (opportunityId) loadBuilderData();
     else loadCampaigns();
-  }, [companyId, opportunityId, loadBuilderData, loadCampaigns]);
+  }, [opportunityId, loadBuilderData, loadCampaigns]);
 
   // ── Handlers ──
   async function handleChannelChange(ch: Channel) {
