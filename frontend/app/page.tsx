@@ -10,10 +10,19 @@ import {
   Check,
   X,
   Activity,
+  Bot,
+  Search,
+  Megaphone,
+  Zap,
+  MessageSquare,
+  Clock,
+  Trophy,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   getOpportunityDashboard,
   getActivityStream,
+  getAgents,
   createOpportunityFromGoal,
 } from '@/lib/api';
 
@@ -47,6 +56,14 @@ interface ActivityItem {
   description: string;
   details?: Record<string, unknown>;
   createdAt: string;
+}
+
+interface AgentInfo {
+  id: string;
+  name: string;
+  goal: string;
+  status: string;
+  lastRunAt?: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -113,6 +130,66 @@ const actionTypeLabel: Record<string, string> = {
   generating_opportunity: 'Generating opportunity',
 };
 
+interface ActionMeta {
+  label: string;
+  Icon: LucideIcon;
+  iconBg: string;
+  iconColor: string;
+  labelColor: string;
+  rowBg: string;
+}
+
+const ACTION_META: Record<string, ActionMeta> = {
+  discovered_opportunity: {
+    label: 'Discovered',
+    Icon: Search,
+    iconBg: 'bg-[#EEF2FF]',
+    iconColor: 'text-[#5B4FFF]',
+    labelColor: 'text-[#5B4FFF]',
+    rowBg: 'bg-[#F5F3FF]',
+  },
+  created_campaign: {
+    label: 'Campaign',
+    Icon: Megaphone,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-500',
+    labelColor: 'text-blue-500',
+    rowBg: 'bg-blue-50/60',
+  },
+  launched_campaign: {
+    label: 'Launched',
+    Icon: Zap,
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-600',
+    labelColor: 'text-emerald-600',
+    rowBg: 'bg-emerald-50/60',
+  },
+  sent_messages: {
+    label: 'Sent',
+    Icon: MessageSquare,
+    iconBg: 'bg-teal-50',
+    iconColor: 'text-teal-600',
+    labelColor: 'text-teal-600',
+    rowBg: 'bg-teal-50/60',
+  },
+  achieved_milestone: {
+    label: 'Milestone',
+    Icon: Trophy,
+    iconBg: 'bg-amber-50',
+    iconColor: 'text-amber-500',
+    labelColor: 'text-amber-500',
+    rowBg: 'bg-amber-50/60',
+  },
+  generating_opportunity: {
+    label: 'Generating',
+    Icon: Sparkles,
+    iconBg: 'bg-purple-50',
+    iconColor: 'text-purple-500',
+    labelColor: 'text-purple-500',
+    rowBg: 'bg-purple-50/60',
+  },
+};
+
 const parseTriggerReasons = (opp: Opportunity): string[] => {
   const reasons: string[] = [];
   if (opp.average_spend) {
@@ -162,6 +239,7 @@ function useTypewriter(text: string, speed = 28) {
 export default function HomePage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
+  const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(true);
   const [coldStart, setColdStart] = useState(false);
@@ -194,6 +272,16 @@ export default function HomePage() {
   useEffect(() => {
     fetch('https://xeno-crm-backend-n6d8.onrender.com/health').catch(() => {});
     fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
+  }, []);
+
+  // Fetch agent info once for the status card
+  useEffect(() => {
+    getAgents({ limit: 1 })
+      .then(res => {
+        const agent = res?.data?.[0] ?? res?.[0];
+        if (agent) setAgentInfo(agent);
+      })
+      .catch(() => {});
   }, []);
 
   // Fetch opportunities with cold-start retry
@@ -606,17 +694,57 @@ export default function HomePage() {
               ) : null}
             </div>
 
-            {/* ── Right: AI Activity Stream ── */}
+            {/* ── Right: Agent Panel ── */}
             <div className="col-span-4 space-y-4">
-              {/* Activity Stream Card */}
-              <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#5B4FFF]" />
+
+              {/* Agent Status Card */}
+              <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-[#5B4FFF] to-[#8B7FFF] flex items-center justify-center shrink-0 shadow-sm">
+                    <Bot className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-bold text-[#1A1A1A] truncate">
+                        {agentInfo?.name ?? 'GrowthOS Agent'}
+                      </p>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 shrink-0">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-semibold text-emerald-600">Active</span>
+                      </span>
                     </div>
-                    <h3 className="text-sm font-bold text-[#1A1A1A]">Agent Activity</h3>
+                    <p className="text-xs text-[#9CA3AF] truncate">
+                      {agentInfo?.goal ?? 'Analyzing your customer data…'}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-[#F3F4F6] grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-[#F9FAFB] px-3 py-2.5">
+                    <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1">Cadence</p>
+                    <p className="text-xs font-semibold text-[#1A1A1A]">Every 6 hours</p>
+                  </div>
+                  <div className="rounded-xl bg-[#F9FAFB] px-3 py-2.5">
+                    <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-1">Actions today</p>
+                    <p className="text-xs font-semibold text-[#1A1A1A]">
+                      {activityItems.filter(a => {
+                        const d = new Date(a.createdAt);
+                        const now = new Date();
+                        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+                      }).length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity Feed */}
+              <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5B4FFF]" />
+                    </div>
+                    <h3 className="text-sm font-bold text-[#1A1A1A]">Activity</h3>
                   </div>
                   {activityItems.length > 0 && (
                     <button
@@ -629,51 +757,65 @@ export default function HomePage() {
                 </div>
 
                 {activityLoading ? (
-                  <div className="flex flex-col items-center justify-center py-8 gap-3">
-                    <div className="h-8 w-8 rounded-full border-2 border-[#E5E7EB] border-t-[#5B4FFF] animate-spin" />
-                    <p className="text-xs text-[#9CA3AF]">Loading activity…</p>
-                  </div>
-                ) : activityItems.length === 0 ? (
-                  <div className="text-center py-6">
-                    <Activity className="h-8 w-8 mx-auto mb-2 text-[#D1D5DB]" />
-                    <p className="text-xs text-[#9CA3AF]">
-                      GrowthOS is discovering opportunities…
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {activityItems.slice(0, 5).map((item, idx) => (
-                      <div key={item.id} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div
-                            className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                              idx === 0 ? 'bg-[#5B4FFF]' : 'bg-[#D1D5DB]'
-                            }`}
-                          />
-                          {idx < activityItems.slice(0, 5).length - 1 && (
-                            <div className="w-px flex-1 bg-[#E5E7EB] mt-1" />
-                          )}
-                        </div>
-                        <div className="pb-4 flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[#5B4FFF] uppercase tracking-wide mb-0.5">
-                            {actionTypeLabel[item.actionType] ?? item.actionType}
-                          </p>
-                          <p className="text-sm text-[#1A1A1A] leading-snug">
-                            {idx === 0 ? (
-                              <>
-                                {typedText}
-                                {typedText.length < (item.description?.length ?? 0) && (
-                                  <span className="inline-block w-0.5 h-3.5 bg-[#5B4FFF] ml-0.5 animate-pulse align-middle" />
-                                )}
-                              </>
-                            ) : (
-                              item.description
-                            )}
-                          </p>
-                          <p className="text-[10px] text-[#9CA3AF] mt-1">{timeAgo(item.createdAt)}</p>
+                  <div className="space-y-3">
+                    {[0, 1, 2].map(i => (
+                      <div key={i} className="animate-pulse flex gap-3 rounded-xl p-2">
+                        <div className="h-8 w-8 rounded-xl bg-[#F3F4F6] shrink-0" />
+                        <div className="flex-1 space-y-2 pt-1">
+                          <div className="h-2 bg-[#F3F4F6] rounded w-1/4" />
+                          <div className="h-3 bg-[#F3F4F6] rounded w-full" />
+                          <div className="h-2 bg-[#F3F4F6] rounded w-1/3" />
                         </div>
                       </div>
                     ))}
+                  </div>
+                ) : activityItems.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="h-10 w-10 mx-auto mb-3 rounded-2xl bg-[#F3F4F6] flex items-center justify-center">
+                      <Clock className="h-5 w-5 text-[#D1D5DB]" />
+                    </div>
+                    <p className="text-sm font-medium text-[#6B7280]">Agent is warming up…</p>
+                    <p className="text-[11px] text-[#9CA3AF] mt-1">First run completes in a few minutes</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {activityItems.slice(0, 6).map((item, idx) => {
+                      const meta = ACTION_META[item.actionType] ?? {
+                        label: item.actionType,
+                        Icon: Activity,
+                        iconBg: 'bg-gray-100',
+                        iconColor: 'text-gray-400',
+                        labelColor: 'text-gray-400',
+                        rowBg: 'bg-gray-50',
+                      };
+                      const Icon = meta.Icon;
+                      return (
+                        <div
+                          key={item.id}
+                          className={`flex gap-3 rounded-xl p-2.5 transition-colors ${idx === 0 ? meta.rowBg : 'hover:bg-[#F9FAFB]'}`}
+                        >
+                          <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${meta.iconBg}`}>
+                            <Icon className={`h-3.5 w-3.5 ${meta.iconColor}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${meta.labelColor}`}>
+                              {meta.label}
+                            </p>
+                            <p className="text-xs text-[#1A1A1A] leading-snug">
+                              {idx === 0 ? (
+                                <>
+                                  {typedText}
+                                  {typedText.length < (item.description?.length ?? 0) && (
+                                    <span className="inline-block w-0.5 h-3 bg-[#5B4FFF] ml-0.5 animate-pulse align-middle" />
+                                  )}
+                                </>
+                              ) : item.description}
+                            </p>
+                            <p className="text-[10px] text-[#9CA3AF] mt-0.5">{timeAgo(item.createdAt)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
