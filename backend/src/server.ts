@@ -444,31 +444,19 @@ async function processIngestion(sessionId: string, customerBuffer: Buffer, order
       `Validated ${metricsReport.totalMetricsRecords}/${metricsReport.totalCustomers} customer metrics records...`);
 
     await updateStatus(sessionId, 'calculating_attributes', 90, 'Calculating customer attributes...');
-    const attributesReport = await generateCustomerAttributesWithVerification(companyId);
-    await updateStatus(sessionId, 'validating_attributes', 93,
-      `Validated ${attributesReport.totalAttributesRecords}/${attributesReport.totalCustomers} customer attributes records...`);
+    await generateCustomerAttributesWithVerification(companyId);
 
-    await updateStatus(sessionId, 'generating_personas', 95, 'Generating customer personas with AI...');
-    try {
-      const personasReport = await generatePersonas(supabase, {
-        companyId,
-        logger: {
-          info: (msg) => logger.info(msg),
-          warn: (msg) => logger.warn(msg),
-          error: (msg) => logger.error(msg),
-        },
-      });
-      await updateStatus(sessionId, 'personas_complete', 98,
-        `Generated ${personasReport.totalPersonas} personas for ${personasReport.personasAssigned} customers...`);
-    } catch (personaError) {
-      logger.warn({ err: personaError }, 'Persona generation failed, continuing with ingestion');
-      await updateStatus(sessionId, 'personas_skipped', 98, 'Skipped persona generation (non-critical)');
-    }
-
+    // Mark complete immediately so the user can enter the dashboard
     await prisma.ingestionSession.update({
       where: { id: sessionId },
-      data: { status: 'complete', step: 'Ingestion complete!', progress: 100 },
+      data: { status: 'complete', step: 'completed', progress: 100 },
     });
+
+    // Fire personas in the background — don't block the user
+    generatePersonas(supabase, {
+      companyId,
+      logger: { info: (msg) => logger.info(msg), warn: (msg) => logger.warn(msg), error: (msg) => logger.error(msg) },
+    }).catch((err) => logger.warn({ err }, 'Background persona generation failed'));
   } catch (error) {
     logger.error({ err: error, sessionId }, 'Ingestion error');
     await prisma.ingestionSession.update({

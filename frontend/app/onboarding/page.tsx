@@ -253,33 +253,21 @@ export default function OnboardingPage() {
         }
       }
 
-      // 3. For real data: save profile + kick off opportunities + create agent
-      //    For demo data: skip — everything is pre-loaded in the demo company
-      setDoneItems([0, 1, 2, 3, 4]);
+      // Tick all steps done visually
+      setDoneItems([0, 1, 2, 3, 4, 5]);
 
+      // Fire background tasks — don't await, let them populate the dashboard as the user explores
       if (!useDemoData) {
         const goalLabel = GOAL_LABELS[goal] || goal;
-        await Promise.all([
-          saveOnboardingProfile({
-            companyName,
-            industry,
-            primaryGoal: goalLabel,
-            operatingMode: mode,
-          }).catch(() => {}),
-          generateOpportunities().catch(() => {}),
-        ]);
-        await createAgent(goalLabel, {
+        saveOnboardingProfile({ companyName, industry, primaryGoal: goalLabel, operatingMode: mode }).catch(() => {});
+        generateOpportunities().catch(() => {});
+        createAgent(goalLabel, {
           channels: ['WhatsApp', 'Email'],
           involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
           max_budget: 100000,
           frequency_cap: 3,
         }).catch(() => {});
       }
-
-      // Brief pause so the user sees "Setting up your AI growth team" tick
-      await new Promise(r => setTimeout(r, 800));
-      setDoneItems([0, 1, 2, 3, 4, 5]);
-      await new Promise(r => setTimeout(r, 600));
 
       // Mark onboarding complete — refresh session so middleware sees the new metadata
       const supabase = createClient();
