@@ -2,6 +2,30 @@ import { getAuthToken } from './supabase/client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
 
+// ─── In-memory SWR cache ──────────────────────────────────────────────────────
+// Module-level singleton — persists across SPA navigation within a session.
+// On a cache hit, returns the stale value immediately and refreshes in background.
+interface CacheEntry { data: unknown; at: number }
+const _cache = new Map<string, CacheEntry>();
+
+function swr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  const entry = _cache.get(key);
+  if (entry && Date.now() - entry.at < ttlMs) {
+    fetcher().then(data => _cache.set(key, { data, at: Date.now() })).catch(() => {});
+    return Promise.resolve(entry.data as T);
+  }
+  return fetcher().then(data => {
+    _cache.set(key, { data, at: Date.now() });
+    return data;
+  });
+}
+
+function bust(keyPrefix: string) {
+  for (const k of _cache.keys()) {
+    if (k.startsWith(keyPrefix)) _cache.delete(k);
+  }
+}
+
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -135,14 +159,12 @@ export async function getIngestionStatus(sessionId: string) {
   return response.json();
 }
 
-export async function getIntelligencePreview() {
-  const response = await apiFetch(`${API_BASE_URL}/intelligence-preview`);
-
-  if (!response.ok) {
-    throw new Error('Failed to get intelligence preview');
-  }
-
-  return response.json();
+export function getIntelligencePreview() {
+  return swr('intel-preview', 300_000, async () => {
+    const response = await apiFetch(`${API_BASE_URL}/intelligence-preview`);
+    if (!response.ok) throw new Error('Failed to get intelligence preview');
+    return response.json();
+  });
 }
 
 export async function getIntelligenceBrief() {
@@ -165,6 +187,7 @@ export async function generatePersonas(model?: string) {
     throw new Error('Failed to generate personas');
   }
 
+  bust('personas');
   return response.json();
 }
 
@@ -181,10 +204,12 @@ export async function generateOpportunities(model?: string) {
   return response.json();
 }
 
-export async function getOpportunityDashboard() {
-  const response = await apiFetch(`${API_BASE_URL}/opportunities`, {}, 12000);
-  if (!response.ok) throw new Error('Failed to fetch opportunities');
-  return response.json();
+export function getOpportunityDashboard() {
+  return swr('opp-dashboard', 90_000, async () => {
+    const response = await apiFetch(`${API_BASE_URL}/opportunities`, {}, 12000);
+    if (!response.ok) throw new Error('Failed to fetch opportunities');
+    return response.json();
+  });
 }
 
 export async function getOpportunityCustomers(opportunityId: string) {
@@ -199,13 +224,16 @@ export async function createOpportunityFromGoal(goal: string, model?: string) {
     body: JSON.stringify({ goal, model }),
   }, 60000);
   if (!response.ok) throw new Error('Failed to create opportunity from goal');
+  bust('opp-dashboard');
   return response.json();
 }
 
-export async function getPersonaDistribution() {
-  const response = await apiFetch(`${API_BASE_URL}/personas`);
-  if (!response.ok) throw new Error('Failed to fetch personas');
-  return response.json();
+export function getPersonaDistribution() {
+  return swr('personas', 300_000, async () => {
+    const response = await apiFetch(`${API_BASE_URL}/personas`);
+    if (!response.ok) throw new Error('Failed to fetch personas');
+    return response.json();
+  });
 }
 
 export async function getPersonaCustomers(personaName: string) {
@@ -233,17 +261,21 @@ export async function saveCampaign(opportunityId: string, campaign: any) {
     body: JSON.stringify({ opportunityId, campaign }),
   });
   if (!response.ok) throw new Error('Failed to save campaign');
+  bust('campaigns-');
   return response.json();
 }
 
-export async function getCampaigns(opts?: { page?: number; limit?: number }) {
+export function getCampaigns(opts?: { page?: number; limit?: number }) {
   const params = new URLSearchParams();
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.limit) params.set('limit', String(opts.limit));
   const qs = params.toString();
-  const response = await apiFetch(`${API_BASE_URL}/campaigns${qs ? `?${qs}` : ''}`);
-  if (!response.ok) throw new Error('Failed to fetch campaigns');
-  return response.json();
+  const key = `campaigns-${qs}`;
+  return swr(key, 90_000, async () => {
+    const response = await apiFetch(`${API_BASE_URL}/campaigns${qs ? `?${qs}` : ''}`);
+    if (!response.ok) throw new Error('Failed to fetch campaigns');
+    return response.json();
+  });
 }
 
 export async function getCampaignById(campaignId: string) {
@@ -257,6 +289,7 @@ export async function approveCampaign(campaignId: string) {
     method: 'POST',
   });
   if (!response.ok) throw new Error('Failed to approve campaign');
+  bust('campaigns-');
   return response.json();
 }
 
@@ -265,6 +298,7 @@ export async function launchCampaign(campaignId: string) {
     method: 'POST',
   });
   if (!response.ok) throw new Error('Failed to launch campaign');
+  bust('campaigns-');
   return response.json();
 }
 
@@ -281,14 +315,17 @@ export async function createAgent(goal: string, guardrails?: any) {
   return response.json();
 }
 
-export async function getAgents(opts?: { page?: number; limit?: number }) {
+export function getAgents(opts?: { page?: number; limit?: number }) {
   const params = new URLSearchParams();
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.limit) params.set('limit', String(opts.limit));
   const qs = params.toString();
-  const response = await apiFetch(`${API_BASE_URL}/agents${qs ? `?${qs}` : ''}`);
-  if (!response.ok) throw new Error('Failed to fetch agents');
-  return response.json();
+  const key = `agents-${qs}`;
+  return swr(key, 120_000, async () => {
+    const response = await apiFetch(`${API_BASE_URL}/agents${qs ? `?${qs}` : ''}`);
+    if (!response.ok) throw new Error('Failed to fetch agents');
+    return response.json();
+  });
 }
 
 export async function getAgent(agentId: string) {
@@ -314,12 +351,15 @@ export async function updateAgent(agentId: string, updates: { status?: string; g
   return response.json();
 }
 
-export async function getActivityStream(limit?: number) {
-  const url = new URL(`${API_BASE_URL}/activity-stream`);
-  if (limit) url.searchParams.set('limit', limit.toString());
-  const response = await apiFetch(url.toString(), {}, 8000);
-  if (!response.ok) throw new Error('Failed to fetch activity stream');
-  return response.json();
+export function getActivityStream(limit?: number) {
+  const key = `activity-${limit ?? ''}`;
+  return swr(key, 15_000, async () => {
+    const url = new URL(`${API_BASE_URL}/activity-stream`);
+    if (limit) url.searchParams.set('limit', limit.toString());
+    const response = await apiFetch(url.toString(), {}, 8000);
+    if (!response.ok) throw new Error('Failed to fetch activity stream');
+    return response.json();
+  });
 }
 
 export async function refineOpportunity(opportunityId: string, modifier: string) {
