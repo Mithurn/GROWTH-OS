@@ -281,10 +281,12 @@ export default function OnboardingPage() {
       setDoneItems([0, 1, 2, 3, 4, 5]);
       await new Promise(r => setTimeout(r, 600));
 
-      // Mark onboarding complete so middleware lets them through
-      await createClient().auth.updateUser({ data: { onboarding_complete: true } });
+      // Mark onboarding complete — refresh session so middleware sees the new metadata
+      const supabase = createClient();
+      await supabase.auth.updateUser({ data: { onboarding_complete: true } });
+      await supabase.auth.refreshSession();
 
-      router.push('/');
+      window.location.href = '/';
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : typeof err === 'string' ? err : 'Setup failed. Please try again.');
       setIsSettingUp(false);
