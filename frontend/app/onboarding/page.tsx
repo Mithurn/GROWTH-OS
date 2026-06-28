@@ -234,7 +234,13 @@ export default function OnboardingPage() {
         while (!ingestionDone && retries < MAX_RETRIES) {
           retries++;
           await new Promise(r => setTimeout(r, 1500));
-          const status = await getIngestionStatus(sessionId);
+          let status: { step: string; message?: string } | null = null;
+          try {
+            status = await getIngestionStatus(sessionId);
+          } catch {
+            // Polling hiccup — keep retrying, data is likely still processing
+            continue;
+          }
 
           setIngestionMessage(status.message || '');
           const count = getDoneCount(status.step);
@@ -244,29 +250,30 @@ export default function OnboardingPage() {
             setDoneItems([0, 1, 2, 3]);
             ingestionDone = true;
           } else if (status.step === 'error') {
-            throw new Error(status.message || 'Data ingestion failed');
+            throw new Error('Something went wrong processing your data. Your upload was saved — please contact support.');
           }
         }
 
         if (!ingestionDone) {
-          throw new Error('Setup timed out. Please try again.');
+          throw new Error('This is taking longer than expected. Your data is still being processed — please refresh in a minute.');
         }
       }
 
       // Tick all steps done visually
       setDoneItems([0, 1, 2, 3, 4, 5]);
 
-      // Fire background tasks — don't await, let them populate the dashboard as the user explores
       if (!useDemoData) {
         const goalLabel = GOAL_LABELS[goal] || goal;
+        // Fire these in the background — don't block the redirect
         saveOnboardingProfile({ companyName, industry, primaryGoal: goalLabel, operatingMode: mode }).catch(() => {});
-        generateOpportunities().catch(() => {});
         createAgent(goalLabel, {
           channels: ['WhatsApp', 'Email'],
           involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
           max_budget: 100000,
           frequency_cap: 3,
         }).catch(() => {});
+        // Wait for at least one opportunity so the dashboard isn't empty on arrival
+        await generateOpportunities().catch(() => {});
       }
 
       // Mark onboarding complete — refresh session so middleware sees the new metadata
