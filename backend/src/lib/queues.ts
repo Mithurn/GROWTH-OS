@@ -56,7 +56,17 @@ export async function enqueueOpportunityDiscovery(data: OpportunityDiscoveryJob)
     await opportunityQueue.add('discover', data, JOB_OPTIONS);
   } else {
     const { discoverOpportunities } = await import('../services/opportunity-discovery');
-    await discoverOpportunities(data.companyId, data.agentId, data.goal);
+    const { logAgentAction } = await import('../services/agent-logger');
+    const discovered = await discoverOpportunities(data.companyId, data.agentId, data.goal);
+    if (discovered.length > 0) {
+      const totalRevenue = discovered.reduce((s, o) => s + Number(o.potentialRevenue), 0);
+      await logAgentAction({
+        agentId: data.agentId,
+        actionType: 'discovered_opportunity',
+        description: `Discovered ${discovered.length} new opportunities worth ₹${totalRevenue.toLocaleString('en-IN')}`,
+        details: { opportunityIds: discovered.map((o: any) => o.id), count: discovered.length },
+      }).catch(() => {});
+    }
   }
 }
 
@@ -65,12 +75,19 @@ export async function enqueueCampaignGeneration(data: CampaignGenerationJob): Pr
     await campaignQueue.add('generate', data, JOB_OPTIONS);
   } else {
     const { createCampaignForOpportunity } = await import('../services/campaign-planner');
-    await createCampaignForOpportunity(
+    const { logAgentAction } = await import('../services/agent-logger');
+    const campaign = await createCampaignForOpportunity(
       data.opportunityId,
       data.companyId,
       data.agentId,
       data.guardrails as any,
     );
+    await logAgentAction({
+      agentId: data.agentId,
+      actionType: 'created_campaign',
+      description: `Created campaign "${campaign.name}" targeting ${data.audienceSize ?? 0} customers`,
+      details: { campaignId: campaign.id, opportunityId: data.opportunityId },
+    }).catch(() => {});
   }
 }
 
