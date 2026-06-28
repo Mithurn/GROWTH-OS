@@ -104,7 +104,6 @@ const SUGGESTIONS = [
 export default function OpportunitiesPage() {
   const router = useRouter();
   const [companyId, setCompanyId] = useState<string | undefined>(undefined);
-  const [companyIdLoaded, setCompanyIdLoaded] = useState(false);
   const [report, setReport] = useState<OpportunityReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [creatingGoal, setCreatingGoal] = useState(false);
@@ -115,19 +114,16 @@ export default function OpportunitiesPage() {
   const [campaignMap, setCampaignMap] = useState<Record<string, string>>({}); // opportunityId → campaign status
 
   useEffect(() => {
-    const id = window.localStorage.getItem('growthOS_company_id') ?? undefined;
-    setCompanyId(id);
-    setCompanyIdLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!companyIdLoaded) return;
+    setCompanyId(window.localStorage.getItem('growthOS_company_id') ?? undefined);
     let mounted = true;
     async function load() {
       try {
-        setLoading(true);
         setError(null);
-        const res = await getOpportunityDashboard();
+        // Fetch opportunities + campaigns in parallel (both are cached)
+        const [res, campRes] = await Promise.all([
+          getOpportunityDashboard(),
+          getCampaigns().catch(() => null),
+        ]);
         const data = res.data as OpportunityReport;
         if (!mounted) return;
         if (data.totalOpportunities > 0) {
@@ -137,15 +133,13 @@ export default function OpportunitiesPage() {
           if (!mounted) return;
           setReport(gen.data as OpportunityReport);
         }
-        // Load campaign statuses to show cues on each opportunity
-        try {
-          const campRes = await getCampaigns();
+        if (campRes) {
           const map: Record<string, string> = {};
           (campRes.data ?? []).forEach((c: any) => {
             if (c.opportunity_id) map[c.opportunity_id] = c.status;
           });
           if (mounted) setCampaignMap(map);
-        } catch { /* non-critical */ }
+        }
       } catch (e) {
         if (!mounted) return;
         setError(e instanceof Error ? e.message : 'Failed to load opportunities');
@@ -155,7 +149,7 @@ export default function OpportunitiesPage() {
     }
     load();
     return () => { mounted = false; };
-  }, [companyId, companyIdLoaded]);
+  }, []);
 
   const allOpportunities = useMemo<Opportunity[]>(() => {
     const dist = report?.opportunityDistribution ?? [];
