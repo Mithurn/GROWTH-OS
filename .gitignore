@@ -42,3 +42,13 @@ skills-lock.json
 backend/.mcp.json
 # guildly agent workspace (linked project) — unstaged by default
 .guildly/
+
+# Internal planning and research notes. These stay local: they catalogue past
+# defects with file:line detail, which is not something to publish alongside a
+# live deployment.
+/docs/PRODUCTION_PLAN.md
+/docs/ARCHITECTURE_V2.md
+/yes.md
+
+# Scratch assets not referenced by the app
+/frontend/public/Gemini_Generated_Image_*.png
