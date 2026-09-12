@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { enqueueOpportunityDiscovery, enqueueCampaignGeneration } from '../lib/queues';
 import { logger } from '../lib/logger';
+import { checkGuardrails, type Guardrails } from '@growthos/domain';
 
 interface AgentExecutionContext {
   agentId: string;
@@ -139,7 +140,7 @@ export class AgentOrchestrator {
     });
 
     for (const opp of existingUncampaigned) {
-      if (!this.meetsGuardrails(opp, guardrails)) continue;
+      if (!this.meetsGuardrails({ potentialRevenue: Number(opp.potentialRevenue) }, guardrails)) continue;
       await enqueueCampaignGeneration({
         opportunityId: opp.id,
         companyId,
@@ -163,20 +164,20 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Check if an opportunity meets the agent's guardrails
+   * Check if an opportunity meets the agent's guardrails.
+   *
+   * Delegates to @growthos/domain so this check is the same deterministic function the
+   * LangGraph agent will use as a graph node it cannot skip (docs/ARCHITECTURE_V2.md
+   * Phase 4) — not a helper the orchestrator happens to call today and something else
+   * reimplements tomorrow. Fixes one latent bug in the extraction: a `max_budget` of
+   * exactly 0 is now enforced (the old `guardrails.max_budget &&` truthy check treated
+   * 0 as "no budget set" and let anything through).
    */
   private meetsGuardrails(
-    opportunity: any,
-    guardrails: { max_budget?: number; frequency_cap?: number; channels?: string[] }
+    opportunity: { potentialRevenue: number },
+    guardrails: Guardrails,
   ): boolean {
-    // For now, simple validation
-    // In production, you'd check budget constraints, frequency caps, etc.
-
-    if (guardrails.max_budget && opportunity.potentialRevenue > guardrails.max_budget) {
-      return false;
-    }
-
-    return true;
+    return checkGuardrails({ potentialRevenue: opportunity.potentialRevenue }, guardrails).allowed;
   }
 
   /**

@@ -1,9 +1,22 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
+  // esbuild (the real render.yaml build) reads tsconfig.json's `paths` natively;
+  // Vite/Vitest does not, so the same alias is declared here explicitly rather than
+  // pulling in a vite-tsconfig-paths dependency for one entry.
+  resolve: {
+    alias: {
+      '@growthos/domain': path.resolve(__dirname, '../packages/domain/src/index.ts'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
+    // packages/domain is pure (no I/O, no Prisma/Supabase) and deliberately has no
+    // node_modules of its own — it runs through the backend's already-installed
+    // vitest rather than a second npm install. See docs/ARCHITECTURE_V2.md §12.
+    include: ['src/**/*.test.ts', '../packages/domain/src/**/*.test.ts'],
     env: {
       NODE_ENV: 'test',
       NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',

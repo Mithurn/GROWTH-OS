@@ -48,6 +48,7 @@ backend/.mcp.json
 # live deployment.
 /docs/PRODUCTION_PLAN.md
 /docs/ARCHITECTURE_V2.md
+/docs/PROGRESS.md
 /yes.md
 
 # Scratch assets not referenced by the app
