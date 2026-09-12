@@ -8,20 +8,26 @@ import { parseWithRetry } from '../lib/ai';
 import {
   OPPORTUNITY_TYPES as OPPORTUNITY_TYPE_ENUM,
   toPrismaWhere,
+  estimateImpact,
   type OpportunityType,
+  type HistoricalOutcome,
 } from '@growthos/domain';
 
 // ── OpenRouter client with required headers ───────────────────────────────────
 
+// NOTE: the model no longer produces potential_revenue, confidence_score, or
+// priority_score. Those used to be invented by the LLM as bare z.number() fields and
+// written straight into a Decimal(12,2) currency column — a number a language model
+// made up, displayed to the user as real rupees. They're now computed deterministically
+// by estimateImpact() from this tenant's own campaign history, the same way
+// audience_size was already discarded in favour of a recomputed value below. See
+// docs/ARCHITECTURE_V2.md §1 and §5.
 const DiscoveredOpportunityRawSchema = z.object({
   opportunity_key: z.string(),
   opportunity_type: z.enum(['Retention-Churn', 'Retention-VIP', 'Upsell', 'Reactivation']),
   title: z.string(),
   description: z.string(),
   audience_size: z.number(),
-  potential_revenue: z.number(),
-  confidence_score: z.number(),
-  priority_score: z.number(),
   supporting_customer_segment: z.string(),
   recommended_action: z.string(),
   trigger_reason: z.string(),
@@ -29,6 +35,35 @@ const DiscoveredOpportunityRawSchema = z.object({
   ai_reasoning: z.string(),
 });
 const DiscoveredOpportunityArraySchema = z.array(DiscoveredOpportunityRawSchema);
+
+/**
+ * This tenant's own past campaigns of one opportunity type, as conversion outcomes —
+ * the real data estimateImpact() shrinks toward the global prior. A campaign counts
+ * toward history once it has actually gone out (has communications), not while it's
+ * still a draft.
+ */
+async function getHistoricalOutcomes(
+  companyId: string,
+  opportunityType: OpportunityType,
+): Promise<HistoricalOutcome[]> {
+  const campaigns = await prisma.campaign.findMany({
+    where: {
+      companyId,
+      opportunity: { opportunityType },
+      status: { in: ['Running', 'Launched', 'Completed'] },
+    },
+    select: {
+      communications: { select: { converted: true } },
+    },
+  });
+
+  return campaigns
+    .map((c) => ({
+      total: c.communications.length,
+      converted: c.communications.filter((comm) => comm.converted).length,
+    }))
+    .filter((outcome) => outcome.total > 0);
+}
 
 interface DiscoveredOpportunity {
   id: string;
@@ -203,14 +238,14 @@ For each opportunity provide:
 3. title: action-oriented title
 4. description: 2–3 sentences explaining the opportunity
 5. audience_size: realistic estimate based on the data above
-6. potential_revenue: conservative rupee estimate
-7. confidence_score: 0–100
-8. priority_score: 0–100
-9. supporting_customer_segment: short label for the target segment
-10. recommended_action: specific action (mention channel: WhatsApp / Email / SMS)
-11. trigger_reason: why this opportunity exists now
-12. ai_summary: one-sentence summary
-13. ai_reasoning: why you prioritised this
+6. supporting_customer_segment: short label for the target segment
+7. recommended_action: specific action (mention channel: WhatsApp / Email / SMS)
+8. trigger_reason: why this opportunity exists now
+9. ai_summary: one-sentence summary
+10. ai_reasoning: why you prioritised this
+
+Do not estimate revenue, confidence, or priority scores — those are computed separately
+from this tenant's real campaign history, not by you.
 
 Respond ONLY with a valid JSON array. No markdown, no explanation outside the JSON.`;
 
@@ -241,6 +276,17 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
           oppData.opportunity_type as OpportunityType,
           companyId,
         );
+        const finalAudienceSize = audienceSize > 0 ? audienceSize : oppData.audience_size;
+
+        const historical = await getHistoricalOutcomes(
+          companyId,
+          oppData.opportunity_type as OpportunityType,
+        );
+        const impact = estimateImpact({
+          audienceSize: finalAudienceSize,
+          avgOrderValue: Number(analytics.avgOrderValue) || 0,
+          historical,
+        });
 
         const opportunity = await prisma.opportunity.create({
           data: {
@@ -250,10 +296,13 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
             opportunityType: oppData.opportunity_type,
             title: oppData.title,
             description: oppData.description,
-            audienceSize: audienceSize > 0 ? audienceSize : oppData.audience_size,
-            potentialRevenue: oppData.potential_revenue,
-            confidenceScore: oppData.confidence_score,
-            priorityScore: oppData.priority_score,
+            audienceSize: finalAudienceSize,
+            potentialRevenue: impact.expectedRevenue,
+            potentialRevenueLow: impact.lowRevenue,
+            potentialRevenueHigh: impact.highRevenue,
+            confidenceScore: impact.confidenceScore,
+            priorityScore: impact.priorityScore,
+            predictedConversionRate: impact.conversionRate,
             supportingCustomerSegment: oppData.supporting_customer_segment,
             recommendedAction: oppData.recommended_action,
             audienceDefinition: {
@@ -270,7 +319,7 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
         const audienceCustomerIds = await getAudienceCustomers(
           oppData.opportunity_type as OpportunityType,
           companyId,
-          audienceSize > 0 ? audienceSize : oppData.audience_size,
+          finalAudienceSize,
         );
 
         if (audienceCustomerIds.length > 0) {
@@ -289,7 +338,17 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
           audienceSize: opportunity.audienceSize,
         });
 
-        logger.info({ title: oppData.title, customers: audienceCustomerIds.length, revenue: oppData.potential_revenue }, 'Opportunity created');
+        logger.info(
+          {
+            title: oppData.title,
+            customers: audienceCustomerIds.length,
+            revenue: impact.expectedRevenue,
+            revenueRange: [impact.lowRevenue, impact.highRevenue],
+            confidenceScore: impact.confidenceScore,
+            historicalSampleSize: impact.sampleSize,
+          },
+          'Opportunity created',
+        );
       } catch (error) {
         logger.error({ err: error, key: oppData.opportunity_key }, 'Error creating opportunity');
       }
