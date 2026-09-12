@@ -9,10 +9,9 @@ import {
 import {
   ArrowLeft, Brain, ChevronRight, Loader2, Mail, MailOpen,
   MessageSquare, MousePointerClick, Send, Smartphone,
-  Sparkles, Target, TrendingUp, Users, Zap, Activity,
+  Sparkles, Target,  Users, Zap, Activity,
 } from 'lucide-react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+import { getCampaignAnalytics } from '@/lib/api';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -512,8 +511,7 @@ function AnalyticsContent() {
 
   const fetchAnalytics = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`${API_BASE}/campaigns/${id}/analytics`);
-      const j   = await res.json();
+      const j = await getCampaignAnalytics(id);
       if (j.success && j.data) setData(j.data);
       else setError(j.error ?? 'Campaign not found');
     } catch {

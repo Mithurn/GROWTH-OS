@@ -2,22 +2,44 @@ import Redis from 'ioredis';
 
 let client: Redis | null = null;
 
-function getClient(): Redis | null {
-  if (!process.env.REDIS_URL) return null;
-  if (client) return client;
-
-  client = new Redis(process.env.REDIS_URL, {
+function redisOptions() {
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  return {
+    url,
     maxRetriesPerRequest: 1,
     lazyConnect: true,
     enableOfflineQueue: false,
-    tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined,
-  });
+    tls: url.startsWith('rediss://') ? {} : undefined,
+  } as const;
+}
 
+/**
+ * Shared command client (cache, frequency cap, webhook dedup).
+ * Returns null when `REDIS_URL` is unset so callers can fall back in-process.
+ */
+export function getClient(): Redis | null {
+  if (client) return client;
+  const options = redisOptions();
+  if (!options) return null;
+
+  client = new Redis(options.url, options);
   client.on('error', (err) => {
     console.warn('[Redis] Connection error:', err.message);
   });
 
   return client;
+}
+
+/** A dedicated connection. ioredis subscribers cannot share a connection with commands. */
+export function createSubscriber(): Redis | null {
+  const options = redisOptions();
+  if (!options) return null;
+  const sub = new Redis(options.url, options);
+  sub.on('error', (err) => {
+    console.warn('[Redis] Subscriber error:', err.message);
+  });
+  return sub;
 }
 
 /**

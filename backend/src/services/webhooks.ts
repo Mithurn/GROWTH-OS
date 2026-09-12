@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Prisma } from '../../generated/prisma';
+import { prisma } from '../lib/prisma';
 import { isDuplicateWebhook } from '../lib/redis';
 import { logger } from '../lib/logger';
 
@@ -32,29 +33,57 @@ const STATE_ORDER: Record<string, number> = {
 // Once a message is READ/CLICKED/CONVERTED it cannot regress to FAILED.
 const FAILED_ALLOWED_FROM = new Set(['QUEUED', 'SENT', 'DELIVERED']);
 
-const TimestampFields: Record<string, string> = {
-  SENT:      'sent_at',
-  DELIVERED: 'delivered_at',
-  READ:      'read_at',
-  CLICKED:   'clicked_at',
-  CONVERTED: 'converted_at',
-  FAILED:    'failed_at',
-};
-
 export function verifySignature(payload: string, signature: string): boolean {
-  const expectedSignature = crypto
+  if (typeof signature !== 'string' || signature.length === 0) return false;
+
+  const expected = crypto
     .createHmac('sha256', WEBHOOK_SECRET)
     .update(payload)
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
+  const provided = Buffer.from(signature, 'utf8');
+  const expectedBuf = Buffer.from(expected, 'utf8');
+
+  // timingSafeEqual throws on length mismatch, which would surface a malformed
+  // signature as a 500 instead of a 401. Compare lengths first — a length mismatch
+  // is already a definitive rejection and leaks nothing about the expected digest.
+  if (provided.length !== expectedBuf.length) return false;
+
+  return crypto.timingSafeEqual(provided, expectedBuf);
 }
 
+/**
+ * Timestamp field to stamp per status. Typed against the Prisma model so a
+ * misspelled field is a compile error rather than a timestamp that silently
+ * never gets written.
+ */
+const TimestampFields = {
+  SENT:      'sentAt',
+  DELIVERED: 'deliveredAt',
+  READ:      'readAt',
+  CLICKED:   'clickedAt',
+  CONVERTED: 'convertedAt',
+  FAILED:    'failedAt',
+} as const satisfies Record<string, keyof Prisma.CommunicationUpdateInput>;
+
+/** Prisma's unique-constraint violation. */
+const UNIQUE_VIOLATION = 'P2002';
+
+/**
+ * Apply a provider delivery callback to a communication.
+ *
+ * Runs on Prisma rather than the Supabase client because the three writes it makes
+ * (advance the communication, append the event, record the event id as processed)
+ * have to land together. Previously they were three independent requests: if the
+ * event insert failed after the status update had committed, the provider's retry
+ * would be rejected by the state machine as out-of-order, marked processed, and the
+ * event row lost for good — silently undercounting campaign analytics.
+ *
+ * Dedup relies on the unique index on `processed_webhook_events.event_id` instead of
+ * a read-then-write check, so two concurrent deliveries of the same event can't both
+ * pass the check and double-apply.
+ */
 export async function processWebhook(
-  supabase: SupabaseClient,
   event: WebhookEvent
 ): Promise<{ success: boolean; message: string }> {
   // Redis fast-path dedup: reject duplicates before hitting the DB
@@ -63,31 +92,10 @@ export async function processWebhook(
     return { success: true, message: 'Event already processed (Redis dedup)' };
   }
 
-  // Check idempotency
-  const { data: existing, error: checkError } = await supabase
-    .from('processed_webhook_events')
-    .select('id')
-    .eq('event_id', event.eventId)
-    .maybeSingle();
-
-  if (checkError) {
-    throw new Error(`Failed to check event idempotency: ${checkError.message}`);
-  }
-
-  if (existing) {
-    return { success: true, message: 'Event already processed (idempotent)' };
-  }
-
-  // Get current communication state
-  const { data: comm, error: commError } = await supabase
-    .from('communications')
-    .select('id, status, provider_message_id')
-    .eq('id', event.communicationId)
-    .maybeSingle();
-
-  if (commError) {
-    throw new Error(`Failed to load communication: ${commError.message}`);
-  }
+  const comm = await prisma.communication.findUnique({
+    where: { id: event.communicationId },
+    select: { id: true, status: true, providerMessageId: true },
+  });
 
   if (!comm) {
     throw new Error(`Communication ${event.communicationId} not found`);
@@ -96,88 +104,104 @@ export async function processWebhook(
   // ── State machine enforcement ─────────────────────────────────────────────────
   // Enforce transitions based on DB state, not on what the caller asserts.
   // This guards against late callbacks, retried webhooks, and out-of-order DLRs.
-  const currentPos = STATE_ORDER[comm.status] ?? 0;
+  const rejection = rejectionReason(comm.status, event.status);
 
-  if (event.status === 'FAILED') {
-    if (!FAILED_ALLOWED_FROM.has(comm.status)) {
-      logger.warn({ communicationId: event.communicationId, currentState: comm.status }, 'Webhook: rejected FAILED callback — already succeeded');
-      await supabase.from('processed_webhook_events').insert({
-        id: crypto.randomUUID(),
-        event_id: event.eventId,
-        communication_id: event.communicationId,
-      });
-      return { success: true, message: `Rejected: cannot fail a communication in state ${comm.status}` };
-    }
-  } else {
-    const incomingPos = STATE_ORDER[event.status] ?? 0;
-    if (incomingPos <= currentPos) {
-      logger.warn({ communicationId: event.communicationId, from: comm.status, to: event.status }, 'Webhook: rejected out-of-order transition');
-      await supabase.from('processed_webhook_events').insert({
-        id: crypto.randomUUID(),
-        event_id: event.eventId,
-        communication_id: event.communicationId,
-      });
-      return { success: true, message: `Rejected: ${comm.status} → ${event.status} is not a valid forward transition` };
-    }
+  if (rejection) {
+    logger.warn(
+      { communicationId: event.communicationId, from: comm.status, to: event.status },
+      'Webhook: rejected transition',
+    );
+    // Still recorded as processed so the provider stops retrying a callback we will
+    // never apply.
+    await markProcessed(event);
+    return { success: true, message: rejection };
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // Update communication status and timestamp
-  const updates: any = {
-    status: event.status,
-  };
+  const updates: Prisma.CommunicationUpdateInput = { status: event.status };
 
-  if (TimestampFields[event.status]) {
-    updates[TimestampFields[event.status]] = event.timestamp;
+  const timestampField = TimestampFields[event.status as keyof typeof TimestampFields];
+  if (timestampField) {
+    updates[timestampField] = new Date(event.timestamp);
   }
 
-  if (event.providerMessageId && !comm.provider_message_id) {
-    updates.provider_message_id = event.providerMessageId;
+  if (event.providerMessageId && !comm.providerMessageId) {
+    updates.providerMessageId = event.providerMessageId;
   }
 
-  const { error: updateError } = await supabase
-    .from('communications')
-    .update(updates)
-    .eq('id', event.communicationId);
-
-  if (updateError) {
-    throw new Error(`Failed to update communication: ${updateError.message}`);
+  try {
+    await prisma.$transaction([
+      // First, so a duplicate aborts the whole transaction before anything is applied.
+      prisma.processedWebhookEvent.create({
+        data: { eventId: event.eventId, communicationId: event.communicationId },
+      }),
+      prisma.communication.update({
+        where: { id: event.communicationId },
+        data: updates,
+      }),
+      prisma.communicationEvent.create({
+        data: {
+          communicationId: event.communicationId,
+          eventType: event.status,
+          eventTimestamp: new Date(event.timestamp),
+          sequenceNumber: event.sequenceNumber,
+          providerMessageId: event.providerMessageId,
+          providerEventId: event.eventId,
+        },
+      }),
+    ]);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { success: true, message: 'Event already processed (idempotent)' };
+    }
+    throw error;
   }
 
-  // Create communication event
-  const { error: eventError } = await supabase
-    .from('communication_events')
-    .insert({
-      id: crypto.randomUUID(),
-      communication_id: event.communicationId,
-      event_type: event.status,
-      event_timestamp: event.timestamp,
-      sequence_number: event.sequenceNumber,
-      provider_message_id: event.providerMessageId,
-      provider_event_id: event.eventId,
-    });
-
-  if (eventError) {
-    throw new Error(`Failed to create communication event: ${eventError.message}`);
-  }
-
-  // Mark webhook event as processed
-  const { error: processedError } = await supabase
-    .from('processed_webhook_events')
-    .insert({
-      id: crypto.randomUUID(),
-      event_id: event.eventId,
-      communication_id: event.communicationId,
-    });
-
-  if (processedError) {
-    throw new Error(`Failed to mark event as processed: ${processedError.message}`);
-  }
-
-  logger.info({ status: event.status, communicationId: event.communicationId, seq: event.sequenceNumber }, 'Webhook processed');
+  logger.info(
+    { status: event.status, communicationId: event.communicationId, seq: event.sequenceNumber },
+    'Webhook processed',
+  );
 
   return {
     success: true,
     message: `Event processed: ${event.status}`,
   };
+}
+
+/**
+ * Why this callback cannot be applied to a communication in `currentStatus`,
+ * or null if it can.
+ */
+function rejectionReason(currentStatus: string, incomingStatus: string): string | null {
+  if (incomingStatus === 'FAILED') {
+    return FAILED_ALLOWED_FROM.has(currentStatus)
+      ? null
+      : `Rejected: cannot fail a communication in state ${currentStatus}`;
+  }
+
+  const currentPos = STATE_ORDER[currentStatus] ?? 0;
+  const incomingPos = STATE_ORDER[incomingStatus] ?? 0;
+
+  return incomingPos > currentPos
+    ? null
+    : `Rejected: ${currentStatus} → ${incomingStatus} is not a valid forward transition`;
+}
+
+async function markProcessed(event: WebhookEvent): Promise<void> {
+  try {
+    await prisma.processedWebhookEvent.create({
+      data: { eventId: event.eventId, communicationId: event.communicationId },
+    });
+  } catch (error) {
+    // A concurrent delivery already recorded it, which is the outcome we wanted.
+    if (!isUniqueViolation(error)) throw error;
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: string }).code === UNIQUE_VIOLATION
+  );
 }

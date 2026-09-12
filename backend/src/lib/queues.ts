@@ -35,6 +35,10 @@ export interface PersonaGenerationJob {
   model?: string;
 }
 
+export interface IngestionJob {
+  sessionId: string;
+}
+
 // ── Queue instances (created only when Redis is available) ────────────────────
 
 export const opportunityQueue = connection
@@ -47,6 +51,10 @@ export const campaignQueue = connection
 
 export const personaQueue = connection
   ? new Queue<PersonaGenerationJob>('persona-generation', { connection })
+  : null;
+
+export const ingestionQueue = connection
+  ? new Queue<IngestionJob>('ingestion', { connection })
   : null;
 
 // ── Enqueue helpers (fail-open: run inline when Redis is absent) ──────────────
@@ -95,8 +103,25 @@ export async function enqueuePersonaGeneration(data: PersonaGenerationJob): Prom
   if (personaQueue) {
     await personaQueue.add('generate', data, JOB_OPTIONS);
   } else {
-    console.warn('[BullMQ] Persona queue not available — REDIS_URL not set');
+    const { supabase } = await import('./supabase');
+    const { generatePersonas } = await import('../services/personas');
+    await generatePersonas(supabase, { companyId: data.companyId, model: data.model });
   }
+}
+
+export async function enqueueIngestion(data: IngestionJob): Promise<void> {
+  if (ingestionQueue) {
+    await ingestionQueue.add('process', data, JOB_OPTIONS);
+    return;
+  }
+  const { processIngestion } = await import('../services/ingestion');
+  // Inline fallback still returns immediately to the HTTP caller — the work is
+  // scheduled on the next tick so the route can respond with the session id.
+  setImmediate(() => {
+    processIngestion(data.sessionId).catch((err) => {
+      console.error('[Ingestion] inline run failed', err);
+    });
+  });
 }
 
 // ── Workers ───────────────────────────────────────────────────────────────────
@@ -106,6 +131,7 @@ let workersStarted = false;
 export function startWorkers(): void {
   if (!connection) {
     console.log('[BullMQ] REDIS_URL not set — workers disabled, falling back to inline execution');
+    void resumeIncompleteIngestions();
     return;
   }
   if (workersStarted) return;
@@ -190,11 +216,7 @@ export function startWorkers(): void {
         (involvementLower.includes('major') && Number(potentialRevenue ?? 0) < 20000);
 
       if (shouldAutoLaunch) {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        );
+        const { supabase } = await import('./supabase');
         await prisma.campaign.update({
           where: { id: campaign.id },
           data: { status: 'Approved', approvedAt: new Date() },
@@ -220,16 +242,54 @@ export function startWorkers(): void {
     'persona-generation',
     async (job) => {
       const { companyId, model } = job.data;
-      const { createClient } = await import('@supabase/supabase-js');
+      const { supabase } = await import('./supabase');
       const { generatePersonas } = await import('../services/personas');
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      );
       return generatePersonas(supabase, { companyId, model });
     },
     { connection, concurrency: 1 },
   );
 
-  console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation');
+  new Worker<IngestionJob>(
+    'ingestion',
+    async (job) => {
+      const { processIngestion } = await import('../services/ingestion');
+      await processIngestion(job.data.sessionId);
+      return { sessionId: job.data.sessionId };
+    },
+    { connection, concurrency: 1 },
+  );
+
+  console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation, ingestion');
+
+  void resumeIncompleteIngestions();
+}
+
+/**
+ * Sessions that still have CSV payloads were interrupted by a crash or spin-down.
+ * Re-queue them so a keep-alive ping that wakes the instance also finishes the import.
+ */
+async function resumeIncompleteIngestions(): Promise<void> {
+  try {
+    const { prisma } = await import('./prisma');
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const stuck = await prisma.ingestionSession.findMany({
+      where: {
+        status: { in: ['pending', 'processing'] },
+        customerCsv: { not: null },
+        createdAt: { gte: cutoff },
+      },
+      select: { id: true },
+      take: 20,
+    });
+
+    for (const session of stuck) {
+      await enqueueIngestion({ sessionId: session.id });
+    }
+
+    if (stuck.length > 0) {
+      console.log(`[BullMQ] Resumed ${stuck.length} interrupted ingestion session(s)`);
+    }
+  } catch (err) {
+    console.warn('[BullMQ] Failed to resume interrupted ingestions', err);
+  }
 }

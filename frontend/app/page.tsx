@@ -1,881 +1,414 @@
-'use client';
-
-import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Sparkles,
-  TrendingUp,
-  Send,
   ArrowRight,
-  Check,
-  X,
-  Activity,
-  Search,
-  Megaphone,
-  Zap,
-  MessageSquare,
-  Clock,
-  Trophy,
+  Bot,
+  Brain,
+  LineChart,
+  Radio,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Upload,
+  Users,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import {
-  getOpportunityDashboard,
-  getActivityStream,
-  createOpportunityFromGoal,
-} from '@/lib/api';
+import { BackendWarmup } from '@/components/backend-warmup';
 
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
-interface Opportunity {
-  id: string;
-  opportunity_id: string;
-  title: string;
-  opportunity_type: string;
-  audience_size: number;
-  potential_revenue: number;
-  confidence_score: number;
-  priority_score: number;
-  description: string;
-  ai_summary: string;
-  recommended_action: string;
-  supporting_customer_segment: string;
-  trigger_reason: string;
-  audience_definition?: Record<string, string>;
-  average_spend?: number;
-  average_orders?: number;
-  status: string;
-}
+const GITHUB_URL = 'https://github.com/Mithurn/xeno-grow';
 
-interface ActivityItem {
-  id: string;
-  agentId: string;
-  actionType: string;
-  description: string;
-  details?: Record<string, unknown>;
-  createdAt: string;
-}
-
-
-// ─────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────
-const PLACEHOLDER_SUGGESTIONS = [
-  'Increase repeat purchases',
-  'Recover dormant customers',
-  'Boost loyalty engagement',
-  'Find high-value segments',
-  'Reduce customer churn',
-];
-
-const SUGGESTION_CHIPS = [
-  'Find customers likely to churn',
-  'Increase denim sales',
-  'Recover dormant VIPs',
-];
-
-// ─────────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────────
-const formatCurrency = (amount: number) => {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(0)}K`;
-  return `₹${amount}`;
-};
-
-const parseChannel = (action: string): string => {
-  if (action.toLowerCase().includes('whatsapp')) return 'WhatsApp';
-  if (action.toLowerCase().includes('email')) return 'Email';
-  if (action.toLowerCase().includes('sms')) return 'SMS';
-  return 'WhatsApp';
-};
-
-const getPriorityLabel = (score: number) => {
-  if (score >= 70) return { label: 'High Priority', color: 'bg-[#F0EEFF] text-[#5B4FFF]' };
-  if (score >= 40) return { label: 'Medium Priority', color: 'bg-amber-50 text-amber-600' };
-  return { label: 'Low Priority', color: 'bg-gray-100 text-gray-600' };
-};
-
-const getGreeting = () => {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'Good Morning.';
-  if (hour >= 12 && hour < 17) return 'Good Afternoon.';
-  if (hour >= 17 || hour < 5) return 'Good Evening.';
-};
-
-const timeAgo = (dateStr: string): string => {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-};
-
-const actionTypeLabel: Record<string, string> = {
-  discovered_opportunity: 'Discovered opportunity',
-  launched_campaign: 'Launched campaign',
-  sent_messages: 'Sent messages',
-  achieved_milestone: 'Milestone reached',
-  generating_opportunity: 'Generating opportunity',
-};
-
-interface ActionMeta {
-  label: string;
-  Icon: LucideIcon;
-  iconBg: string;
-  iconColor: string;
-  labelColor: string;
-  rowBg: string;
-}
-
-const ACTION_META: Record<string, ActionMeta> = {
-  discovered_opportunity: {
-    label: 'Discovered',
-    Icon: Search,
-    iconBg: 'bg-[#EEF2FF]',
-    iconColor: 'text-[#5B4FFF]',
-    labelColor: 'text-[#5B4FFF]',
-    rowBg: 'bg-[#F5F3FF]',
-  },
-  created_campaign: {
-    label: 'Campaign',
-    Icon: Megaphone,
-    iconBg: 'bg-blue-50',
-    iconColor: 'text-blue-500',
-    labelColor: 'text-blue-500',
-    rowBg: 'bg-blue-50/60',
-  },
-  launched_campaign: {
-    label: 'Launched',
-    Icon: Zap,
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-600',
-    labelColor: 'text-emerald-600',
-    rowBg: 'bg-emerald-50/60',
-  },
-  sent_messages: {
-    label: 'Sent',
-    Icon: MessageSquare,
-    iconBg: 'bg-teal-50',
-    iconColor: 'text-teal-600',
-    labelColor: 'text-teal-600',
-    rowBg: 'bg-teal-50/60',
-  },
-  achieved_milestone: {
-    label: 'Milestone',
-    Icon: Trophy,
-    iconBg: 'bg-amber-50',
-    iconColor: 'text-amber-500',
-    labelColor: 'text-amber-500',
-    rowBg: 'bg-amber-50/60',
-  },
-  generating_opportunity: {
-    label: 'Generating',
-    Icon: Sparkles,
-    iconBg: 'bg-purple-50',
-    iconColor: 'text-purple-500',
-    labelColor: 'text-purple-500',
-    rowBg: 'bg-purple-50/60',
-  },
-};
-
-const parseTriggerReasons = (opp: Opportunity): string[] => {
-  const reasons: string[] = [];
-  if (opp.average_spend) {
-    reasons.push(`Average Order Value ₹${Math.round(opp.average_spend).toLocaleString()}`);
-  }
-  if (opp.audience_definition?.days_since_last_order) {
-    const days = opp.audience_definition.days_since_last_order.replace('>=', '').trim();
-    reasons.push(`Last purchase > ${days} days ago`);
-  } else if (opp.trigger_reason?.toLowerCase().includes('days')) {
-    reasons.push('Extended purchase gap detected');
-  }
-  if (opp.supporting_customer_segment) {
-    reasons.push(`${opp.supporting_customer_segment} segment`);
-  }
-  if (reasons.length === 0 && opp.trigger_reason) {
-    return opp.trigger_reason.split('.').filter(s => s.trim()).slice(0, 3);
-  }
-  return reasons.length > 0 ? reasons : ['High-value customer pattern detected'];
-};
-
-// ─────────────────────────────────────────────────────────────
-// Typewriter hook
-// ─────────────────────────────────────────────────────────────
-function useTypewriter(text: string, speed = 28) {
-  const [displayed, setDisplayed] = useState('');
-  const prevText = useRef('');
-
-  useEffect(() => {
-    if (!text || text === prevText.current) return;
-    prevText.current = text;
-    setDisplayed('');
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      setDisplayed(text.slice(0, i));
-      if (i >= text.length) clearInterval(id);
-    }, speed);
-    return () => clearInterval(id);
-  }, [text, speed]);
-
-  return displayed;
-}
-
-// ─────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────
-export default function HomePage() {
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activityLoading, setActivityLoading] = useState(true);
-  const [coldStart, setColdStart] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [generatingSteps, setGeneratingSteps] = useState<string[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [queryError, setQueryError] = useState<string | null>(null);
-  const [pinnedOpportunity, setPinnedOpportunity] = useState<Opportunity | null>(null);
-  const [cardAnimating, setCardAnimating] = useState(false);
-  const stepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const optimisticIdsRef = useRef<Set<string>>(new Set());
-
-  const newestActivity = activityItems[0];
-  const typedText = useTypewriter(newestActivity?.description ?? '');
-  const thinkingText = useTypewriter(generatingSteps[currentStepIndex] ?? '');
-
-  // Rotating placeholder
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIndex(prev => (prev + 1) % PLACEHOLDER_SUGGESTIONS.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Wake both Render services immediately on homepage load
-  useEffect(() => {
-    fetch('https://xeno-crm-backend-n6d8.onrender.com/health').catch(() => {});
-    fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
-  }, []);
-
-
-  // Fetch opportunities with cold-start retry
-  useEffect(() => {
-    const run = async () => {
-      const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
-      const MAX_RETRIES = 4;
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-          if (attempt > 0) {
-            setColdStart(true);
-            await new Promise(r => setTimeout(r, 5000));
-          }
-          const data = await getOpportunityDashboard();
-          if (data.success && data.data.topOpportunities) {
-            setOpportunities(data.data.topOpportunities);
-          }
-          setColdStart(false);
-          setLoading(false);
-          return;
-        } catch {
-          if (attempt === MAX_RETRIES - 1) {
-            setError('Unable to reach backend. Try refreshing in a moment.');
-            setColdStart(false);
-            setLoading(false);
-          }
-        }
-      }
-    };
-    run();
-  }, []);
-
-  // Activity feed — poll every 10s (EventSource can't send auth headers)
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const data = await getActivityStream(20);
-        if (data.success && Array.isArray(data.data)) {
-          setActivityItems(data.data);
-        }
-      } catch {
-        // non-critical
-      } finally {
-        setActivityLoading(false);
-      }
-    };
-
-    poll();
-    const interval = setInterval(poll, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleSubmitQuery = async () => {
-    if (!query.trim()) return;
-
-    const submittedQuery = query.trim();
-    const steps = [
-      `Spawning agent for: "${submittedQuery}"...`,
-      'Scanning customer database...',
-      'Calculating revenue potential...',
-      'Mapping audience segments...',
-      'Finalizing opportunity strategy...',
-    ];
-
-    setGeneratingSteps(steps);
-    setCurrentStepIndex(0);
-    setProcessing(true);
-    setQuery('');
-
-    // Push first optimistic activity item
-    const pushOptimistic = (idx: number) => {
-      const id = `optimistic-${crypto.randomUUID()}`;
-      optimisticIdsRef.current.add(id);
-      setActivityItems(prev => [
-        {
-          id,
-          agentId: 'growthOS',
-          actionType: 'generating_opportunity',
-          description: steps[idx],
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
-    };
-
-    pushOptimistic(0);
-
-    stepIntervalRef.current = setInterval(() => {
-      setCurrentStepIndex(prev => {
-        const next = prev + 1;
-        if (next < steps.length) {
-          pushOptimistic(next);
-          return next;
-        }
-        clearInterval(stepIntervalRef.current!);
-        stepIntervalRef.current = null;
-        return prev;
-      });
-    }, 2000);
-
-    setQueryError(null);
-    try {
-      const companyId = window.localStorage.getItem('growthOS_company_id') ?? undefined;
-      const result = await createOpportunityFromGoal(submittedQuery);
-      const data = await getOpportunityDashboard();
-      if (data.success && data.data.topOpportunities) {
-        setOpportunities(data.data.topOpportunities);
-      }
-      if (result.success && result.data) {
-        setCardAnimating(true);
-        setTimeout(() => {
-          setPinnedOpportunity(result.data);
-          setCardAnimating(false);
-        }, 300);
-      }
-    } catch {
-      setQueryError('GrowthOS couldn\'t generate that opportunity right now. Try a different query.');
-      setTimeout(() => setQueryError(null), 4000);
-    } finally {
-      if (stepIntervalRef.current) {
-        clearInterval(stepIntervalRef.current);
-        stepIntervalRef.current = null;
-      }
-      setCurrentStepIndex(0);
-      setGeneratingSteps([]);
-      // Remove optimistic items — real activity poll will fill in
-      setActivityItems(prev => prev.filter(item => !optimisticIdsRef.current.has(item.id)));
-      optimisticIdsRef.current.clear();
-      setProcessing(false);
-    }
-  };
-
-  const handleShowTopOpportunity = () => {
-    setCardAnimating(true);
-    setTimeout(() => {
-      setPinnedOpportunity(null);
-      setCardAnimating(false);
-    }, 300);
-  };
-
-  // When processing: featured slot shows skeleton, full list shifts down to grid
-  const featuredOpportunity = processing ? null : (pinnedOpportunity ?? opportunities[0]);
-  const gridOpportunities = processing ? opportunities.slice(0, 3) : opportunities.slice(1, 4);
-
+// lucide-react v1 dropped brand marks, and the GitHub logo carries more signal here
+// than a generic code glyph would.
+function GithubIcon({ className }: { className?: string }) {
   return (
-    <div className="min-h-screen bg-[#F9FAFB]">
-      {/* ── Main ── */}
-      <main className="max-w-[1400px] mx-auto px-6 py-12">
-        {/* ── Greeting + Command Bar ── */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-[#1A1A1A] mb-3">{getGreeting()}</h1>
-          <p className="text-[#6B7280] text-base max-w-xl mx-auto mb-8">
-            {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <span className="h-4 w-4 border-2 border-[#5B4FFF] border-t-transparent rounded-full animate-spin" />
-                {coldStart
-                  ? 'AI engine is warming up — this takes about 30 seconds on first load…'
-                  : 'Scanning for opportunities…'}
-              </span>
-            ) : (
-              'GrowthOS analyzed customer behavior, campaign performance, and revenue signals while you were away.'
-            )}
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+      <path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.09 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.49 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
+
+const PIPELINE = [
+  {
+    icon: Upload,
+    title: 'Ingest',
+    body: 'Upload customers and orders as CSV. The pipeline validates, cleans, and imports them, then computes RFM scores and behavioural attributes per customer.',
+  },
+  {
+    icon: Users,
+    title: 'Segment',
+    body: 'An LLM reads the computed metrics and names the personas that actually exist in your data — not a fixed template of segments.',
+  },
+  {
+    icon: Target,
+    title: 'Find revenue',
+    body: 'Deterministic rules surface seven opportunity types: dormant VIPs, churn risk, cross-sell, VIP reward, and more. Each one carries an audience and a revenue estimate.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Write the campaign',
+    body: 'The agent drafts channel-appropriate copy for the chosen audience. You edit it in natural language until it sounds like you.',
+  },
+  {
+    icon: Radio,
+    title: 'Send and measure',
+    body: 'Approved campaigns go out through a provider layer that reports back over signed webhooks. The funnel updates as delivery events land.',
+  },
+];
+
+const ARCHITECTURE = [
+  {
+    title: 'Three deployable services',
+    body: 'A Next.js frontend on Vercel, an Express API on Render, and a separate channel service that models a real messaging provider over HTTP rather than a function call.',
+  },
+  {
+    title: 'AI reasons, code decides',
+    body: 'Opportunity detection, RFM scoring, and analytics are deterministic and auditable. The LLM is scoped to naming personas, explaining findings, and writing copy.',
+  },
+  {
+    title: 'Typed AI boundaries',
+    body: 'Every model call follows prompt → JSON parse → Zod validate → database write. No free-form model output reaches the UI or the database.',
+  },
+  {
+    title: 'Delivery you can trust',
+    body: 'Webhooks are HMAC-signed, idempotent by event id, and ordered by sequence number, so a retried or out-of-order callback cannot corrupt a communication’s state.',
+  },
+];
+
+const STACK = [
+  'Next.js 16',
+  'React 19',
+  'TypeScript',
+  'Tailwind CSS 4',
+  'Express 5',
+  'PostgreSQL',
+  'Prisma',
+  'Supabase Auth',
+  'BullMQ + Redis',
+  'Zod',
+  'OpenRouter',
+  'Vitest',
+];
+
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen bg-white text-[#1A1A1A]">
+      <BackendWarmup />
+
+      {/* ── Nav ─────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b border-[#E5E7EB] bg-white/90 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <Image src="/logo.png" alt="GrowthOS" width={92} height={36} className="object-contain" priority />
+
+          <div className="flex items-center gap-2">
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#1A1A1A] sm:flex"
+            >
+              <GithubIcon className="h-4 w-4" />
+              Source
+            </a>
+            <Link
+              href="/login"
+              className="rounded-full px-4 py-2 text-[13px] font-medium text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#1A1A1A]"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/login?mode=signup"
+              className="flex items-center gap-1.5 rounded-full bg-[#5B4FFF] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#4B3FE5]"
+            >
+              Get started
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden border-b border-[#E5E7EB]">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(91,79,255,0.10),transparent_60%)]"
+        />
+
+        <div className="relative mx-auto max-w-4xl px-6 py-24 text-center sm:py-32">
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#FAFAFA] px-3.5 py-1.5 text-[12px] font-medium text-[#6B7280]">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#5B4FFF] opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#5B4FFF]" />
+            </span>
+            Autonomous growth agent
+          </div>
+
+          <h1 className="text-[42px] font-black leading-[1.05] tracking-tight sm:text-[64px]">
+            Your CRM waits for
+            <br />
+            instructions.
+            <span className="block text-[#5B4FFF]">This one doesn&apos;t.</span>
+          </h1>
+
+          <p className="mx-auto mt-7 max-w-xl text-[17px] leading-relaxed text-[#6B7280]">
+            GrowthOS reads your customer data, finds where revenue is leaking, writes the
+            campaign to recover it, and tracks what actually converted. You approve the
+            decisions — it does the work.
           </p>
 
-          <div className="max-w-2xl mx-auto">
-            <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-[#5B4FFF] to-[#8B5CF6] rounded-2xl opacity-0 group-focus-within:opacity-20 blur transition-opacity" />
-              <div className="relative flex items-center gap-3 p-4 bg-white rounded-2xl border border-[#E5E7EB] shadow-sm group-focus-within:border-[#5B4FFF] transition-all">
-                <Sparkles className="h-5 w-5 text-[#5B4FFF] shrink-0" />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSubmitQuery()}
-                  placeholder={PLACEHOLDER_SUGGESTIONS[placeholderIndex]}
-                  className="flex-1 bg-transparent text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] outline-none"
-                  disabled={processing}
-                />
-                {processing ? (
-                  <div className="h-9 w-9 rounded-xl bg-[#5B4FFF] flex items-center justify-center shrink-0">
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleSubmitQuery}
-                    disabled={!query.trim()}
-                    className="h-9 w-9 rounded-xl bg-[#5B4FFF] text-white disabled:opacity-40 hover:bg-[#4B3FE5] transition-all flex items-center justify-center shrink-0"
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/login?mode=signup"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#5B4FFF] px-7 text-[15px] font-semibold text-white shadow-lg shadow-[#5B4FFF]/20 transition-all hover:-translate-y-0.5 hover:bg-[#4B3FE5] sm:w-auto"
+            >
+              Create an account
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#E5E7EB] px-7 text-[15px] font-semibold text-[#374151] transition-colors hover:border-[#5B4FFF] hover:text-[#5B4FFF] sm:w-auto"
+            >
+              <GithubIcon className="h-4 w-4" />
+              Read the code
+            </a>
+          </div>
+
+          <p className="mt-5 text-[13px] text-[#9CA3AF]">
+            After you sign in, upload your CSVs or start with 500 sample customers.
+          </p>
+        </div>
+      </section>
+
+      {/* ── The inversion ───────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB] bg-[#FAFAFA]">
+        <div className="mx-auto max-w-5xl px-6 py-20">
+          <h2 className="max-w-2xl text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
+            A dashboard is a question. This is an answer.
+          </h2>
+          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#6B7280]">
+            Traditional CRMs hand the marketer a query builder and expect them to already know
+            what to look for. Most of the work is in the knowing.
+          </p>
+
+          <div className="mt-12 grid gap-5 md:grid-cols-2">
+            <div className="rounded-2xl border border-[#E5E7EB] bg-white p-7">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9CA3AF]">
+                Traditional CRM
+              </p>
+              <ul className="mt-5 space-y-3.5 text-[15px] text-[#6B7280]">
+                <li>You guess which segment matters this month.</li>
+                <li>You hand-build the filter that defines it.</li>
+                <li>You write the copy from scratch, every time.</li>
+                <li>You open a report and interpret it yourself.</li>
+              </ul>
             </div>
-            <div className="flex items-center justify-center gap-2 mt-4">
-              {SUGGESTION_CHIPS.map(chip => (
-                <button
-                  key={chip}
-                  onClick={() => setQuery(chip)}
-                  className="px-3 py-1.5 text-xs text-[#6B7280] bg-white border border-[#E5E7EB] rounded-full hover:border-[#5B4FFF] hover:text-[#5B4FFF] transition-all"
-                >
-                  {chip}
-                </button>
-              ))}
+
+            <div className="rounded-2xl border-2 border-[#5B4FFF]/25 bg-white p-7 shadow-lg shadow-[#5B4FFF]/5">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#5B4FFF]">
+                GrowthOS
+              </p>
+              <ul className="mt-5 space-y-3.5 text-[15px] text-[#374151]">
+                <li>The agent surfaces the segment that is leaking revenue.</li>
+                <li>The audience is already built and sized.</li>
+                <li>The campaign arrives drafted, on the right channel.</li>
+                <li>The funnel explains itself as events land.</li>
+              </ul>
             </div>
-            {queryError && (
-              <p className="text-center text-xs text-red-500 mt-3">{queryError}</p>
-            )}
           </div>
         </div>
+      </section>
 
-        {/* ── Error ── */}
-        {error && (
-          <div className="text-center py-12">
-            <p className="text-red-500 mb-4">{error}</p>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#5B4FFF] text-white rounded-lg hover:bg-[#4B3FE5] transition-colors"
-            >
-              Go to Onboarding <ArrowRight className="h-4 w-4" />
-            </Link>
+      {/* ── Pipeline ────────────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB]">
+        <div className="mx-auto max-w-5xl px-6 py-20">
+          <h2 className="text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
+            CSV in, revenue decisions out
+          </h2>
+          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#6B7280]">
+            Five stages, each one inspectable. Nothing in this pipeline is a black box you have
+            to take on faith.
+          </p>
+
+          <ol className="mt-12 space-y-3">
+            {PIPELINE.map((stage, i) => {
+              const Icon = stage.icon;
+              return (
+                <li
+                  key={stage.title}
+                  className="group flex gap-5 rounded-2xl border border-[#E5E7EB] bg-white p-6 transition-all hover:border-[#5B4FFF]/30 hover:shadow-lg hover:shadow-[#5B4FFF]/5"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="text-[11px] font-bold tabular-nums text-[#C7CBD4]">
+                        0{i + 1}
+                      </span>
+                      <h3 className="text-[17px] font-bold">{stage.title}</h3>
+                    </div>
+                    <p className="mt-1.5 text-[15px] leading-relaxed text-[#6B7280]">
+                      {stage.body}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </section>
+
+      {/* ── Architecture ────────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB] bg-[#0A0E1A] text-white">
+        <div className="mx-auto max-w-5xl px-6 py-20">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[12px] font-medium text-[#A89DFF]">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            How it is built
           </div>
-        )}
 
-        {/* ── Empty ── */}
-        {!loading && !error && opportunities.length === 0 && (
-          <div className="text-center py-16">
-            <Sparkles className="h-12 w-12 mx-auto mb-4 text-[#9CA3AF]" />
-            <h2 className="text-xl font-semibold text-[#1A1A1A] mb-2">No opportunities yet</h2>
-            <p className="text-[#6B7280] mb-6">Upload customer data to discover growth opportunities</p>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#5B4FFF] text-white rounded-xl hover:bg-[#4B3FE5] transition-colors font-medium"
-            >
-              Get Started <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        )}
+          <h2 className="mt-6 text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
+            The interesting part isn&apos;t the prompt
+          </h2>
+          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#8B92A5]">
+            Anything can call a language model. The engineering is in deciding what the model is
+            allowed to be wrong about, and containing it when it is.
+          </p>
 
-        {/* ── Two Column Layout ── */}
-        {!loading && (featuredOpportunity || processing) && (
-          <div className="grid grid-cols-12 gap-8">
-            {/* ── Left: Featured Opportunity or Thinking Skeleton ── */}
-            <div className="col-span-8">
-              {processing ? (
-                /* ── Thinking Skeleton Card ── */
-                <div className="relative bg-white rounded-2xl border border-[#5B4FFF]/20 p-8 shadow-sm overflow-hidden">
-                  {/* Shimmer overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#5B4FFF]/[0.03] to-transparent animate-pulse pointer-events-none" />
-
-                  {/* Pulsing badge */}
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F0EEFF] text-[#5B4FFF] text-[10px] font-bold uppercase tracking-wider rounded-full mb-6">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5B4FFF]" />
-                    </span>
-                    GrowthOS is analyzing your request
-                  </div>
-
-                  <h2 className="text-3xl font-bold text-[#1A1A1A] mb-3">
-                    Generating Opportunity...
-                  </h2>
-                  <p className="text-[#5B4FFF] text-base mb-2 min-h-[1.5rem]">
-                    {thinkingText}
-                    <span className="inline-block w-0.5 h-4 bg-[#5B4FFF] ml-0.5 animate-pulse align-middle" />
-                  </p>
-                  <p className="text-[#9CA3AF] text-sm mb-10">
-                    Step {currentStepIndex + 1} of {generatingSteps.length}
-                  </p>
-
-                  {/* Skeleton metric bars */}
-                  <div className="flex gap-16 mb-10">
-                    {['Recoverable Revenue', 'Audience Size'].map(label => (
-                      <div key={label}>
-                        <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">{label}</p>
-                        <div className="h-9 w-28 bg-gray-100 rounded-lg animate-pulse" />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Skeleton info rows */}
-                  <div className="grid grid-cols-3 gap-6 pt-8 border-t border-[#E5E7EB]">
-                    {['Why GrowthOS Found This', 'Predicted Outcome', 'Recommended Action'].map(col => (
-                      <div key={col}>
-                        <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">{col}</p>
-                        <div className="space-y-2.5">
-                          <div className="h-3 w-full bg-gray-100 rounded animate-pulse" />
-                          <div className="h-3 w-4/5 bg-gray-100 rounded animate-pulse" />
-                          <div className="h-3 w-3/5 bg-gray-100 rounded animate-pulse" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : featuredOpportunity ? (
+          <div className="mt-12 grid gap-5 sm:grid-cols-2">
+            {ARCHITECTURE.map((item) => (
               <div
-                className={`bg-white rounded-2xl border border-[#E5E7EB] p-8 shadow-sm transition-all duration-300 ${
-                  cardAnimating ? 'opacity-0 translate-y-3' : 'opacity-100 translate-y-0'
-                }`}
+                key={item.title}
+                className="rounded-2xl border border-white/10 bg-white/[0.03] p-6"
               >
-                <div className="flex items-center justify-between mb-6">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#5B4FFF] text-white text-[10px] font-bold uppercase tracking-wider rounded-full">
-                    <Sparkles className="h-3 w-3" />
-                    {pinnedOpportunity ? 'Generated for You' : 'Highest Impact Opportunity'}
-                  </div>
-                  {pinnedOpportunity && (
-                    <button
-                      onClick={handleShowTopOpportunity}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-[#6B7280] bg-[#F3F4F6] hover:bg-[#E5E7EB] rounded-full transition-all"
-                    >
-                      <TrendingUp className="h-3 w-3" />
-                      Show Top Opportunity
-                    </button>
-                  )}
-                </div>
-
-                <h2 className="text-3xl font-bold text-[#1A1A1A] mb-3">
-                  {featuredOpportunity.title}
-                </h2>
-                <p className="text-[#6B7280] text-base leading-relaxed mb-8 max-w-2xl">
-                  {featuredOpportunity.ai_summary || featuredOpportunity.description}
-                </p>
-
-                {/* 2-metric row */}
-                <div className="flex gap-16 mb-10">
-                  <div>
-                    <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">
-                      Recoverable Revenue
-                    </p>
-                    <p className="text-3xl font-bold text-[#5B4FFF]">
-                      {formatCurrency(featuredOpportunity.potential_revenue)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">
-                      Audience Size
-                    </p>
-                    <p className="text-3xl font-bold text-[#1A1A1A]">
-                      {featuredOpportunity.audience_size.toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 2-column info */}
-                <div className="grid grid-cols-2 gap-8 pt-8 border-t border-[#E5E7EB]">
-                  <div>
-                    <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">
-                      Why GrowthOS Found This
-                    </p>
-                    <ul className="space-y-2.5">
-                      {parseTriggerReasons(featuredOpportunity).map((reason, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-[#4B5563]">
-                          <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                          <span>{reason}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">
-                      Recommended Action
-                    </p>
-                    <div className="bg-[#F9FAFB] rounded-xl p-4 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#6B7280]">Channel</span>
-                        <span className="font-medium text-[#1A1A1A]">
-                          {parseChannel(featuredOpportunity.recommended_action)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#6B7280]">Segment</span>
-                        <span className="font-medium text-[#1A1A1A]">
-                          {featuredOpportunity.supporting_customer_segment || 'General'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#6B7280]">Priority</span>
-                        <span
-                          className={`font-medium ${
-                            featuredOpportunity.priority_score >= 70
-                              ? 'text-[#5B4FFF]'
-                              : featuredOpportunity.priority_score >= 40
-                              ? 'text-amber-600'
-                              : 'text-gray-600'
-                          }`}
-                        >
-                          {getPriorityLabel(featuredOpportunity.priority_score).label.replace(' Priority', '')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CTA Buttons */}
-                <div className="flex items-center gap-4 mt-8">
-                  <Link
-                    href={`/opportunities/${featuredOpportunity.opportunity_id || featuredOpportunity.id}`}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#5B4FFF] text-white text-sm font-semibold rounded-full hover:bg-[#4B3FE5] transition-colors"
-                  >
-                    Review Opportunity →
-                  </Link>
-                  <Link
-                    href="/opportunities"
-                    className="text-sm font-medium text-[#6B7280] hover:text-[#1A1A1A] transition-colors"
-                  >
-                    View All Opportunities
-                  </Link>
-                </div>
+                <h3 className="text-[16px] font-bold">{item.title}</h3>
+                <p className="mt-2.5 text-[14.5px] leading-relaxed text-[#8B92A5]">{item.body}</p>
               </div>
-              ) : null}
-            </div>
-
-            {/* ── Right: Activity Feed ── */}
-            <div className="col-span-4">
-
-              {/* Activity Feed */}
-              <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5B4FFF]" />
-                    </div>
-                    <h3 className="text-sm font-bold text-[#1A1A1A]">Activity</h3>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-semibold text-emerald-600">Agent active</span>
-                    </span>
-                  </div>
-                  {activityItems.length > 0 && (
-                    <button
-                      onClick={() => setModalOpen(true)}
-                      className="text-[10px] font-medium text-[#5B4FFF] hover:underline"
-                    >
-                      See all
-                    </button>
-                  )}
-                </div>
-
-                {activityLoading ? (
-                  <div className="space-y-3">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} className="animate-pulse flex gap-3 rounded-xl p-2">
-                        <div className="h-8 w-8 rounded-xl bg-[#F3F4F6] shrink-0" />
-                        <div className="flex-1 space-y-2 pt-1">
-                          <div className="h-2 bg-[#F3F4F6] rounded w-1/4" />
-                          <div className="h-3 bg-[#F3F4F6] rounded w-full" />
-                          <div className="h-2 bg-[#F3F4F6] rounded w-1/3" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : activityItems.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="h-10 w-10 mx-auto mb-3 rounded-2xl bg-[#F3F4F6] flex items-center justify-center">
-                      <Clock className="h-5 w-5 text-[#D1D5DB]" />
-                    </div>
-                    <p className="text-sm font-medium text-[#6B7280]">Agent is warming up…</p>
-                    <p className="text-[11px] text-[#9CA3AF] mt-1">First run completes in a few minutes</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {activityItems.slice(0, 6).map((item, idx) => {
-                      const meta = ACTION_META[item.actionType] ?? {
-                        label: item.actionType,
-                        Icon: Activity,
-                        iconBg: 'bg-gray-100',
-                        iconColor: 'text-gray-400',
-                        labelColor: 'text-gray-400',
-                        rowBg: 'bg-gray-50',
-                      };
-                      const Icon = meta.Icon;
-                      return (
-                        <div
-                          key={item.id}
-                          className={`flex gap-3 rounded-xl p-2.5 transition-colors ${idx === 0 ? meta.rowBg : 'hover:bg-[#F9FAFB]'}`}
-                        >
-                          <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${meta.iconBg}`}>
-                            <Icon className={`h-3.5 w-3.5 ${meta.iconColor}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${meta.labelColor}`}>
-                              {meta.label}
-                            </p>
-                            <p className="text-xs text-[#1A1A1A] leading-snug">
-                              {idx === 0 ? (
-                                <>
-                                  {typedText}
-                                  {typedText.length < (item.description?.length ?? 0) && (
-                                    <span className="inline-block w-0.5 h-3 bg-[#5B4FFF] ml-0.5 animate-pulse align-middle" />
-                                  )}
-                                </>
-                              ) : item.description}
-                            </p>
-                            <p className="text-[10px] text-[#9CA3AF] mt-0.5">{timeAgo(item.createdAt)}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-            </div>
+            ))}
           </div>
-        )}
 
-        {/* ── Other Opportunities ── */}
-        {!loading && gridOpportunities.length > 0 && (
-          <div className="mt-12">
-            <h3 className="text-lg font-bold text-[#1A1A1A] mb-6">
-              {processing ? 'Current Opportunities' : 'Other Opportunities'}
-            </h3>
-            <div className="grid grid-cols-3 gap-6">
-              {gridOpportunities.map((opp, i) => {
-                const priority = getPriorityLabel(opp.priority_score);
-                return (
-                  <Link
-                    key={opp.opportunity_id || opp.id || i}
-                    href={`/opportunities/${opp.opportunity_id || opp.id}`}
-                    className="bg-white rounded-xl border border-[#E5E7EB] p-6 hover:border-[#5B4FFF] hover:shadow-md transition-all group"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-base font-semibold text-[#1A1A1A] group-hover:text-[#5B4FFF] transition-colors">
-                        {opp.title}
-                      </h4>
-                      <span
-                        className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ${priority.color}`}
-                      >
-                        {priority.label.replace(' Priority', '')}
-                      </span>
-                    </div>
-                    <p className="text-xl font-bold text-[#5B4FFF] mb-2">
-                      {formatCurrency(opp.potential_revenue)}
-                      <span className="text-xs font-normal text-[#9CA3AF] ml-1">Est. Value</span>
-                    </p>
-                    <p className="text-sm text-[#6B7280] line-clamp-2">{opp.description}</p>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* ── Activity Modal ── */}
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setModalOpen(false)}
-        >
-          <div
-            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
-              <div className="flex items-center gap-2">
-                <div className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#5B4FFF]" />
-                </div>
-                <h2 className="text-base font-bold text-[#1A1A1A]">GrowthOS Agent Activity Log</h2>
-              </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="h-8 w-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
-              >
-                <X className="h-4 w-4 text-[#6B7280]" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-              {activityItems.map((item, idx) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border border-[#E5E7EB] overflow-hidden"
-                >
-                  <div className="flex items-start justify-between px-4 py-3 bg-[#F9FAFB]">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-2 w-2 rounded-full shrink-0 mt-0.5 ${
-                          idx === 0 ? 'bg-[#5B4FFF]' : 'bg-[#D1D5DB]'
-                        }`}
-                      />
-                      <span className="text-xs font-semibold text-[#5B4FFF] uppercase tracking-wide">
-                        {actionTypeLabel[item.actionType] ?? item.actionType}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-[#9CA3AF]">{timeAgo(item.createdAt)}</span>
+          {/* Flow */}
+          <div className="mt-12 overflow-x-auto">
+            <div className="flex min-w-max items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 font-mono text-[12.5px] text-[#8B92A5]">
+              {[
+                { label: 'Frontend', sub: 'Vercel' },
+                { label: 'API', sub: 'Render' },
+                { label: 'Postgres', sub: 'Supabase' },
+                { label: 'Queue', sub: 'Redis' },
+                { label: 'Channel', sub: 'Render' },
+              ].map((node, i, arr) => (
+                <div key={node.label} className="flex items-center gap-2.5">
+                  <div className="rounded-lg border border-white/10 bg-[#0A0E1A] px-3.5 py-2 text-center">
+                    <div className="font-semibold text-white">{node.label}</div>
+                    <div className="mt-0.5 text-[11px] text-[#5B6178]">{node.sub}</div>
                   </div>
-                  <div className="px-4 py-3">
-                    <p className="text-sm text-[#1A1A1A] mb-2">{item.description}</p>
-                    {item.details && Object.keys(item.details).length > 0 && (
-                      <pre className="text-[11px] text-[#6B7280] bg-[#F3F4F6] rounded-lg p-3 overflow-x-auto font-mono leading-relaxed">
-                        {JSON.stringify(item.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
+                  {i < arr.length - 1 && <span className="text-[#5B6178]">&rarr;</span>}
                 </div>
               ))}
-
-              {activityItems.length === 0 && (
-                <div className="text-center py-12">
-                  <Activity className="h-10 w-10 mx-auto mb-3 text-[#D1D5DB]" />
-                  <p className="text-sm text-[#9CA3AF]">No activity logged yet.</p>
-                </div>
-              )}
             </div>
           </div>
+
+          <div className="mt-10 flex flex-wrap gap-2">
+            {STACK.map((tech) => (
+              <span
+                key={tech}
+                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] font-medium text-[#A8AEC0]"
+              >
+                {tech}
+              </span>
+            ))}
+          </div>
         </div>
-      )}
+      </section>
+
+      {/* ── What you can do in the demo ─────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB]">
+        <div className="mx-auto max-w-5xl px-6 py-20">
+          <h2 className="text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
+            What you can do once you&apos;re in
+          </h2>
+
+          <div className="mt-12 grid gap-5 sm:grid-cols-3">
+            {[
+              {
+                icon: Brain,
+                title: 'Watch personas form',
+                body: 'Load the sample retailer and see the segments the model names from its actual purchase behaviour.',
+              },
+              {
+                icon: Bot,
+                title: 'Send the agent a goal',
+                body: 'Type a plain-language objective and watch it decide which audience serves that goal and why.',
+              },
+              {
+                icon: LineChart,
+                title: 'Launch and track',
+                body: 'Approve a campaign and follow real delivery events through the funnel as the provider reports back.',
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-[#E5E7EB] bg-white p-6 transition-all hover:border-[#5B4FFF]/30 hover:shadow-lg hover:shadow-[#5B4FFF]/5"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-5 text-[16px] font-bold">{item.title}</h3>
+                  <p className="mt-2 text-[14.5px] leading-relaxed text-[#6B7280]">{item.body}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Closing CTA ─────────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB] bg-[#FAFAFA]">
+        <div className="mx-auto max-w-3xl px-6 py-24 text-center">
+          <h2 className="text-[32px] font-black leading-tight tracking-tight sm:text-[42px]">
+            See it find revenue in data
+            <br />
+            it has never seen
+          </h2>
+          <p className="mx-auto mt-5 max-w-lg text-[16px] leading-relaxed text-[#6B7280]">
+            Create an account, then upload your own data or evaluate the pipeline on 500
+            sample customers and 3,000 orders — loaded into your workspace, not a shared sandbox.
+          </p>
+          <Link
+            href="/login?mode=signup"
+            className="mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#5B4FFF] px-8 text-[15px] font-semibold text-white shadow-lg shadow-[#5B4FFF]/20 transition-all hover:-translate-y-0.5 hover:bg-[#4B3FE5]"
+          >
+            Create an account
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <footer className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-9 sm:flex-row">
+        <Image src="/logo.png" alt="GrowthOS" width={76} height={30} className="object-contain" />
+        <p className="text-[13px] text-[#9CA3AF]">
+          Built by{' '}
+          <a
+            href="https://github.com/Mithurn"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-[#6B7280] underline decoration-[#D1D5DB] underline-offset-2 transition-colors hover:text-[#5B4FFF]"
+          >
+            Mithurn Jeromme
+          </a>
+        </p>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-[13px] font-medium text-[#6B7280] transition-colors hover:text-[#5B4FFF]"
+        >
+          <GithubIcon className="h-4 w-4" />
+          GitHub
+        </a>
+      </footer>
     </div>
   );
 }

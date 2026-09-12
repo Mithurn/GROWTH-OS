@@ -12,6 +12,7 @@ export default defineConfig({
       FRONTEND_URL: 'http://localhost:3000',
       LOG_LEVEL: 'silent',
       OPENROUTER_API_KEY: 'test-openrouter-key',
+      INTERNAL_API_SECRET: 'test-internal-secret',
     },
     setupFiles: ['./src/__tests__/setup.ts'],
   },

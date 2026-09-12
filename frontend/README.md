@@ -31,11 +31,14 @@
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Overview dashboard — featured opportunity, AI activity stream, natural language command bar |
+| `/` | Public landing page — what the product does, the architecture, and a link to sign in |
+| `/login` | Email/password and Google sign-in via Supabase Auth |
+| `/dashboard` | Overview — featured opportunity, AI activity stream, natural language command bar |
 | `/onboarding` | 5-step wizard: industry → CSV upload → goal → mode → animated setup |
 | `/opportunities` | AI-detected revenue opportunities with audience size, revenue potential, confidence scores |
 | `/opportunities/[id]/campaign` | Campaign generation, channel selection, message preview, approve & launch |
-| `/analytics` | Live campaign funnel — polls every 5s while campaign is active, updates in real-time |
+| `/analytics` | Live campaign funnel — polls every 5s while a campaign is active |
+| `/settings` | Company profile and AI guardrails |
 | `/campaigns` | All campaigns with status tracking |
 | `/personas` | AI-assigned persona distribution across the customer base |
 | `/intelligence` | Customer intelligence view |
@@ -58,13 +61,13 @@
 
 ## Key Design Decisions
 
-**No auth on the frontend.** Company ID stored in `localStorage` after onboarding. At production scale this becomes JWT + Supabase Row Level Security — removed for demo simplicity.
+**Auth in the proxy, tenancy on the server.** `proxy.ts` gates every route on a Supabase session and routes users by onboarding state. The company a request belongs to is never sent by the client — the backend resolves it from the JWT via `profiles.company_id`, so a tampered client cannot reach another tenant's data.
 
 **Polling over WebSockets.** Analytics page polls `/api/campaigns/:id/analytics` every 5 seconds while status is `Launched`. Keeps the client stateless. At scale, Supabase Realtime replaces this.
 
-**AI command bar on homepage.** Natural language input lets the marketer type a goal ("increase repeat purchases") and the backend generates a targeted opportunity from it — no segment builder required.
+**AI command bar on the dashboard.** Natural language input lets the marketer type a goal ("increase repeat purchases") and the backend generates a targeted opportunity from it — no segment builder required.
 
-**Wake pings on page load.** Both backend and channel service health endpoints are pinged the moment the homepage loads, pre-warming Render free-tier instances before the marketer reaches campaign generation.
+**Keep the backend warm, wake the channel service on demand.** Render's free tier gives 750 instance-hours a month across the whole workspace — enough to keep exactly one service up 24/7. An external cron holds the backend open, so the app is never cold for a visitor. The channel service is only needed at launch time, so the backend warms it itself before fanning out sends rather than paying to keep it running.
 
 ---
 

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Sparkles,
-  ArrowRight,
   RotateCcw,
   ShieldAlert,
   TrendingUp,
@@ -18,6 +17,7 @@ import {
   createOpportunityFromGoal,
   getCampaigns,
 } from '@/lib/api';
+import type { CampaignWithMetrics } from '@/lib/types';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -74,11 +74,6 @@ const getCategoryForType = (type: string): string => {
   return 'Expansion';
 };
 
-const normalizeStatus = (status: string): string => {
-  if (!status) return 'new';
-  return status.toLowerCase();
-};
-
 const CATEGORY_FILTERS = [
   { key: 'Recovery', icon: RotateCcw, color: 'text-blue-500' },
   { key: 'Retention', icon: ShieldAlert, color: 'text-amber-500' },
@@ -103,7 +98,6 @@ const SUGGESTIONS = [
 // ─────────────────────────────────────────────────────────────
 export default function OpportunitiesPage() {
   const router = useRouter();
-  const [companyId, setCompanyId] = useState<string | undefined>(undefined);
   const [report, setReport] = useState<OpportunityReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [creatingGoal, setCreatingGoal] = useState(false);
@@ -114,7 +108,6 @@ export default function OpportunitiesPage() {
   const [campaignMap, setCampaignMap] = useState<Record<string, string>>({}); // opportunityId → campaign status
 
   useEffect(() => {
-    setCompanyId(window.localStorage.getItem('growthOS_company_id') ?? undefined);
     let mounted = true;
     async function load() {
       try {
@@ -135,7 +128,7 @@ export default function OpportunitiesPage() {
         }
         if (campRes) {
           const map: Record<string, string> = {};
-          (campRes.data ?? []).forEach((c: any) => {
+          (campRes.data ?? []).forEach((c: CampaignWithMetrics) => {
             if (c.opportunity_id) map[c.opportunity_id] = c.status;
           });
           if (mounted) setCampaignMap(map);

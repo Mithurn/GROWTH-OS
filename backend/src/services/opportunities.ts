@@ -1,6 +1,6 @@
-import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { openRouterConfig } from '../config/openrouter';
+import { selectIn, selectPaged } from '../lib/scoped-query';
+import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 
 export type OpportunityStatus =
@@ -310,92 +310,87 @@ function normalizeConfidence(value: number | string | null | undefined): number 
   return roundToTwo(Math.max(0, Math.min(1, parsed)));
 }
 
+/**
+ * Load a company by id, failing closed.
+ *
+ * This used to fall back to the oldest row in `companies` when no id was supplied, and
+ * to create a demo company if the table was empty. Both fallbacks silently attributed
+ * one tenant's generated data to another, so a missing id is now an error. Every caller
+ * either passes the JWT-resolved company or one read off an ownership-verified row.
+ */
 async function ensureCompanyRow(supabase: SupabaseClient, companyId?: string): Promise<CompanyRow> {
-  if (companyId) {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id, company_name, industry')
-      .eq('id', companyId)
-      .maybeSingle();
-
-    if (error) throw new Error(`Failed to load company ${companyId}: ${error.message}`);
-    if (data) return data as CompanyRow;
+  if (!companyId) {
+    throw new Error('companyId is required');
   }
 
-  const { data: existing, error: existingError } = await supabase
+  const { data, error } = await supabase
     .from('companies')
     .select('id, company_name, industry')
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .eq('id', companyId)
+    .maybeSingle();
 
-  if (existingError) {
-    throw new Error(`Failed to inspect companies table: ${existingError.message}`);
-  }
+  if (error) throw new Error(`Failed to load company ${companyId}: ${error.message}`);
+  if (!data) throw new Error(`Company ${companyId} not found`);
 
-  if (existing && existing.length > 0) {
-    return existing[0] as CompanyRow;
-  }
-
-  const { data: inserted, error: insertError } = await supabase
-    .from('companies')
-    .upsert(
-      {
-        company_name: 'GrowthOS Demo Fashion',
-        industry: 'Fashion',
-      },
-      { onConflict: 'company_name' },
-    )
-    .select('id, company_name, industry')
-    .single();
-
-  if (insertError) {
-    throw new Error(`Failed to create default company row: ${insertError.message}`);
-  }
-
-  return inserted as CompanyRow;
+  return data as CompanyRow;
 }
 
-async function fetchCustomers(supabase: SupabaseClient): Promise<CustomerRow[]> {
-  const { data, error } = await supabase
-    .from('customers')
-    .select('id, first_name, last_name')
-    .order('created_at', { ascending: true });
+// ── Tenant-scoped reads ──────────────────────────────────────────────────────
+// `customers`, `personas`, and `products` carry a `company_id`, so they filter on it
+// directly. `orders`, `order_items`, `customer_metrics`, and `customer_attributes` do
+// not — their tenant is implied by the customer or order they belong to, so they are
+// filtered by ids already narrowed to one company.
+//
+// These reads previously had no company filter at all while their results were written
+// back tagged with the caller's company, which mixed customers between tenants.
 
-  if (error) {
-    throw new Error(`Failed to load customers: ${error.message}`);
-  }
-
-  return (data ?? []) as CustomerRow[];
+async function fetchCustomers(supabase: SupabaseClient, companyId: string): Promise<CustomerRow[]> {
+  return selectPaged<CustomerRow>(
+    supabase,
+    'customers',
+    'id, first_name, last_name',
+    (q) => q.eq('company_id', companyId).order('created_at', { ascending: true }),
+  );
 }
 
-async function fetchMetrics(supabase: SupabaseClient): Promise<Map<string, MetricRow>> {
-  const { data, error } = await supabase
-    .from('customer_metrics')
-    .select('customer_id, total_orders, total_spent, avg_order_value, last_order_date, days_since_last_order, purchase_frequency, engagement_score');
+async function fetchMetrics(
+  supabase: SupabaseClient,
+  customerIds: string[],
+): Promise<Map<string, MetricRow>> {
+  const rows = await selectIn<MetricRow>(
+    supabase,
+    'customer_metrics',
+    'customer_id, total_orders, total_spent, avg_order_value, last_order_date, days_since_last_order, purchase_frequency, engagement_score',
+    'customer_id',
+    customerIds,
+  );
 
-  if (error) {
-    throw new Error(`Failed to load customer metrics: ${error.message}`);
-  }
-
-  return new Map((data ?? []).map((row) => [row.customer_id, row as MetricRow]));
+  return new Map(rows.map((row) => [row.customer_id, row]));
 }
 
-async function fetchAttributes(supabase: SupabaseClient): Promise<Map<string, AttributeRow>> {
-  const { data, error } = await supabase
-    .from('customer_attributes')
-    .select('customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score');
+async function fetchAttributes(
+  supabase: SupabaseClient,
+  customerIds: string[],
+): Promise<Map<string, AttributeRow>> {
+  const rows = await selectIn<AttributeRow>(
+    supabase,
+    'customer_attributes',
+    'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score',
+    'customer_id',
+    customerIds,
+  );
 
-  if (error) {
-    throw new Error(`Failed to load customer attributes: ${error.message}`);
-  }
-
-  return new Map((data ?? []).map((row) => [row.customer_id, row as AttributeRow]));
+  return new Map(rows.map((row) => [row.customer_id, row]));
 }
 
-async function fetchPersonas(supabase: SupabaseClient): Promise<Map<string, PersonaRow>> {
+async function fetchPersonas(
+  supabase: SupabaseClient,
+  companyId: string,
+): Promise<Map<string, PersonaRow>> {
   const { data, error } = await supabase
     .from('personas')
-    .select('customer_id, persona_name, persona_description, confidence_score');
+    .select('customer_id, persona_name, persona_description, confidence_score')
+    .eq('company_id', companyId);
 
   if (error) {
     throw new Error(`Failed to load personas: ${error.message}`);
@@ -404,40 +399,75 @@ async function fetchPersonas(supabase: SupabaseClient): Promise<Map<string, Pers
   return new Map((data ?? []).map((row) => [row.customer_id, row as PersonaRow]));
 }
 
-async function fetchOrders(supabase: SupabaseClient): Promise<OrderRow[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('id, customer_id, order_date');
-
-  if (error) {
-    throw new Error(`Failed to load orders: ${error.message}`);
-  }
-
-  return (data ?? []) as OrderRow[];
+async function fetchOrders(supabase: SupabaseClient, customerIds: string[]): Promise<OrderRow[]> {
+  return selectIn<OrderRow>(
+    supabase,
+    'orders',
+    'id, customer_id, order_date',
+    'customer_id',
+    customerIds,
+  );
 }
 
-async function fetchOrderItems(supabase: SupabaseClient): Promise<OrderItemRow[]> {
-  const { data, error } = await supabase
-    .from('order_items')
-    .select('order_id, product_id');
-
-  if (error) {
-    throw new Error(`Failed to load order items: ${error.message}`);
-  }
-
-  return (data ?? []) as OrderItemRow[];
+async function fetchOrderItems(
+  supabase: SupabaseClient,
+  orderIds: string[],
+): Promise<OrderItemRow[]> {
+  return selectIn<OrderItemRow>(
+    supabase,
+    'order_items',
+    'order_id, product_id',
+    'order_id',
+    orderIds,
+  );
 }
 
-async function fetchProducts(supabase: SupabaseClient): Promise<Map<string, ProductRow>> {
+async function fetchProducts(
+  supabase: SupabaseClient,
+  companyId: string,
+): Promise<Map<string, ProductRow>> {
   const { data, error } = await supabase
     .from('products')
-    .select('id, category');
+    .select('id, category')
+    .eq('company_id', companyId);
 
   if (error) {
     throw new Error(`Failed to load products: ${error.message}`);
   }
 
   return new Map((data ?? []).map((row) => [row.id, row as ProductRow]));
+}
+
+/**
+ * Load every customer-derived dataset for one company.
+ *
+ * Runs in three waves because the scoping is hierarchical: customers narrow the
+ * customer-keyed tables, and orders narrow order_items.
+ */
+async function fetchCompanyDataset(supabase: SupabaseClient, companyId: string) {
+  const customers = await fetchCustomers(supabase, companyId);
+  const customerIds = customers.map((c) => c.id);
+
+  const [metricsByCustomer, attributesByCustomer, personasByCustomer, orders, productsById] =
+    await Promise.all([
+      fetchMetrics(supabase, customerIds),
+      fetchAttributes(supabase, customerIds),
+      fetchPersonas(supabase, companyId),
+      fetchOrders(supabase, customerIds),
+      fetchProducts(supabase, companyId),
+    ]);
+
+  const orderItems = await fetchOrderItems(supabase, orders.map((o) => o.id));
+
+  return {
+    customers,
+    metricsByCustomer,
+    attributesByCustomer,
+    personasByCustomer,
+    orders,
+    orderItems,
+    productsById,
+  };
 }
 
 function buildProfiles(
@@ -771,12 +801,11 @@ function buildOpportunityPrompt(opportunity: OpportunityDraft, sampleCustomers: 
 }
 
 async function generateAiEnrichment(
-  client: OpenAI,
   model: string,
   opportunity: OpportunityDraft,
   sampleCustomers: OpportunityCustomerDetail[],
 ): Promise<AIOpportunitySummary> {
-  const response = await client.chat.completions.create({
+  const response = await openai.chat.completions.create({
     model,
     temperature: 0.2,
     max_tokens: 600,
@@ -863,7 +892,6 @@ function buildOpportunityCandidates(customers: CustomerProfile[]): OpportunityDr
 }
 
 async function enrichWithAiSummaries(
-  client: OpenAI,
   model: string,
   opportunities: OpportunityDraft[],
   customerDetailsByOpportunity: Map<string, OpportunityCustomerDetail[]>,
@@ -874,7 +902,7 @@ async function enrichWithAiSummaries(
   for (const opportunity of opportunities) {
     const sampleCustomers = customerDetailsByOpportunity.get(opportunity.opportunity_key) ?? [];
     try {
-      const enrichment = await generateAiEnrichment(client, model, opportunity, sampleCustomers);
+      const enrichment = await generateAiEnrichment(model, opportunity, sampleCustomers);
       enriched.push({ ...opportunity, ...enrichment });
       logger.info(`[opportunities] AI enrichment generated for ${opportunity.title}`);
     } catch (error) {
@@ -899,22 +927,19 @@ async function buildCustomerDetailsByOpportunity(
       continue;
     }
 
-    const [customersResult, metricsResult, attributesResult, personasResult] = await Promise.all([
-      supabase.from('customers').select('id, first_name, last_name').in('id', customerIds),
-      supabase.from('customer_metrics').select('customer_id, total_spent, total_orders, avg_order_value, last_order_date, days_since_last_order, engagement_score').in('customer_id', customerIds),
-      supabase.from('customer_attributes').select('customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, dominant_price_band, category_diversity_score').in('customer_id', customerIds),
-      supabase.from('personas').select('customer_id, persona_name, persona_description, confidence_score').in('customer_id', customerIds),
+    // Audience lists run to hundreds of ids, so these go through the chunked helper —
+    // a raw .in() puts every id in the query string and overflows the URL limit.
+    const [customerRows, metricRows, attributeRows, personaRows] = await Promise.all([
+      selectIn<any>(supabase, 'customers', 'id, first_name, last_name', 'id', customerIds),
+      selectIn<any>(supabase, 'customer_metrics', 'customer_id, total_spent, total_orders, avg_order_value, last_order_date, days_since_last_order, engagement_score', 'customer_id', customerIds),
+      selectIn<any>(supabase, 'customer_attributes', 'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, dominant_price_band, category_diversity_score', 'customer_id', customerIds),
+      selectIn<any>(supabase, 'personas', 'customer_id, persona_name, persona_description, confidence_score', 'customer_id', customerIds),
     ]);
 
-    if (customersResult.error) throw new Error(`Failed to load opportunity customers: ${customersResult.error.message}`);
-    if (metricsResult.error) throw new Error(`Failed to load opportunity metrics: ${metricsResult.error.message}`);
-    if (attributesResult.error) throw new Error(`Failed to load opportunity attributes: ${attributesResult.error.message}`);
-    if (personasResult.error) throw new Error(`Failed to load opportunity personas: ${personasResult.error.message}`);
-
-    const customerById = new Map((customersResult.data ?? []).map((row: any) => [row.id, row]));
-    const metricsById = new Map((metricsResult.data ?? []).map((row: any) => [row.customer_id, row]));
-    const attributesById = new Map((attributesResult.data ?? []).map((row: any) => [row.customer_id, row]));
-    const personasById = new Map((personasResult.data ?? []).map((row: any) => [row.customer_id, row]));
+    const customerById = new Map(customerRows.map((row: any) => [row.id, row]));
+    const metricsById = new Map(metricRows.map((row: any) => [row.customer_id, row]));
+    const attributesById = new Map(attributeRows.map((row: any) => [row.customer_id, row]));
+    const personasById = new Map(personaRows.map((row: any) => [row.customer_id, row]));
 
     const audience = customerIds.map((customerId) => {
       const customer = customerById.get(customerId);
@@ -1067,26 +1092,11 @@ export async function generateOpportunities(
   const logger = options.logger ?? defaultLogger;
   const company = await ensureCompanyRow(supabase, options.companyId);
   const model = options.model ?? openRouterConfig.defaultModel;
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   logger.info(`[opportunities] Starting generation for company=${company.company_name} (${company.id})`);
 
-  const [customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById] = await Promise.all([
-    fetchCustomers(supabase),
-    fetchMetrics(supabase),
-    fetchAttributes(supabase),
-    fetchPersonas(supabase),
-    fetchOrders(supabase),
-    fetchOrderItems(supabase),
-    fetchProducts(supabase),
-  ]);
+  const { customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById } =
+    await fetchCompanyDataset(supabase, company.id);
 
   const profiles = buildProfiles(
     customers,
@@ -1108,7 +1118,7 @@ export async function generateOpportunities(
   }
 
   const customerDetailsByOpportunity = await buildCustomerDetailsByOpportunity(supabase, candidateOpportunities);
-  const opportunitiesWithAi = await enrichWithAiSummaries(client, model, candidateOpportunities, customerDetailsByOpportunity, logger);
+  const opportunitiesWithAi = await enrichWithAiSummaries(model, candidateOpportunities, customerDetailsByOpportunity, logger);
   const persistedOpportunities = await upsertOpportunities(supabase, company.id, opportunitiesWithAi);
 
   const opportunityIds = persistedOpportunities.map((row) => row.id);
@@ -1164,8 +1174,8 @@ export async function getOpportunityDashboard(
   companyId?: string,
 ): Promise<OpportunityReport> {
   const company = await ensureCompanyRow(supabase, companyId);
-  const [customers, opportunitiesResult] = await Promise.all([
-    fetchCustomers(supabase),
+  const [dataset, opportunitiesResult] = await Promise.all([
+    fetchCompanyDataset(supabase, company.id),
     supabase
       .from('opportunities')
       .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
@@ -1198,12 +1208,15 @@ export async function getOpportunityDashboard(
     }
   }
 
-  const metricsByCustomer = await fetchMetrics(supabase);
-  const attributesByCustomer = await fetchAttributes(supabase);
-  const personasByCustomer = await fetchPersonas(supabase);
-  const orderItems = await fetchOrderItems(supabase);
-  const orders = await fetchOrders(supabase);
-  const productsById = await fetchProducts(supabase);
+  const {
+    customers,
+    metricsByCustomer,
+    attributesByCustomer,
+    personasByCustomer,
+    orders,
+    orderItems,
+    productsById,
+  } = dataset;
   const profiles = buildProfiles(customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById);
   const customerDetailsByOpportunity = new Map<string, OpportunityCustomerDetail[]>();
 
@@ -1299,22 +1312,17 @@ export async function getOpportunityCustomers(
   const customerIds = (audienceData ?? []).map((row: any) => row.customer_id);
   const customers = dashboard.opportunityDistribution.length > 0
     ? await (async () => {
-        const [customersResult, metricsResult, attributesResult, personasResult] = await Promise.all([
-          supabase.from('customers').select('id, first_name, last_name').in('id', customerIds),
-          supabase.from('customer_metrics').select('customer_id, total_spent, total_orders, avg_order_value, last_order_date, days_since_last_order, engagement_score').in('customer_id', customerIds),
-          supabase.from('customer_attributes').select('customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, dominant_price_band, category_diversity_score').in('customer_id', customerIds),
-          supabase.from('personas').select('customer_id, persona_name, persona_description, confidence_score').in('customer_id', customerIds),
+        const [customerRows, metricRows, attributeRows, personaRows] = await Promise.all([
+          selectIn<any>(supabase, 'customers', 'id, first_name, last_name', 'id', customerIds),
+          selectIn<any>(supabase, 'customer_metrics', 'customer_id, total_spent, total_orders, avg_order_value, last_order_date, days_since_last_order, engagement_score', 'customer_id', customerIds),
+          selectIn<any>(supabase, 'customer_attributes', 'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, dominant_price_band, category_diversity_score', 'customer_id', customerIds),
+          selectIn<any>(supabase, 'personas', 'customer_id, persona_name, persona_description, confidence_score', 'customer_id', customerIds),
         ]);
 
-        if (customersResult.error) throw new Error(`Failed to load audience customers: ${customersResult.error.message}`);
-        if (metricsResult.error) throw new Error(`Failed to load audience metrics: ${metricsResult.error.message}`);
-        if (attributesResult.error) throw new Error(`Failed to load audience attributes: ${attributesResult.error.message}`);
-        if (personasResult.error) throw new Error(`Failed to load audience personas: ${personasResult.error.message}`);
-
-        const customerById = new Map((customersResult.data ?? []).map((row: any) => [row.id, row]));
-        const metricsById = new Map((metricsResult.data ?? []).map((row: any) => [row.customer_id, row]));
-        const attributesById = new Map((attributesResult.data ?? []).map((row: any) => [row.customer_id, row]));
-        const personasById = new Map((personasResult.data ?? []).map((row: any) => [row.customer_id, row]));
+        const customerById = new Map(customerRows.map((row: any) => [row.id, row]));
+        const metricsById = new Map(metricRows.map((row: any) => [row.customer_id, row]));
+        const attributesById = new Map(attributeRows.map((row: any) => [row.customer_id, row]));
+        const personasById = new Map(personaRows.map((row: any) => [row.customer_id, row]));
 
         return customerIds.map((customerId) => {
           const customer = customerById.get(customerId);
@@ -1372,15 +1380,7 @@ export async function refineOpportunity(
   if (!row) throw new Error(`Opportunity ${opportunityId} not found`);
 
   const model = options.model ?? openRouterConfig.defaultModel;
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   const currentRevenue = toNumber(row.potential_revenue);
   const prompt = [
     'You are a marketing co-pilot for a retail CRM. A marketer wants to modify an existing opportunity.',
@@ -1413,7 +1413,7 @@ export async function refineOpportunity(
     'Return JSON only. No markdown.',
   ].join('\n');
 
-  const response = await client.chat.completions.create({
+  const response = await openai.chat.completions.create({
     model,
     temperature: 0.3,
     max_tokens: 700,
@@ -1489,27 +1489,12 @@ export async function createOpportunityFromGoal(
 ): Promise<OpportunityDistributionRow> {
   const company = await ensureCompanyRow(supabase, options.companyId);
   const model = options.model ?? openRouterConfig.defaultModel;
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   logger.info({ goal }, '[createOpportunityFromGoal] Analyzing goal');
 
   // Fetch customer data to understand the business context
-  const [customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById] = await Promise.all([
-    fetchCustomers(supabase),
-    fetchMetrics(supabase),
-    fetchAttributes(supabase),
-    fetchPersonas(supabase),
-    fetchOrders(supabase),
-    fetchOrderItems(supabase),
-    fetchProducts(supabase),
-  ]);
+  const { customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById } =
+    await fetchCompanyDataset(supabase, company.id);
 
   const profiles = buildProfiles(
     customers,
@@ -1578,7 +1563,7 @@ Create a specific, actionable marketing opportunity that helps achieve this goal
 
 Be realistic - don't promise impossible results. Base estimates on the business context provided.`;
 
-  const response = await client.chat.completions.create({
+  const response = await openai.chat.completions.create({
     model,
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.7,

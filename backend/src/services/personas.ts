@@ -1,6 +1,6 @@
-import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { openRouterConfig } from '../config/openrouter';
+import { selectIn, selectPaged } from '../lib/scoped-query';
+import { openRouterConfig, openai } from '../config/openrouter';
 import { logger as rootLogger } from '../lib/logger';
 
 export interface PersonaLogger {
@@ -398,12 +398,11 @@ function buildPersonaPrompt(cluster: PersonaCluster, profile: PersonaGroupProfil
 }
 
 async function generatePersonaNarrative(
-  client: OpenAI,
   model: string,
   cluster: PersonaCluster,
   profile: PersonaGroupProfile,
 ): Promise<RawPersonaResponse> {
-  const response = await client.chat.completions.create({
+  const response = await openai.chat.completions.create({
     model,
     temperature: 0.2,
     max_tokens: 256,
@@ -456,49 +455,29 @@ function clusterProfiles(customers: CustomerProfile[]): PersonaCluster[] {
   return [...clusters.values()].sort((a, b) => b.customers.length - a.customers.length || a.label.localeCompare(b.label));
 }
 
+/**
+ * Load a company by id, failing closed. The previous fallback to the oldest row in
+ * `companies` — and to creating a demo company outright — meant a missing id quietly
+ * attributed generated personas to another tenant.
+ */
 async function ensureCompanyRow(
   supabase: SupabaseClient,
   companyId?: string,
 ): Promise<CompanyRow> {
-  if (companyId) {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id, company_name, industry')
-      .eq('id', companyId)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data) return data as CompanyRow;
+  if (!companyId) {
+    throw new Error('companyId is required');
   }
 
-  const { data: existing, error: existingError } = await supabase
+  const { data, error } = await supabase
     .from('companies')
     .select('id, company_name, industry')
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .eq('id', companyId)
+    .maybeSingle();
 
-  if (existingError) {
-    throw new Error(`Failed to inspect companies table: ${existingError.message}`);
-  }
+  if (error) throw error;
+  if (!data) throw new Error(`Company ${companyId} not found`);
 
-  if (existing && existing.length > 0) {
-    return existing[0] as CompanyRow;
-  }
-
-  const { data: inserted, error: insertError } = await supabase
-    .from('companies')
-    .upsert({
-      company_name: 'GrowthOS Demo Fashion',
-      industry: 'Fashion',
-    }, { onConflict: 'company_name' })
-    .select('id, company_name, industry')
-    .single();
-
-  if (insertError) {
-    throw new Error(`Failed to create default company row: ${insertError.message}`);
-  }
-
-  return inserted as CompanyRow;
+  return data as CompanyRow;
 }
 
 async function upsertPersonaRows(
@@ -531,41 +510,47 @@ async function fetchPersonaRows(
   return (data ?? []) as unknown as Array<PersonaRecord & { customers?: CustomerRow | CustomerRow[] | null }>;
 }
 
-async function fetchMetricsByCustomer(supabase: SupabaseClient): Promise<Map<string, MetricRow>> {
-  const { data, error } = await supabase
-    .from('customer_metrics')
-    .select('customer_id, total_orders, total_spent, avg_order_value, last_order_date, days_since_last_order, purchase_frequency, engagement_score');
+// Scoped by the customer ids of one company. `customer_metrics` and
+// `customer_attributes` have no company_id of their own — their tenant is implied by
+// the customer. These reads were previously global while their derived personas were
+// written back tagged with the caller's company.
+async function fetchMetricsByCustomer(
+  supabase: SupabaseClient,
+  customerIds: string[],
+): Promise<Map<string, MetricRow>> {
+  const rows = await selectIn<MetricRow>(
+    supabase,
+    'customer_metrics',
+    'customer_id, total_orders, total_spent, avg_order_value, last_order_date, days_since_last_order, purchase_frequency, engagement_score',
+    'customer_id',
+    customerIds,
+  );
 
-  if (error) {
-    throw new Error(`Failed to load customer metrics: ${error.message}`);
-  }
-
-  return new Map((data ?? []).map((row) => [row.customer_id, row as MetricRow]));
+  return new Map(rows.map((row) => [row.customer_id, row]));
 }
 
-async function fetchAttributesByCustomer(supabase: SupabaseClient): Promise<Map<string, AttributeRow>> {
-  const { data, error } = await supabase
-    .from('customer_attributes')
-    .select('customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score');
+async function fetchAttributesByCustomer(
+  supabase: SupabaseClient,
+  customerIds: string[],
+): Promise<Map<string, AttributeRow>> {
+  const rows = await selectIn<AttributeRow>(
+    supabase,
+    'customer_attributes',
+    'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score',
+    'customer_id',
+    customerIds,
+  );
 
-  if (error) {
-    throw new Error(`Failed to load customer attributes: ${error.message}`);
-  }
-
-  return new Map((data ?? []).map((row) => [row.customer_id, row as AttributeRow]));
+  return new Map(rows.map((row) => [row.customer_id, row]));
 }
 
-async function fetchCustomers(supabase: SupabaseClient): Promise<CustomerRow[]> {
-  const { data, error } = await supabase
-    .from('customers')
-    .select('id, first_name, last_name')
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    throw new Error(`Failed to load customers: ${error.message}`);
-  }
-
-  return (data ?? []) as CustomerRow[];
+async function fetchCustomers(supabase: SupabaseClient, companyId: string): Promise<CustomerRow[]> {
+  return selectPaged<CustomerRow>(
+    supabase,
+    'customers',
+    'id, first_name, last_name',
+    (q) => q.eq('company_id', companyId).order('created_at', { ascending: true }),
+  );
 }
 
 function buildProfiles(
@@ -651,20 +636,13 @@ export async function generatePersonas(
   const logger = options.logger ?? defaultLogger;
   const company = await ensureCompanyRow(supabase, options.companyId);
   const model = options.model ?? openRouterConfig.defaultModel;
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   logger.info(`[personas] Starting persona generation for company=${company.company_name} (${company.id})`);
 
-  const customers = await fetchCustomers(supabase);
-  const metricsByCustomer = await fetchMetricsByCustomer(supabase);
-  const attributesByCustomer = await fetchAttributesByCustomer(supabase);
+  const customers = await fetchCustomers(supabase, company.id);
+  const customerIds = customers.map((c) => c.id);
+  const metricsByCustomer = await fetchMetricsByCustomer(supabase, customerIds);
+  const attributesByCustomer = await fetchAttributesByCustomer(supabase, customerIds);
   const profiles = buildProfiles(customers, metricsByCustomer, attributesByCustomer);
   const clusters = clusterProfiles(profiles);
 
@@ -676,7 +654,7 @@ export async function generatePersonas(
     let aiPersona: RawPersonaResponse;
 
     try {
-      aiPersona = await generatePersonaNarrative(client, model, cluster, profileSummary);
+      aiPersona = await generatePersonaNarrative(model, cluster, profileSummary);
     } catch (error) {
       logger.warn(
         `[personas] Falling back to deterministic persona for ${cluster.label} (${cluster.personaKey})`,
@@ -764,10 +742,11 @@ export async function getPersonaDistribution(
   companyId?: string,
 ): Promise<{ companyId: string; personaDistribution: PersonaDistributionRow[]; totalCustomers: number; totalPersonas: number; totalRevenue: number; }> {
   const company = await ensureCompanyRow(supabase, companyId);
-  const customers = await fetchCustomers(supabase);
-  const metricsByCustomer = await fetchMetricsByCustomer(supabase);
+  const customers = await fetchCustomers(supabase, company.id);
+  const customerIds = customers.map((c) => c.id);
+  const metricsByCustomer = await fetchMetricsByCustomer(supabase, customerIds);
   const persistedRows = await fetchPersonaRows(supabase, company.id);
-  const profiles = buildProfiles(customers, metricsByCustomer, await fetchAttributesByCustomer(supabase));
+  const profiles = buildProfiles(customers, metricsByCustomer, await fetchAttributesByCustomer(supabase, customerIds));
   const distribution = buildDistribution(persistedRows, profiles);
   const totalRevenue = profiles.reduce((sum, profile) => sum + profile.totalSpent, 0);
 
@@ -786,9 +765,10 @@ export async function getPersonaCustomers(
   companyId?: string,
 ): Promise<{ companyId: string; personaName: string; personas: PersonaDistributionRow[]; customers: PersonaCustomerRow[]; }> {
   const company = await ensureCompanyRow(supabase, companyId);
-  const customers = await fetchCustomers(supabase);
-  const metricsByCustomer = await fetchMetricsByCustomer(supabase);
-  const attributesByCustomer = await fetchAttributesByCustomer(supabase);
+  const customers = await fetchCustomers(supabase, company.id);
+  const customerIds = customers.map((c) => c.id);
+  const metricsByCustomer = await fetchMetricsByCustomer(supabase, customerIds);
+  const attributesByCustomer = await fetchAttributesByCustomer(supabase, customerIds);
   const profiles = buildProfiles(customers, metricsByCustomer, attributesByCustomer);
   const persistedRows = await fetchPersonaRows(supabase, company.id);
   const distribution = buildDistribution(persistedRows, profiles);

@@ -23,7 +23,13 @@ export class AgentOrchestrator {
   private runInterval: NodeJS.Timeout | null = null;
 
   /**
-   * Start the orchestrator - runs agents on a schedule
+   * Run agents on an in-process interval.
+   *
+   * Only useful where the process is guaranteed to stay up. On Render's free tier the
+   * instance sleeps after 15 minutes idle and the interval dies with it, so production
+   * drives `runAllAgents` from an external cron via
+   * `POST /api/internal/agents/run-scheduled` instead. Opt in with
+   * `ENABLE_AGENT_INTERVAL=true` for local development.
    */
   async start(intervalMs: number = 60000) {
     if (this.isRunning) {
@@ -32,7 +38,7 @@ export class AgentOrchestrator {
     }
 
     this.isRunning = true;
-    logger.info('Agent Orchestrator starting');
+    logger.info({ intervalMs }, 'Agent Orchestrator starting');
 
     // Run immediately on start
     await this.runAllAgents();
@@ -56,14 +62,19 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Run all active agents
+   * Run one tick for every active agent.
+   *
+   * Returns what happened so the cron-driven endpoint can report it. Overlapping calls
+   * are dropped rather than queued — a slow run must not be able to pile up behind a
+   * cron that fires on a fixed schedule.
    */
-  private async runAllAgents() {
+  async runAllAgents(): Promise<{ ran: boolean; agentsProcessed: number }> {
     if (this.isProcessingAgents) {
       logger.info('Agent run skipped — previous run still in progress');
-      return;
+      return { ran: false, agentsProcessed: 0 };
     }
     this.isProcessingAgents = true;
+    let agentsProcessed = 0;
     try {
       // Get all agents that are in 'discovering' or 'running' status
       const agents = await prisma.agent.findMany({
@@ -87,6 +98,7 @@ export class AgentOrchestrator {
             goal: agent.goal,
             guardrails: agent.guardrails as any
           });
+          agentsProcessed++;
         } catch (error) {
           logger.error({ err: error, agentId: agent.id }, 'Error executing agent');
         }
@@ -96,6 +108,8 @@ export class AgentOrchestrator {
     } finally {
       this.isProcessingAgents = false;
     }
+
+    return { ran: true, agentsProcessed };
   }
 
   /**

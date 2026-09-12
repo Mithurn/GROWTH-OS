@@ -24,7 +24,12 @@
   <a href="#setup">Setup</a>
 </p>
 
-**Production URL:** https://xeno-channel-service-0dpu.onrender.com
+**Production URL:** https://xeno-channel-service.onrender.com
+
+> Runs on Render's free tier and is deliberately **not** kept warm. Render's 750 free
+> instance-hours are shared workspace-wide, and keeping the backend warm 24/7 already
+> consumes ~730 of them. This service spins down when idle and is woken on demand by the
+> backend immediately before a campaign launch fans out its sends.
 
 ---
 

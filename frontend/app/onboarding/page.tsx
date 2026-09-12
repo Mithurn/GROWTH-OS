@@ -4,7 +4,6 @@ import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
   ArrowLeft,
@@ -30,6 +29,7 @@ import {
   uploadCustomerCSV,
   uploadOrderCSV,
   startIngestion,
+  seedDemoData,
   getIngestionStatus,
   saveOnboardingProfile,
   createAgent,
@@ -101,7 +101,6 @@ function getDoneCount(step: string): number {
 }
 
 export default function OnboardingPage() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>('welcome');
 
   // Company + industry
@@ -153,9 +152,7 @@ export default function OnboardingPage() {
     setCompanyError('');
     try {
       const res = await saveBusinessInfo(companyName.trim(), industry);
-      const id = res?.data?.id;
-      if (!id) throw new Error('No company ID returned');
-      window.localStorage.setItem('growthOS_company_id', id);
+      if (!res?.data?.id) throw new Error('No company ID returned');
       next();
     } catch {
       setCompanyError('Failed to save. Please try again.');
@@ -189,9 +186,8 @@ export default function OnboardingPage() {
     // Double-click guard
     if (isSettingUp) return;
 
-    const storedCompanyId = window.localStorage.getItem('growthOS_company_id');
-    if (!storedCompanyId || (!useDemoData && (!customerFile || !orderFile))) {
-      setSetupError('Missing company or data files. Please go back and try again.');
+    if (!useDemoData && (!customerFile || !orderFile)) {
+      setSetupError('Missing data files. Please go back and try again.');
       return;
     }
 
@@ -202,88 +198,67 @@ export default function OnboardingPage() {
     setSetupError('');
 
     try {
-      if (useDemoData) {
-        // Force the company ID to the one that has our demo data
-        window.localStorage.setItem('growthOS_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
-        
-        let currentStep = 0;
-        const steps = ['validating', 'importing_customers', 'calculating_metrics', 'generating_personas', 'completed'];
-        
-        while (currentStep < steps.length) {
-          await new Promise(r => setTimeout(r, 1200));
-          const statusStep = steps[currentStep];
-          setIngestionMessage(`Processing ${statusStep.replace('_', ' ')}...`);
-          const count = getDoneCount(statusStep);
-          setDoneItems(Array.from({ length: count }, (_, i) => i));
-          
-          if (statusStep === 'completed') {
-            setDoneItems([0, 1, 2, 3]);
-            break;
-          }
-          currentStep++;
-        }
-      } else {
-        // 1. Kick off ingestion pipeline with both CSV files
-        const { sessionId } = await startIngestion(customerFile!, orderFile!);
+      // Demo and upload differ only in where the rows come from. Both run the same
+      // server-side pipeline against this user's own company, so both show real
+      // progress and both end with real personas and opportunities.
+      const { sessionId } = useDemoData
+        ? await seedDemoData()
+        : await startIngestion(customerFile!, orderFile!);
 
-        // 2. Poll until backend pipeline completes
-        let ingestionDone = false;
-        let retries = 0;
-        const MAX_RETRIES = 200; // 200 × 1.5s = 5 min — covers AI persona generation
+      let ingestionDone = false;
+      let retries = 0;
+      const MAX_RETRIES = 200; // 200 × 1.5s = 5 min — covers AI persona generation
 
-        while (!ingestionDone && retries < MAX_RETRIES) {
-          retries++;
-          await new Promise(r => setTimeout(r, 1500));
-          let status: { step: string; message?: string } | null = null;
-          try {
-            status = await getIngestionStatus(sessionId);
-          } catch {
-            // Polling hiccup — keep retrying, data is likely still processing
-            continue;
-          }
-
-          if (!status) continue;
-
-          setIngestionMessage(status.message || '');
-          const count = getDoneCount(status.step);
-          setDoneItems(Array.from({ length: count }, (_, i) => i));
-
-          if (status.step === 'completed') {
-            setDoneItems([0, 1, 2, 3]);
-            ingestionDone = true;
-          } else if (status.step === 'error') {
-            throw new Error('Something went wrong processing your data. Your upload was saved — please contact support.');
-          }
+      while (!ingestionDone && retries < MAX_RETRIES) {
+        retries++;
+        await new Promise(r => setTimeout(r, 1500));
+        let status: { step: string; message?: string } | null = null;
+        try {
+          status = await getIngestionStatus(sessionId);
+        } catch {
+          // Polling hiccup — keep retrying, data is likely still processing
+          continue;
         }
 
-        if (!ingestionDone) {
-          throw new Error('This is taking longer than expected. Your data is still being processed — please refresh in a minute.');
+        if (!status) continue;
+
+        setIngestionMessage(status.message || '');
+        const count = getDoneCount(status.step);
+        setDoneItems(Array.from({ length: count }, (_, i) => i));
+
+        if (status.step === 'completed') {
+          setDoneItems([0, 1, 2, 3]);
+          ingestionDone = true;
+        } else if (status.step === 'error') {
+          throw new Error('Something went wrong processing your data. Your upload was saved — please contact support.');
         }
+      }
+
+      if (!ingestionDone) {
+        throw new Error('This is taking longer than expected. Your data is still being processed — please refresh in a minute.');
       }
 
       // Tick all steps done visually
       setDoneItems([0, 1, 2, 3, 4, 5]);
 
-      if (!useDemoData) {
-        const goalLabel = GOAL_LABELS[goal] || goal;
-        // Fire these in the background — don't block the redirect
-        saveOnboardingProfile({ companyName, industry, primaryGoal: goalLabel, operatingMode: mode }).catch(() => {});
-        createAgent(goalLabel, {
-          channels: ['WhatsApp', 'Email'],
-          involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
-          max_budget: 100000,
-          frequency_cap: 3,
-        }).catch(() => {});
-        // Wait for at least one opportunity so the dashboard isn't empty on arrival
-        await generateOpportunities().catch(() => {});
-      }
+      const goalLabel = GOAL_LABELS[goal] || goal;
+      // Fire these in the background — don't block the redirect
+      saveOnboardingProfile({ companyName, industry, primaryGoal: goalLabel, operatingMode: mode }).catch(() => {});
+      createAgent(goalLabel, {
+        channels: ['WhatsApp', 'Email'],
+        involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
+        max_budget: 100000,
+        frequency_cap: 3,
+      }).catch(() => {});
+      // Wait for at least one opportunity so the dashboard isn't empty on arrival
+      await generateOpportunities().catch(() => {});
 
-      // Mark onboarding complete — refresh session so middleware sees the new metadata
+      // Mark onboarding complete — refresh session so the proxy sees the new metadata
       const supabase = createClient();
       await supabase.auth.updateUser({ data: { onboarding_complete: true } });
       await supabase.auth.refreshSession();
 
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : typeof err === 'string' ? err : 'Setup failed. Please try again.');
       setIsSettingUp(false);
@@ -573,14 +548,17 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => {
-                  window.localStorage.setItem('growthOS_company_id', '1bac1f55-82ad-4d34-a5e2-42ec8d7794da');
                   setUseDemoData(true);
                   next();
                 }}
                 className="w-full border-2 border-[#E5E7EB] text-[#374151] text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:border-[#5B4FFF] hover:text-[#5B4FFF] transition-colors"
               >
-                Use Pre-loaded Demo Data <ArrowRight className="h-4 w-4" />
+                Try it with 500 customers <ArrowRight className="h-4 w-4" />
               </button>
+              <p className="text-[11px] text-[#9CA3AF] text-center mt-2">
+                Imports 500 customers and 3,000 orders into your workspace so you can evaluate
+                the pipeline before uploading your own files.
+              </p>
             </div>
           )}
 

@@ -6,12 +6,10 @@ import {
   ArrowLeft,
   BarChart2,
   Calendar,
-  CheckCircle2,
   ChevronRight,
   Clock,
   Gem,
   Loader2,
-  MessageSquare,
   Send,
   Sparkles,
   TrendingDown,
@@ -164,12 +162,16 @@ export default function OpportunityDetailPage() {
   const whySummary = opp ? (opp.ai_summary || opp.description) : '';
   const typedSummary = useTypewriter(whySummary);
 
+  // Prefer the AI-assigned personas; fall back to deriving them from the audience.
+  // Depends on `data` rather than the derived `opp`/`customers`, which get a fresh
+  // identity on every render and so would defeat the memo.
   const personas = useMemo(() => {
-    if (opp?.opportunity_personas && opp.opportunity_personas.length > 0) {
-      return opp.opportunity_personas.slice(0, 3).map(p => ({ name: p.name, description: p.description, count: null as number | null }));
+    const aiPersonas = data?.opportunity?.opportunity_personas;
+    if (aiPersonas && aiPersonas.length > 0) {
+      return aiPersonas.slice(0, 3).map(p => ({ name: p.name, description: p.description, count: null as number | null }));
     }
     const map = new Map<string, { name: string; description: string; count: number }>();
-    customers.forEach(c => {
+    (data?.customers ?? []).forEach(c => {
       if (!c.persona_name) return;
       if (!map.has(c.persona_name)) {
         map.set(c.persona_name, { name: c.persona_name, description: c.persona_description ?? '', count: 0 });
@@ -177,7 +179,7 @@ export default function OpportunityDetailPage() {
       map.get(c.persona_name)!.count++;
     });
     return Array.from(map.values()).slice(0, 3);
-  }, [customers, opp?.opportunity_personas]);
+  }, [data]);
 
   async function handleRefine(text?: string) {
     const query = (text ?? modifier).trim();
@@ -384,7 +386,7 @@ export default function OpportunityDetailPage() {
 
               {/* AI quote */}
               <p className="text-xs text-gray-400 italic leading-relaxed mb-5 border-l-2 border-indigo-100 pl-3">
-                "Historically this audience responds best to urgency-driven {channel} campaigns with limited-time incentives."
+                &ldquo;Historically this audience responds best to urgency-driven {channel} campaigns with limited-time incentives.&rdquo;
               </p>
 
               <button

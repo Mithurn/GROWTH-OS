@@ -1,16 +1,27 @@
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import OpenAI from 'openai';
-import { openRouterConfig } from '../config/openrouter';
+import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
+import { parseWithRetry } from '../lib/ai';
 
-const openai = new OpenAI({
-  apiKey: openRouterConfig.apiKey,
-  baseURL: openRouterConfig.baseUrl,
-  defaultHeaders: {
-    'HTTP-Referer': openRouterConfig.httpReferer,
-    'X-Title': openRouterConfig.appName,
-  },
+/** Shape the model must produce. Every field is written straight onto the campaign row. */
+const CampaignStrategySchema = z.object({
+  name: z.string().min(1),
+  objective: z.string().min(1),
+  channel: z.string().min(1),
+  offer: z.string(),
+  messageAngle: z.string(),
+  messageContent: z.string().min(1),
+  messageVariants: z.array(
+    z.object({
+      variant: z.string(),
+      message: z.string().min(1),
+    }),
+  ),
+  expectedOutcome: z.string(),
+  reasoning: z.string(),
 });
+
 
 /**
  * Create a campaign for a discovered opportunity
@@ -146,25 +157,26 @@ Example format:
 }`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: openRouterConfig.defaultModel,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
+    // Validated rather than JSON.parsed: this was the last path writing raw model
+    // output straight into a Prisma create, so a malformed field surfaced as a
+    // database error instead of falling back to a usable campaign.
+    return await parseWithRetry(
+      async () => {
+        const response = await openai.chat.completions.create({
+          model: openRouterConfig.defaultModel,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.8,
+          max_tokens: 1500,
+        });
+
+        const content = response.choices[0]?.message?.content;
+        if (!content) {
+          throw new Error('No response from AI');
         }
-      ],
-      temperature: 0.8,
-      max_tokens: 1500
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No response from AI');
-    }
-
-    const strategy = JSON.parse(content);
-    return strategy;
+        return content;
+      },
+      CampaignStrategySchema,
+    );
   } catch (error) {
     logger.error({ err: error }, 'Error generating campaign strategy');
 
@@ -184,77 +196,5 @@ Example format:
       expectedOutcome: opportunity.aiSummary,
       reasoning: opportunity.aiReasoning || 'AI-generated campaign strategy'
     };
-  }
-}
-
-/**
- * Generate personalized message for a specific customer
- */
-export async function generatePersonalizedMessage(
-  customerId: string,
-  campaignId: string
-): Promise<string> {
-  try {
-    // Get campaign details
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      include: {
-        opportunity: true
-      }
-    });
-
-    if (!campaign) {
-      throw new Error(`Campaign ${campaignId} not found`);
-    }
-
-    // Get customer details
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
-      include: {
-        customerMetrics: true,
-        customerAttributes: true,
-        orders: {
-          orderBy: { orderDate: 'desc' },
-          take: 5,
-          include: {
-            orderItems: {
-              include: {
-                product: true
-              }
-            }
-          }
-        }
-      }
-    });
-
-    if (!customer) {
-      throw new Error(`Customer ${customerId} not found`);
-    }
-
-    // Choose a message variant (simple rotation based on customer ID hash)
-    const messageVariants = (campaign.messageVariants as any[]) || [];
-    const variantIndex = customerId.charCodeAt(0) % messageVariants.length;
-    const selectedVariant = messageVariants[variantIndex] || { message: campaign.messageContent };
-
-    // Personalize the message
-    let message = selectedVariant.message || campaign.messageContent;
-
-    message = message.replace('{{name}}', customer.firstName);
-    message = message.replace('{{offer}}', campaign.offer || 'special offer');
-
-    // Add purchase history context if available
-    if (customer.orders.length > 0) {
-      const lastOrder = customer.orders[0];
-      const daysSince = customer.customerMetrics?.daysSinceLastOrder || 0;
-
-      if (daysSince > 30) {
-        message = message.replace('{{context}}', `It's been ${daysSince} days since your last order`);
-      }
-    }
-
-    return message;
-  } catch (error) {
-    logger.error({ err: error }, 'Error generating personalized message');
-    return `Hi, we have a special offer for you!`;
   }
 }
