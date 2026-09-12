@@ -24,29 +24,11 @@ import {
   createOpportunityFromGoal,
   BACKEND_ORIGIN,
 } from '@/lib/api';
+import type { Opportunity } from '@/lib/types';
 
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
-interface Opportunity {
-  id: string;
-  opportunity_id: string;
-  title: string;
-  opportunity_type: string;
-  audience_size: number;
-  potential_revenue: number;
-  confidence_score: number;
-  priority_score: number;
-  description: string;
-  ai_summary: string;
-  recommended_action: string;
-  supporting_customer_segment: string;
-  trigger_reason: string;
-  audience_definition?: Record<string, string>;
-  average_spend?: number;
-  average_orders?: number;
-  status: string;
-}
 
 interface ActivityItem {
   id: string;
@@ -187,8 +169,11 @@ const parseTriggerReasons = (opp: Opportunity): string[] => {
   if (opp.average_spend) {
     reasons.push(`Average Order Value ₹${Math.round(opp.average_spend).toLocaleString()}`);
   }
-  if (opp.audience_definition?.days_since_last_order) {
-    const days = opp.audience_definition.days_since_last_order.replace('>=', '').trim();
+  // audience_definition is a JSON column, so the threshold arrives as either the
+  // string ">= 90" or a bare number depending on which rule emitted it.
+  const daysSinceLastOrder = opp.audience_definition?.['days_since_last_order'];
+  if (typeof daysSinceLastOrder === 'string' || typeof daysSinceLastOrder === 'number') {
+    const days = String(daysSinceLastOrder).replace('>=', '').trim();
     reasons.push(`Last purchase > ${days} days ago`);
   } else if (opp.trigger_reason?.toLowerCase().includes('days')) {
     reasons.push('Extended purchase gap detected');
@@ -659,7 +644,7 @@ export default function HomePage() {
                 {/* CTA Buttons */}
                 <div className="flex items-center gap-4 mt-8">
                   <Link
-                    href={`/opportunities/${featuredOpportunity.opportunity_id || featuredOpportunity.id}`}
+                    href={`/opportunities/${featuredOpportunity.opportunity_id}`}
                     className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#5B4FFF] text-white text-sm font-semibold rounded-full hover:bg-[#4B3FE5] transition-colors"
                   >
                     Review Opportunity →
@@ -781,8 +766,8 @@ export default function HomePage() {
                 const priority = getPriorityLabel(opp.priority_score);
                 return (
                   <Link
-                    key={opp.opportunity_id || opp.id || i}
-                    href={`/opportunities/${opp.opportunity_id || opp.id}`}
+                    key={opp.opportunity_id || i}
+                    href={`/opportunities/${opp.opportunity_id}`}
                     className="bg-white rounded-xl border border-[#E5E7EB] p-6 hover:border-[#5B4FFF] hover:shadow-md transition-all group"
                   >
                     <div className="flex items-start justify-between mb-3">

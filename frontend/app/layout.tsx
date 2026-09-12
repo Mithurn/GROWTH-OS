@@ -1,6 +1,24 @@
 import type { Metadata } from "next";
+import { Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { MainLayout } from "@/components/main-layout";
+
+// Three type roles, three faces. Satoshi (globals.css) is the body voice and stays
+// the app's face; these two exist so display and data aren't the same font doing
+// every job, which is the single clearest tell of a generated layout.
+const display = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://growos-ai.vercel.app";
 
@@ -50,7 +68,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`h-full antialiased ${display.variable} ${mono.variable}`}>
       <body className="min-h-full flex flex-col">
         <MainLayout>{children}</MainLayout>
       </body>
