@@ -12,7 +12,9 @@ services:
     branch: main
     autoDeployTrigger: checksPass
     healthCheckPath: /health
-    buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js --external:pg --external:pg-native --external:bullmq --external:ioredis
+    # The bundle itself lives in backend/package.json's "build" script so that this
+    # deploy and the CI build gate run byte-identical commands and cannot drift.
+    buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npm run build
     preDeployCommand: cd backend && npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: cd backend && node dist/server.js
     envVars:

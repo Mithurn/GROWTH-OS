@@ -41,6 +41,14 @@ jobs:
       - name: Test
         run: npm test
 
+      # Same reasoning as the frontend's build step below. tsc resolves modules through
+      # this package's tsconfig `paths`; esbuild resolves them through the tsconfig
+      # nearest each imported file. A `packages/*` file importing an npm dependency can
+      # therefore typecheck clean and still fail the real Render build, which is exactly
+      # what `packages/contracts` did. Runs the same script render.yaml runs.
+      - name: Build
+        run: npm run build
+
   channel-service:
     name: Channel service — typecheck
     runs-on: ubuntu-latest
