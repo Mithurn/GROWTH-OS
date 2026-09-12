@@ -10,6 +10,19 @@
 --
 -- Uses IF NOT EXISTS / DO blocks throughout because several of these
 -- columns already exist in production from manual Supabase edits.
+--
+-- 2026-09-13: the profiles and ingestion_sessions foreign keys originally used
+-- `ADD CONSTRAINT IF NOT EXISTS`, which is not valid PostgreSQL syntax on any
+-- version (only a few ALTER TABLE actions, ADD COLUMN among them, accept IF NOT
+-- EXISTS — ADD CONSTRAINT does not). `prisma migrate deploy` against a fresh
+-- database failed here every time, aborting the whole migration's transaction —
+-- verified against a clean postgres:16-alpine container. Rewritten to the same
+-- guarded DO-block pattern already used correctly above for customers/products.
+-- Editing an already-applied migration changes its checksum: wherever this
+-- migration is already recorded as applied (staging/production), the next
+-- `prisma migrate deploy` there needs a one-time
+-- `prisma migrate resolve --applied 20260627175139_add_profiles_and_formalize_schema`
+-- first, or it will refuse to proceed with a checksum mismatch.
 -- ============================================================
 
 -- 1. Add user_id to companies (may already exist)
@@ -64,9 +77,18 @@ CREATE TABLE IF NOT EXISTS "profiles" (
 
     CONSTRAINT "profiles_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "profiles"
-  ADD CONSTRAINT IF NOT EXISTS "profiles_company_id_fkey"
-  FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'profiles_company_id_fkey'
+      AND table_name = 'profiles'
+  ) THEN
+    ALTER TABLE "profiles"
+      ADD CONSTRAINT "profiles_company_id_fkey"
+      FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS "profiles_company_id_idx" ON "profiles"("company_id");
 
 -- Backfill profiles for any existing companies that have a user_id
@@ -89,7 +111,16 @@ CREATE TABLE IF NOT EXISTS "ingestion_sessions" (
 
     CONSTRAINT "ingestion_sessions_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "ingestion_sessions"
-  ADD CONSTRAINT IF NOT EXISTS "ingestion_sessions_company_id_fkey"
-  FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'ingestion_sessions_company_id_fkey'
+      AND table_name = 'ingestion_sessions'
+  ) THEN
+    ALTER TABLE "ingestion_sessions"
+      ADD CONSTRAINT "ingestion_sessions_company_id_fkey"
+      FOREIGN KEY ("company_id") REFERENCES "companies"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS "ingestion_sessions_company_id_idx" ON "ingestion_sessions"("company_id");
