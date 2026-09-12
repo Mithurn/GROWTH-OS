@@ -219,6 +219,12 @@ model Opportunity {
   description               String
   audienceSize              Int      @default(0) @map("audience_size")
   potentialRevenue          Decimal  @default(0) @map("potential_revenue") @db.Decimal(12, 2)
+  // Interval bounds around potentialRevenue from the same deterministic estimator
+  // (packages/domain/src/impact/estimate.ts) — a single point number implies false
+  // precision the UI should not repeat. Default equals potentialRevenue's default (0)
+  // so existing rows read as a zero-width interval rather than null.
+  potentialRevenueLow       Decimal  @default(0) @map("potential_revenue_low") @db.Decimal(12, 2)
+  potentialRevenueHigh      Decimal  @default(0) @map("potential_revenue_high") @db.Decimal(12, 2)
   confidenceScore           Decimal  @default(0) @map("confidence_score") @db.Decimal(5, 2)
   priorityScore             Decimal  @default(0) @map("priority_score") @db.Decimal(5, 2)
   supportingCustomerSegment String   @map("supporting_customer_segment")
