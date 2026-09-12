@@ -8,8 +8,12 @@ services:
     name: xeno-crm-backend
     env: node
     plan: free
+    repo: https://github.com/Mithurn/GROWTH-OS
+    branch: main
+    autoDeployTrigger: checksPass
     healthCheckPath: /health
     buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js --external:pg --external:pg-native --external:bullmq --external:ioredis
+    preDeployCommand: cd backend && npx prisma migrate deploy --schema=prisma/schema.prisma
     startCommand: cd backend && node dist/server.js
     envVars:
       - key: PORT
@@ -37,6 +41,9 @@ services:
     name: xeno-channel-service
     env: node
     plan: free
+    repo: https://github.com/Mithurn/GROWTH-OS
+    branch: main
+    autoDeployTrigger: checksPass
     healthCheckPath: /health
     buildCommand: cd channel-service && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js
     startCommand: cd channel-service && node dist/server.js
