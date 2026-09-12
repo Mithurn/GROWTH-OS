@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "build": "esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js --external:pg --external:pg-native --external:bullmq --external:ioredis",
     "generate:data": "tsx src/data-generator/generate-data.ts",
     "test": "vitest run",
     "test:watch": "vitest",
