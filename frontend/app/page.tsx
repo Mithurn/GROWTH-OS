@@ -1,20 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  Bot,
-  Brain,
-  LineChart,
-  Radio,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  Upload,
-  Users,
-} from 'lucide-react';
 import { BackendWarmup } from '@/components/backend-warmup';
 
-const GITHUB_URL = 'https://github.com/Mithurn/xeno-grow';
+const GITHUB_URL = 'https://github.com/Mithurn/GROWTH-OS';
 
 // lucide-react v1 dropped brand marks, and the GitHub logo carries more signal here
 // than a generic code glyph would.
@@ -28,385 +16,481 @@ function GithubIcon({ className }: { className?: string }) {
 
 const PIPELINE = [
   {
-    icon: Upload,
     title: 'Ingest',
-    body: 'Upload customers and orders as CSV. The pipeline validates, cleans, and imports them, then computes RFM scores and behavioural attributes per customer.',
+    body: 'Customers and orders arrive as CSV. The importer validates, de-duplicates on a per-tenant key, and computes RFM scores and behavioural attributes for every customer.',
+    detail: 'csv → postgres · re-runnable',
   },
   {
-    icon: Users,
     title: 'Segment',
-    body: 'An LLM reads the computed metrics and names the personas that actually exist in your data — not a fixed template of segments.',
+    body: 'A model reads the computed metrics and names the personas that actually exist in the data, rather than sorting customers into a fixed template of segments.',
+    detail: 'metrics → persona narrative',
   },
   {
-    icon: Target,
-    title: 'Find revenue',
-    body: 'Deterministic rules surface seven opportunity types: dormant VIPs, churn risk, cross-sell, VIP reward, and more. Each one carries an audience and a revenue estimate.',
+    title: 'Locate revenue',
+    body: 'Deterministic rules surface seven opportunity types — dormant VIPs, churn risk, cross-sell, reactivation and others. Each one carries a sized audience and a revenue estimate.',
+    detail: '7 rules · audience + estimate',
   },
   {
-    icon: Sparkles,
-    title: 'Write the campaign',
-    body: 'The agent drafts channel-appropriate copy for the chosen audience. You edit it in natural language until it sounds like you.',
+    title: 'Draft the campaign',
+    body: 'The agent writes channel-appropriate copy and three message variants for the chosen audience. You refine it in plain language until it sounds like you wrote it.',
+    detail: 'opportunity → copy + variants',
   },
   {
-    icon: Radio,
     title: 'Send and measure',
-    body: 'Approved campaigns go out through a provider layer that reports back over signed webhooks. The funnel updates as delivery events land.',
+    body: 'Approved campaigns leave through a provider layer that reports back over signed webhooks. The funnel updates as delivery events land, in order, exactly once.',
+    detail: 'hmac webhooks → funnel',
   },
+];
+
+// The honest version of "AI-powered". Split straight from the source: the left column
+// is arithmetic in TypeScript, the right is the only work handed to a model.
+const BOUNDARY = [
+  { code: 'RFM scoring and recency windows', model: 'Persona names and descriptions' },
+  { code: 'Opportunity detection rules', model: 'Why an opportunity matters, in prose' },
+  { code: 'Audience sizing and revenue estimates', model: 'Campaign copy and variants' },
+  { code: 'Delivery state machine and ordering', model: 'Natural-language refinement' },
 ];
 
 const ARCHITECTURE = [
   {
     title: 'Three deployable services',
-    body: 'A Next.js frontend on Vercel, an Express API on Render, and a separate channel service that models a real messaging provider over HTTP rather than a function call.',
+    body: 'A Next.js frontend, an Express API, and a separate channel service that models a messaging provider over HTTP rather than an in-process function call — so retries, signatures and out-of-order callbacks are real problems the code has to solve.',
   },
   {
-    title: 'AI reasons, code decides',
-    body: 'Opportunity detection, RFM scoring, and analytics are deterministic and auditable. The LLM is scoped to naming personas, explaining findings, and writing copy.',
+    title: 'Typed boundaries around the model',
+    body: 'Every call runs prompt → JSON parse → Zod validate → database write, with a retry and a usable fallback. No free-form model output reaches the database or the UI.',
   },
   {
-    title: 'Typed AI boundaries',
-    body: 'Every model call follows prompt → JSON parse → Zod validate → database write. No free-form model output reaches the UI or the database.',
+    title: 'Tenancy enforced in the API',
+    body: 'Queries use the Supabase service role, which bypasses row-level security entirely. Every route therefore re-checks ownership in Express, and a cross-tenant id returns a 404 rather than a 403.',
   },
   {
-    title: 'Delivery you can trust',
-    body: 'Webhooks are HMAC-signed, idempotent by event id, and ordered by sequence number, so a retried or out-of-order callback cannot corrupt a communication’s state.',
+    title: 'Built for a free tier that sleeps',
+    body: 'The agent loop runs from external cron instead of setInterval, ingestion resumes after a spin-down, and the channel service is woken once before a launch fans out instead of by every recipient at once.',
   },
 ];
 
-const STACK = [
-  'Next.js 16',
-  'React 19',
-  'TypeScript',
-  'Tailwind CSS 4',
-  'Express 5',
-  'PostgreSQL',
-  'Prisma',
-  'Supabase Auth',
-  'BullMQ + Redis',
-  'Zod',
-  'OpenRouter',
-  'Vitest',
+const FLOW = [
+  ['frontend', 'vercel'],
+  ['api', 'render'],
+  ['postgres', 'supabase'],
+  ['queue', 'upstash'],
+  ['channel', 'render'],
 ];
+
+const STACK =
+  'Next.js 16 · React 19 · TypeScript · Tailwind 4 · Express 5 · PostgreSQL · Prisma 7 · Supabase Auth · BullMQ · Redis · Zod · OpenRouter · Vitest';
+
+/** Mono eyebrow used as the ledger spine down the left of every section. */
+function Marker({ index, label }: { index: string; label: string }) {
+  return (
+    <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#6B7280]">
+      <span className="text-[#1A1A1A]">{index}</span>
+      <span className="mx-2 text-[#D1D5DB]">/</span>
+      {label}
+    </div>
+  );
+}
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-[#1A1A1A]">
       <BackendWarmup />
 
-      {/* ── Nav ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 border-b border-[#E5E7EB] bg-white/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Image src="/logo.png" alt="GrowthOS" width={92} height={36} className="object-contain" priority />
+      {/* ── Status bar ───────────────────────────────────────────────────────
+          A slim ink rail rather than the usual translucent white nav: it reads as
+          a system chrome strip, and keeps the only CTA reachable down the page. */}
+      <header className="sticky top-0 z-50 bg-[#111318] text-white">
+        <div className="mx-auto flex h-11 max-w-[1140px] items-center justify-between px-5 sm:px-8">
+          <Link href="/" className="font-mono text-[12px] tracking-[0.16em]">
+            GROWTH<span className="text-[#8E84FF]">OS</span>
+          </Link>
 
-          <div className="flex items-center gap-2">
+          <nav className="flex items-center gap-5 font-mono text-[11px] uppercase tracking-[0.14em]">
             <a
               href={GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#1A1A1A] sm:flex"
+              className="hidden text-[#9AA1B2] transition-colors hover:text-white sm:block"
             >
-              <GithubIcon className="h-4 w-4" />
               Source
             </a>
-            <Link
-              href="/login"
-              className="rounded-full px-4 py-2 text-[13px] font-medium text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#1A1A1A]"
-            >
+            <Link href="/login" className="text-[#9AA1B2] transition-colors hover:text-white">
               Sign in
             </Link>
             <Link
               href="/login?mode=signup"
-              className="flex items-center gap-1.5 rounded-full bg-[#5B4FFF] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#4B3FE5]"
+              className="bg-[#5B4FFF] px-3 py-1.5 text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
-              Get started
-              <ArrowRight className="h-3.5 w-3.5" />
+              Create account
             </Link>
-          </div>
+          </nav>
         </div>
       </header>
 
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b border-[#E5E7EB]">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(91,79,255,0.10),transparent_60%)]"
-        />
-
-        <div className="relative mx-auto max-w-4xl px-6 py-24 text-center sm:py-32">
-          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#FAFAFA] px-3.5 py-1.5 text-[12px] font-medium text-[#6B7280]">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#5B4FFF] opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#5B4FFF]" />
-            </span>
+      {/* ── Masthead ────────────────────────────────────────────────────────── */}
+      <div className="border-b border-[#E5E7EB]">
+        <div className="mx-auto flex max-w-[1140px] flex-wrap items-end justify-between gap-4 px-5 pb-5 pt-8 sm:px-8">
+          <Image
+            src="/logo.png"
+            alt="GrowthOS"
+            width={104}
+            height={40}
+            className="object-contain"
+            priority
+          />
+          <p className="font-mono text-[11px] uppercase leading-relaxed tracking-[0.16em] text-[#6B7280]">
             Autonomous growth agent
-          </div>
-
-          <h1 className="text-[42px] font-black leading-[1.05] tracking-tight sm:text-[64px]">
-            Your CRM waits for
-            <br />
-            instructions.
-            <span className="block text-[#5B4FFF]">This one doesn&apos;t.</span>
-          </h1>
-
-          <p className="mx-auto mt-7 max-w-xl text-[17px] leading-relaxed text-[#6B7280]">
-            GrowthOS reads your customer data, finds where revenue is leaking, writes the
-            campaign to recover it, and tracks what actually converted. You approve the
-            decisions — it does the work.
-          </p>
-
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/login?mode=signup"
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#5B4FFF] px-7 text-[15px] font-semibold text-white shadow-lg shadow-[#5B4FFF]/20 transition-all hover:-translate-y-0.5 hover:bg-[#4B3FE5] sm:w-auto"
-            >
-              Create an account
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#E5E7EB] px-7 text-[15px] font-semibold text-[#374151] transition-colors hover:border-[#5B4FFF] hover:text-[#5B4FFF] sm:w-auto"
-            >
-              <GithubIcon className="h-4 w-4" />
-              Read the code
-            </a>
-          </div>
-
-          <p className="mt-5 text-[13px] text-[#9CA3AF]">
-            After you sign in, upload your CSVs or start with 500 sample customers.
+            <span className="mx-2 text-[#D1D5DB]">·</span>
+            retail CRM
+            <span className="mx-2 text-[#D1D5DB]">·</span>
+            built in the open
           </p>
         </div>
-      </section>
+      </div>
 
-      {/* ── The inversion ───────────────────────────────────────────────── */}
-      <section className="border-b border-[#E5E7EB] bg-[#FAFAFA]">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="max-w-2xl text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
-            A dashboard is a question. This is an answer.
-          </h2>
-          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#6B7280]">
-            Traditional CRMs hand the marketer a query builder and expect them to already know
-            what to look for. Most of the work is in the knowing.
-          </p>
-
-          <div className="mt-12 grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl border border-[#E5E7EB] bg-white p-7">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9CA3AF]">
-                Traditional CRM
-              </p>
-              <ul className="mt-5 space-y-3.5 text-[15px] text-[#6B7280]">
-                <li>You guess which segment matters this month.</li>
-                <li>You hand-build the filter that defines it.</li>
-                <li>You write the copy from scratch, every time.</li>
-                <li>You open a report and interpret it yourself.</li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border-2 border-[#5B4FFF]/25 bg-white p-7 shadow-lg shadow-[#5B4FFF]/5">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#5B4FFF]">
-                GrowthOS
-              </p>
-              <ul className="mt-5 space-y-3.5 text-[15px] text-[#374151]">
-                <li>The agent surfaces the segment that is leaking revenue.</li>
-                <li>The audience is already built and sized.</li>
-                <li>The campaign arrives drafted, on the right channel.</li>
-                <li>The funnel explains itself as events land.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pipeline ────────────────────────────────────────────────────── */}
+      {/* ── Hero ────────────────────────────────────────────────────────────
+          Left-biased 7/5 split. The right column is the product's own output,
+          not a stylised device mock. */}
       <section className="border-b border-[#E5E7EB]">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
+        <div className="mx-auto grid max-w-[1140px] gap-12 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-7">
+            <div className="animate-rise">
+              <Marker index="01" label="What it does" />
+            </div>
+
+            <h1
+              className="animate-rise mt-7 font-serif text-[46px] font-normal leading-[1.02] tracking-[-0.02em] sm:text-[68px]"
+              style={{ animationDelay: '60ms' }}
+            >
+              Your CRM waits for instructions.
+              <br />
+              <span className="italic text-[#5B4FFF]">This one doesn’t.</span>
+            </h1>
+
+            <p
+              className="animate-rise mt-7 max-w-xl text-[17px] leading-[1.65] text-[#5C6270]"
+              style={{ animationDelay: '120ms' }}
+            >
+              GrowthOS reads your customer and order history, finds where revenue is
+              leaking, writes the campaign to recover it, and tracks what actually
+              converted. You approve the decisions — it does the work.
+            </p>
+
+            <div
+              className="animate-rise mt-10 flex flex-wrap items-center gap-6"
+              style={{ animationDelay: '180ms' }}
+            >
+              <Link
+                href="/login?mode=signup"
+                className="group inline-flex h-12 items-center gap-3 bg-[#5B4FFF] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+              >
+                Create an account
+                <span className="font-mono transition-transform group-hover:translate-x-0.5">
+                  →
+                </span>
+              </Link>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 border-b border-[#D1D5DB] pb-0.5 text-[15px] font-medium text-[#374151] transition-colors hover:border-[#5B4FFF] hover:text-[#5B4FFF]"
+              >
+                <GithubIcon className="h-4 w-4" />
+                Read the source
+              </a>
+            </div>
+
+            <p
+              className="animate-rise mt-7 font-mono text-[11.5px] uppercase tracking-[0.14em] text-[#6B7280]"
+              style={{ animationDelay: '240ms' }}
+            >
+              Upload your own CSVs, or start with 500 sample customers
+            </p>
+          </div>
+
+          {/* Product proof: a real opportunity as the app renders it. */}
+          <div className="animate-rise lg:col-span-5" style={{ animationDelay: '300ms' }}>
+            <div className="border border-[#E5E7EB] bg-[#FCFCFD]">
+              <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-3">
+                <span className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#6B7280]">
+                  Opportunity · detected
+                </span>
+                <span className="flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#5C6270]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
+                  live
+                </span>
+              </div>
+
+              <div className="px-5 py-6">
+                <p className="font-serif text-[27px] leading-[1.15]">Dormant VIPs</p>
+                <p className="mt-2.5 text-[14px] leading-relaxed text-[#5C6270]">
+                  76 customers in your top spending decile have not ordered in 90 days.
+                  Their median basket is 2.4× the store average.
+                </p>
+
+                <dl className="mt-6 grid grid-cols-3 gap-px border-y border-[#E5E7EB] bg-[#E5E7EB]">
+                  {[
+                    { k: 'Audience', v: '76' },
+                    { k: 'Recoverable', v: '₹1.1L', accent: true },
+                    { k: 'Confidence', v: '0.82' },
+                  ].map((cell) => (
+                    <div key={cell.k} className="bg-[#FCFCFD] px-3 py-3.5">
+                      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#6B7280]">
+                        {cell.k}
+                      </dt>
+                      <dd
+                        className={`mt-1.5 font-mono text-[19px] tabular-nums ${
+                          cell.accent ? 'text-[#5B4FFF]' : 'text-[#1A1A1A]'
+                        }`}
+                      >
+                        {cell.v}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <div className="mt-6 space-y-2.5 font-mono text-[11.5px] leading-relaxed text-[#4B5563]">
+                  {[
+                    ['06:00', 'discovered 4 opportunities'],
+                    ['06:01', 'drafted campaign · whatsapp'],
+                    ['06:01', 'awaiting your approval'],
+                  ].map(([time, event]) => (
+                    <div key={event} className="flex gap-3.5">
+                      <span className="tabular-nums text-[#6B7280]">{time}</span>
+                      <span>{event}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── The inversion ───────────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB] bg-[#FAFAFA]">
+        <div className="mx-auto grid max-w-[1140px] gap-10 px-5 py-20 sm:px-8 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-4">
+            <Marker index="02" label="The inversion" />
+            <h2 className="mt-6 font-serif text-[34px] leading-[1.1] sm:text-[40px]">
+              A dashboard is a question. This is an answer.
+            </h2>
+            <p className="mt-5 text-[15.5px] leading-[1.65] text-[#5C6270]">
+              Traditional CRMs hand you a query builder and assume you already know what
+              to look for. Almost all of the work is in the knowing.
+            </p>
+          </div>
+
+          <div className="lg:col-span-8 lg:pt-1">
+            {[
+              ['Finding the segment', 'You guess which one matters this month', 'Surfaced by the agent, ranked by revenue at risk'],
+              ['Building the audience', 'You hand-assemble the filter', 'Already built, sized, and inspectable'],
+              ['Writing the message', 'You start from an empty box', 'Drafted per channel, refined in plain language'],
+              ['Reading the result', 'You open a report and interpret it', 'The funnel explains itself as events land'],
+            ].map(([job, before, after]) => (
+              <div
+                key={job}
+                className="grid gap-2 border-t border-[#E5E7EB] py-5 sm:grid-cols-[180px_1fr_1fr] sm:gap-6"
+              >
+                <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#6B7280]">
+                  {job}
+                </div>
+                <p className="text-[14.5px] leading-relaxed text-[#6B7280] line-through decoration-[#C7CBD4]">
+                  {before}
+                </p>
+                <p className="text-[14.5px] leading-relaxed text-[#1A1A1A]">{after}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pipeline ────────────────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB]">
+        <div className="mx-auto max-w-[1140px] px-5 py-20 sm:px-8">
+          <Marker index="03" label="The pipeline" />
+          <h2 className="mt-6 max-w-2xl font-serif text-[34px] leading-[1.1] sm:text-[40px]">
             CSV in, revenue decisions out
           </h2>
-          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#6B7280]">
-            Five stages, each one inspectable. Nothing in this pipeline is a black box you have
-            to take on faith.
+          <p className="mt-5 max-w-xl text-[15.5px] leading-[1.65] text-[#5C6270]">
+            Five stages, each one inspectable. Nothing here is a black box you have to
+            take on faith.
           </p>
 
-          <ol className="mt-12 space-y-3">
-            {PIPELINE.map((stage, i) => {
-              const Icon = stage.icon;
-              return (
-                <li
-                  key={stage.title}
-                  className="group flex gap-5 rounded-2xl border border-[#E5E7EB] bg-white p-6 transition-all hover:border-[#5B4FFF]/30 hover:shadow-lg hover:shadow-[#5B4FFF]/5"
-                >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="text-[11px] font-bold tabular-nums text-[#C7CBD4]">
-                        0{i + 1}
-                      </span>
-                      <h3 className="text-[17px] font-bold">{stage.title}</h3>
-                    </div>
-                    <p className="mt-1.5 text-[15px] leading-relaxed text-[#6B7280]">
-                      {stage.body}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
+          <ol className="mt-14">
+            {PIPELINE.map((stage, i) => (
+              <li
+                key={stage.title}
+                className="grid gap-x-8 gap-y-3 border-t border-[#E5E7EB] py-7 lg:grid-cols-12"
+              >
+                <div className="lg:col-span-2">
+                  <span className="font-mono text-[30px] tabular-nums leading-none text-[#8E95A1]">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                </div>
+                <h3 className="font-serif text-[25px] leading-tight lg:col-span-3">
+                  {stage.title}
+                </h3>
+                <p className="max-w-2xl text-[15px] leading-[1.65] text-[#5C6270] lg:col-span-5">
+                  {stage.body}
+                </p>
+                <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-[#6B7280] lg:col-span-2 lg:text-right">
+                  {stage.detail}
+                </div>
+              </li>
+            ))}
           </ol>
         </div>
       </section>
 
-      {/* ── Architecture ────────────────────────────────────────────────── */}
-      <section className="border-b border-[#E5E7EB] bg-[#0A0E1A] text-white">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[12px] font-medium text-[#A89DFF]">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            How it is built
-          </div>
-
-          <h2 className="mt-6 text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
-            The interesting part isn&apos;t the prompt
+      {/* ── Where the model is allowed to act ───────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB] bg-[#FAFAFA]">
+        <div className="mx-auto max-w-[1140px] px-5 py-20 sm:px-8">
+          <Marker index="04" label="The boundary" />
+          <h2 className="mt-6 max-w-2xl font-serif text-[34px] leading-[1.1] sm:text-[40px]">
+            What the model is allowed to be wrong about
           </h2>
-          <p className="mt-4 max-w-2xl text-[16px] leading-relaxed text-[#8B92A5]">
-            Anything can call a language model. The engineering is in deciding what the model is
-            allowed to be wrong about, and containing it when it is.
+          <p className="mt-5 max-w-xl text-[15.5px] leading-[1.65] text-[#5C6270]">
+            Money maths, eligibility and delivery state are arithmetic — they belong in
+            code that can be tested. Language is the only thing handed to a model.
           </p>
 
-          <div className="mt-12 grid gap-5 sm:grid-cols-2">
-            {ARCHITECTURE.map((item) => (
-              <div
-                key={item.title}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-6"
-              >
-                <h3 className="text-[16px] font-bold">{item.title}</h3>
-                <p className="mt-2.5 text-[14.5px] leading-relaxed text-[#8B92A5]">{item.body}</p>
-              </div>
-            ))}
-          </div>
+          <div className="mt-12 grid gap-px bg-[#E5E7EB] sm:grid-cols-2">
+            <div className="bg-white">
+              <p className="px-5 py-4 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#1A1A1A] sm:px-6">
+                Decided by code
+              </p>
+              {BOUNDARY.map((row) => (
+                <div
+                  key={row.code}
+                  className="border-t border-[#E5E7EB] px-5 py-4 text-[14.5px] text-[#1A1A1A] sm:px-6"
+                >
+                  {row.code}
+                </div>
+              ))}
+            </div>
 
-          {/* Flow */}
-          <div className="mt-12 overflow-x-auto">
-            <div className="flex min-w-max items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-5 font-mono text-[12.5px] text-[#8B92A5]">
-              {[
-                { label: 'Frontend', sub: 'Vercel' },
-                { label: 'API', sub: 'Render' },
-                { label: 'Postgres', sub: 'Supabase' },
-                { label: 'Queue', sub: 'Redis' },
-                { label: 'Channel', sub: 'Render' },
-              ].map((node, i, arr) => (
-                <div key={node.label} className="flex items-center gap-2.5">
-                  <div className="rounded-lg border border-white/10 bg-[#0A0E1A] px-3.5 py-2 text-center">
-                    <div className="font-semibold text-white">{node.label}</div>
-                    <div className="mt-0.5 text-[11px] text-[#5B6178]">{node.sub}</div>
-                  </div>
-                  {i < arr.length - 1 && <span className="text-[#5B6178]">&rarr;</span>}
+            <div className="bg-white">
+              <p className="px-5 py-4 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[#5B4FFF] sm:px-6">
+                Written by the model
+              </p>
+              {BOUNDARY.map((row) => (
+                <div
+                  key={row.model}
+                  className="border-t border-[#E5E7EB] px-5 py-4 text-[14.5px] text-[#5C6270] sm:px-6"
+                >
+                  {row.model}
                 </div>
               ))}
             </div>
           </div>
-
-          <div className="mt-10 flex flex-wrap gap-2">
-            {STACK.map((tech) => (
-              <span
-                key={tech}
-                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] font-medium text-[#A8AEC0]"
-              >
-                {tech}
-              </span>
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* ── What you can do in the demo ─────────────────────────────────── */}
-      <section className="border-b border-[#E5E7EB]">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="text-[30px] font-black leading-tight tracking-tight sm:text-[38px]">
-            What you can do once you&apos;re in
-          </h2>
+      {/* ── Architecture ────────────────────────────────────────────────────── */}
+      <section className="bg-[#111318] text-white">
+        <div className="mx-auto max-w-[1140px] px-5 py-20 sm:px-8 sm:py-24">
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#8A91A1]">
+            <span className="text-white">05</span>
+            <span className="mx-2 text-[#3A3F4B]">/</span>
+            How it is built
+          </div>
 
-          <div className="mt-12 grid gap-5 sm:grid-cols-3">
-            {[
-              {
-                icon: Brain,
-                title: 'Watch personas form',
-                body: 'Load the sample retailer and see the segments the model names from its actual purchase behaviour.',
-              },
-              {
-                icon: Bot,
-                title: 'Send the agent a goal',
-                body: 'Type a plain-language objective and watch it decide which audience serves that goal and why.',
-              },
-              {
-                icon: LineChart,
-                title: 'Launch and track',
-                body: 'Approve a campaign and follow real delivery events through the funnel as the provider reports back.',
-              },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.title}
-                  className="rounded-2xl border border-[#E5E7EB] bg-white p-6 transition-all hover:border-[#5B4FFF]/30 hover:shadow-lg hover:shadow-[#5B4FFF]/5"
-                >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
-                    <Icon className="h-5 w-5" />
+          <div className="mt-6 grid gap-10 lg:grid-cols-12 lg:gap-16">
+            <div className="lg:col-span-5">
+              <h2 className="font-serif text-[34px] leading-[1.1] sm:text-[40px]">
+                The interesting part isn’t the prompt
+              </h2>
+              <p className="mt-5 text-[15.5px] leading-[1.65] text-[#9096A5]">
+                Anything can call a language model. The engineering is deciding what it is
+                allowed to be wrong about, and containing it when it is.
+              </p>
+
+              <div className="mt-10 space-y-px">
+                {FLOW.map(([node, host]) => (
+                  <div
+                    key={node}
+                    className="flex items-baseline justify-between border-b border-white/[0.07] py-2.5 font-mono text-[12px]"
+                  >
+                    <span className="text-white">{node}</span>
+                    <span className="text-[#8A91A1]">{host}</span>
                   </div>
-                  <h3 className="mt-5 text-[16px] font-bold">{item.title}</h3>
-                  <p className="mt-2 text-[14.5px] leading-relaxed text-[#6B7280]">{item.body}</p>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-7">
+              <dl className="space-y-px">
+                {ARCHITECTURE.map((item) => (
+                  <div key={item.title} className="border-t border-white/[0.09] py-6">
+                    <dt className="font-serif text-[22px] leading-tight">{item.title}</dt>
+                    <dd className="mt-2.5 max-w-2xl text-[14.5px] leading-[1.65] text-[#9096A5]">
+                      {item.body}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <p className="mt-10 font-mono text-[11.5px] leading-[2] text-[#8A91A1]">
+                {STACK}
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Closing CTA ─────────────────────────────────────────────────── */}
-      <section className="border-b border-[#E5E7EB] bg-[#FAFAFA]">
-        <div className="mx-auto max-w-3xl px-6 py-24 text-center">
-          <h2 className="text-[32px] font-black leading-tight tracking-tight sm:text-[42px]">
-            See it find revenue in data
-            <br />
-            it has never seen
-          </h2>
-          <p className="mx-auto mt-5 max-w-lg text-[16px] leading-relaxed text-[#6B7280]">
-            Create an account, then upload your own data or evaluate the pipeline on 500
-            sample customers and 3,000 orders — loaded into your workspace, not a shared sandbox.
-          </p>
-          <Link
-            href="/login?mode=signup"
-            className="mt-9 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#5B4FFF] px-8 text-[15px] font-semibold text-white shadow-lg shadow-[#5B4FFF]/20 transition-all hover:-translate-y-0.5 hover:bg-[#4B3FE5]"
-          >
-            Create an account
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+      {/* ── Closing ─────────────────────────────────────────────────────────── */}
+      <section className="border-b border-[#E5E7EB]">
+        <div className="mx-auto grid max-w-[1140px] gap-8 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <h2 className="font-serif text-[38px] leading-[1.05] sm:text-[52px]">
+              See it find revenue in data
+              <br />
+              <span className="italic">it has never seen</span>
+            </h2>
+          </div>
+          <div className="lg:col-span-5 lg:pt-3">
+            <p className="text-[15.5px] leading-[1.65] text-[#5C6270]">
+              Create an account, then upload your own history or evaluate the pipeline on
+              500 sample customers and 3,000 orders — imported into your own workspace,
+              never a shared sandbox.
+            </p>
+            <Link
+              href="/login?mode=signup"
+              className="group mt-8 inline-flex h-12 items-center gap-3 bg-[#5B4FFF] px-7 text-[15px] font-semibold text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A1A1A]"
+            >
+              Create an account
+              <span className="font-mono transition-transform group-hover:translate-x-0.5">
+                →
+              </span>
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-9 sm:flex-row">
-        <Image src="/logo.png" alt="GrowthOS" width={76} height={30} className="object-contain" />
-        <p className="text-[13px] text-[#9CA3AF]">
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <footer className="mx-auto flex max-w-[1140px] flex-col gap-3 px-5 py-10 font-mono text-[11px] uppercase tracking-[0.14em] text-[#6B7280] sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <span>GrowthOS</span>
+        <span>
           Built by{' '}
           <a
             href="https://github.com/Mithurn"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-[#6B7280] underline decoration-[#D1D5DB] underline-offset-2 transition-colors hover:text-[#5B4FFF]"
+            className="text-[#5C6270] transition-colors hover:text-[#5B4FFF]"
           >
             Mithurn Jeromme
           </a>
-        </p>
+        </span>
         <a
           href={GITHUB_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-[13px] font-medium text-[#6B7280] transition-colors hover:text-[#5B4FFF]"
+          className="inline-flex items-center gap-2 transition-colors hover:text-[#5B4FFF]"
         >
-          <GithubIcon className="h-4 w-4" />
-          GitHub
+          <GithubIcon className="h-3.5 w-3.5" />
+          Source
         </a>
       </footer>
     </div>

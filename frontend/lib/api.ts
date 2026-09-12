@@ -4,7 +4,6 @@ import type {
   ApiResponse,
   CampaignWithMetrics,
   GeneratedCampaign,
-  Opportunity,
   OpportunityReport,
   PaginatedResponse,
 } from './types';
@@ -265,11 +264,12 @@ export async function generateOpportunities(model?: string) {
 }
 
 export function getOpportunityDashboard() {
-  return swr('opp-dashboard', 90_000, async () => {
-    const response = await apiFetch(`${API_BASE_URL}/opportunities`, {}, 12000);
-    if (!response.ok) throw new Error('Failed to fetch opportunities');
-    return response.json();
-  });
+  return swr('opp-dashboard', 90_000, () =>
+    apiJson<ApiResponse<OpportunityReport>>(
+      `${API_BASE_URL}/opportunities`,
+      'Failed to fetch opportunities',
+    ),
+  );
 }
 
 export async function getOpportunityCustomers(opportunityId: string) {
@@ -331,11 +331,12 @@ export function getCampaigns(opts?: { page?: number; limit?: number }) {
   if (opts?.limit) params.set('limit', String(opts.limit));
   const qs = params.toString();
   const key = `campaigns-${qs}`;
-  return swr(key, 90_000, async () => {
-    const response = await apiFetch(`${API_BASE_URL}/campaigns${qs ? `?${qs}` : ''}`);
-    if (!response.ok) throw new Error('Failed to fetch campaigns');
-    return response.json();
-  });
+  return swr(key, 90_000, () =>
+    apiJson<PaginatedResponse<CampaignWithMetrics>>(
+      `${API_BASE_URL}/campaigns${qs ? `?${qs}` : ''}`,
+      'Failed to fetch campaigns',
+    ),
+  );
 }
 
 export async function getCampaignById(campaignId: string) {
