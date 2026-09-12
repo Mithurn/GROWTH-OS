@@ -182,6 +182,29 @@ CHANNEL_SERVICE_URL=http://localhost:5001
 WEBHOOK_SECRET=your_shared_secret
 ```
 
+## Testing
+
+```bash
+npm test               # unit tests — mocked Prisma/Redis/queues, no external services
+npm run test:integration   # real Postgres via Testcontainers — needs Docker running
+```
+
+`test:integration` starts a real `postgres:16-alpine` container, runs the actual
+`prisma migrate deploy` against it, and tests things the mocked suite can't — tenant
+isolation with two live tenants, real constraint enforcement, real concurrent writes.
+Needs a working Docker daemon. If you're on Colima rather than Docker Desktop, Ryuk
+(Testcontainers' cleanup sidecar) can't bind-mount Colima's socket into itself, so run
+with it disabled:
+
+```bash
+DOCKER_HOST="unix://$HOME/.colima/default/docker.sock" \
+TESTCONTAINERS_RYUK_DISABLED=true \
+npm run test:integration
+```
+
+Containers still get cleaned up (each test's `afterAll` stops its own), Ryuk is just a
+belt-and-braces reaper for crashed test runs.
+
 Runs at **http://localhost:3001**
 
 ### Generate demo data
