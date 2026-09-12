@@ -9,7 +9,7 @@ import {
   getPersonaCustomers,
   getPersonaDistribution,
 } from '../services/personas';
-import { GeneratePersonasSchema } from '../lib/schemas';
+import { GeneratePersonasSchema } from '@growthos/contracts';
 
 export const personasRouter = Router();
 

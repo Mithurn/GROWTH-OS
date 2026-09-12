@@ -23,7 +23,7 @@ import {
   GenerateCampaignSchema,
   SaveCampaignSchema,
   RefineCampaignSchema,
-} from '../lib/schemas';
+} from '@growthos/contracts';
 
 export const campaignsRouter = Router();
 

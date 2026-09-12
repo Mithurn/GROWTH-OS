@@ -20,7 +20,7 @@ import {
   GenerateOpportunitiesSchema,
   RefineOpportunitySchema,
   CreateOpportunityFromGoalSchema,
-} from '../lib/schemas';
+} from '@growthos/contracts';
 
 export const opportunitiesRouter = Router();
 

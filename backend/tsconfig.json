@@ -12,9 +12,12 @@
     "paths": {
       "@growthos/domain": ["../packages/domain/src/index.ts"],
       "@growthos/domain/*": ["../packages/domain/src/*"],
-      "vitest": ["./node_modules/vitest"]
+      "@growthos/contracts": ["../packages/contracts/src/index.ts"],
+      "@growthos/contracts/*": ["../packages/contracts/src/*"],
+      "vitest": ["./node_modules/vitest"],
+      "zod": ["./node_modules/zod"]
     }
   },
-  "include": ["src/**/*", "../packages/domain/src/**/*"],
+  "include": ["src/**/*", "../packages/domain/src/**/*", "../packages/contracts/src/**/*"],
   "exclude": ["node_modules"]
 }

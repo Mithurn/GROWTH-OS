@@ -1,0 +1,23 @@
+{
+  // Exists only to tell esbuild where this package's one npm dependency lives.
+  //
+  // `zod` is installed in `backend/node_modules`, and there is no root `node_modules`,
+  // so a bare `import 'zod'` from a file in this directory cannot be resolved by walking
+  // up the tree. `backend/tsconfig.json` maps `zod` for `tsc`, which applies the invoked
+  // config's `paths` to every file in its `include` — but esbuild picks the tsconfig
+  // nearest the *importing* file, so backend's mapping never reaches these files and the
+  // real `render.yaml` build fails to resolve `zod` without this.
+  //
+  // `packages/domain` needs no equivalent because it is pure and imports nothing from
+  // npm. Every future package with a real dependency does. If one ever needs a package
+  // the backend does not already install, or a second consumer shows up on a different
+  // major of a shared dependency, stop patching this file and move the repo to npm
+  // workspaces with a single hoisted install — see ARCHITECTURE_V2.md §12, and note that
+  // doing so changes install semantics for both Render (`cd backend && npm install`) and
+  // Vercel (root dir `frontend/`), so it needs its own verified change.
+  "compilerOptions": {
+    "paths": {
+      "zod": ["../../backend/node_modules/zod"]
+    }
+  }
+}

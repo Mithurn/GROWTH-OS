@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@growthos/domain': path.resolve(__dirname, '../packages/domain/src/index.ts'),
+      '@growthos/contracts': path.resolve(__dirname, '../packages/contracts/src/index.ts'),
     },
   },
   test: {
@@ -20,7 +21,11 @@ export default defineConfig({
     // vitest.integration.config.ts instead — they need Docker and take longer, so they
     // are not part of the default `npm test` / CI-per-push run. See `npm run
     // test:integration` and docs/PROGRESS.md Phase 0.
-    include: ['src/**/*.test.ts', '../packages/domain/src/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      '../packages/domain/src/**/*.test.ts',
+      '../packages/contracts/src/**/*.test.ts',
+    ],
     exclude: ['src/__tests__/integration/**', 'node_modules/**'],
     env: {
       NODE_ENV: 'test',

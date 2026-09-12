@@ -16,7 +16,7 @@ import {
   OnboardingProfileSchema,
   ConversationMessageSchema,
   OnboardingCompleteSchema,
-} from '../lib/schemas';
+} from '@growthos/contracts';
 
 export const onboardingRouter = Router();
 

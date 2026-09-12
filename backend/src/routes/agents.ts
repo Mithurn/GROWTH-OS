@@ -11,7 +11,7 @@ import {
 import { validateBody } from '../middleware/validate';
 import { agentOrchestrator } from '../services/agent-orchestrator';
 import { getRecentActions } from '../services/agent-logger';
-import { CreateAgentSchema, PatchAgentSchema } from '../lib/schemas';
+import { CreateAgentSchema, PatchAgentSchema } from '@growthos/contracts';
 
 export const agentsRouter = Router();
 
