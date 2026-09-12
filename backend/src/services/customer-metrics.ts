@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger as rootLogger } from '../lib/logger';
+import {
+  toNumber,
+  roundToTwo,
+  daysSince as safeDaysSince,
+  computeRfm,
+  type CustomerAggregate,
+} from '@growthos/domain';
 
 export interface CustomerMetricsLogger {
   info: (message: string, ...args: unknown[]) => void;
@@ -63,12 +70,6 @@ interface StoredMetricRow {
   last_order_date: string | null;
 }
 
-interface CustomerAggregate {
-  totalOrders: number;
-  totalSpent: number;
-  lastOrderDate: Date | null;
-}
-
 interface GenerateCustomerMetricsOptions {
   batchSize?: number;
   logger?: CustomerMetricsLogger;
@@ -76,26 +77,12 @@ interface GenerateCustomerMetricsOptions {
 }
 
 const DEFAULT_BATCH_SIZE = 100;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const defaultLogger: CustomerMetricsLogger = {
   info:  (msg, ...args) => rootLogger.info(args[0] ?? {}, msg),
   warn:  (msg, ...args) => rootLogger.warn(args[0] ?? {}, msg),
   error: (msg, ...args) => rootLogger.error(args[0] ?? {}, msg),
 };
-
-function toNumber(value: number | string | null | undefined): number {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-}
 
 function toISODate(value: Date | null): string | null {
   return value ? value.toISOString() : null;
@@ -121,44 +108,6 @@ function toDateKey(value: string | Date | null | undefined): string | null {
 
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
-}
-
-function safeDaysSince(date: Date | null, now: Date): number | null {
-  if (!date) return null;
-  return Math.max(0, Math.floor((now.getTime() - date.getTime()) / DAY_MS));
-}
-
-function roundToTwo(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function determinePurchaseFrequency(totalOrders: number, daysSinceLastOrder: number | null): 'High' | 'Medium' | 'Low' {
-  if (totalOrders <= 0) {
-    return 'Low';
-  }
-
-  if (totalOrders >= 8 && (daysSinceLastOrder === null || daysSinceLastOrder <= 45)) {
-    return 'High';
-  }
-
-  if (totalOrders >= 3 && (daysSinceLastOrder === null || daysSinceLastOrder <= 120)) {
-    return 'Medium';
-  }
-
-  return 'Low';
-}
-
-function calculateEngagementScore(totalOrders: number, totalSpent: number, daysSinceLastOrder: number | null): number {
-  const recencyScore = daysSinceLastOrder === null
-    ? 0
-    : Math.max(0, 100 - Math.min(daysSinceLastOrder, 365) * (100 / 365));
-
-  const frequencyScore = Math.min(totalOrders * 12, 100);
-  const monetaryScore = totalSpent <= 0
-    ? 0
-    : Math.min((Math.log10(totalSpent + 1) / 4) * 100, 100);
-
-  return roundToTwo((recencyScore * 0.45) + (frequencyScore * 0.35) + (monetaryScore * 0.2));
 }
 
 function aggregateOrdersByCustomer(orders: OrderRow[]): Map<string, CustomerAggregate> {
@@ -192,23 +141,17 @@ function aggregateOrdersByCustomer(orders: OrderRow[]): Map<string, CustomerAggr
 }
 
 function buildMetrics(customer: CustomerRow, aggregate: CustomerAggregate | undefined, now: Date): CustomerMetricsRecord {
-  const totalOrders = aggregate?.totalOrders ?? 0;
-  const totalSpent = roundToTwo(aggregate?.totalSpent ?? 0);
-  const lastOrderDate = aggregate?.lastOrderDate ?? null;
-  const daysSinceLastOrder = safeDaysSince(lastOrderDate, now);
-  const avgOrderValue = totalOrders > 0 ? roundToTwo(totalSpent / totalOrders) : 0;
-  const purchaseFrequency = determinePurchaseFrequency(totalOrders, daysSinceLastOrder);
-  const engagementScore = calculateEngagementScore(totalOrders, totalSpent, daysSinceLastOrder);
+  const rfm = computeRfm(aggregate, now);
 
   return {
     customer_id: customer.id,
-    total_orders: totalOrders,
-    total_spent: totalSpent,
-    avg_order_value: avgOrderValue,
-    last_order_date: toISODate(lastOrderDate),
-    days_since_last_order: daysSinceLastOrder,
-    purchase_frequency: purchaseFrequency,
-    engagement_score: engagementScore,
+    total_orders: rfm.totalOrders,
+    total_spent: rfm.totalSpent,
+    avg_order_value: rfm.avgOrderValue,
+    last_order_date: toISODate(rfm.lastOrderDate),
+    days_since_last_order: rfm.daysSinceLastOrder,
+    purchase_frequency: rfm.purchaseFrequency,
+    engagement_score: rfm.engagementScore,
     updated_at: now.toISOString(),
   };
 }

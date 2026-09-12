@@ -5,21 +5,13 @@ import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { getSegmentCache, setSegmentCache } from '../lib/redis';
 import { parseWithRetry } from '../lib/ai';
+import {
+  OPPORTUNITY_TYPES as OPPORTUNITY_TYPE_ENUM,
+  toPrismaWhere,
+  type OpportunityType,
+} from '@growthos/domain';
 
 // ── OpenRouter client with required headers ───────────────────────────────────
-
-// ── Strict enum — every value must have a matching branch below ───────────────
-// Adding or changing a type here REQUIRES updating getAudienceSize and
-// getAudienceCustomers to match. Never add a catch-all default that targets
-// all customers.
-type OpportunityType = 'Retention-Churn' | 'Retention-VIP' | 'Upsell' | 'Reactivation';
-
-const OPPORTUNITY_TYPE_ENUM: OpportunityType[] = [
-  'Retention-Churn',
-  'Retention-VIP',
-  'Upsell',
-  'Reactivation',
-];
 
 const DiscoveredOpportunityRawSchema = z.object({
   opportunity_key: z.string(),
@@ -311,12 +303,10 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
 }
 
 // ── Audience predicates ───────────────────────────────────────────────────────
-// Single source of truth for what each opportunity type targets. Sizing and customer
-// selection previously duplicated these four predicates, which is how they drifted
-// out of sync on tenant scoping.
-//
-// Every predicate is scoped through the customer relation: customer_metrics has no
-// company_id of its own, so an unscoped count returns every tenant's customers.
+// Single source of truth for what each opportunity type targets now lives in
+// @growthos/domain (packages/domain/src/segments/audience.ts) — a model must never
+// define who receives a message, and this is what "audience sizing is code, not a
+// prompt" means in practice. See docs/ARCHITECTURE_V2.md §5.
 type AudiencePredicate = NonNullable<
   Parameters<typeof prisma.customerMetrics.count>[0]
 >['where'];
@@ -325,28 +315,11 @@ function audiencePredicate(
   opportunityType: OpportunityType,
   companyId: string,
 ): AudiencePredicate | null {
-  const owned = { customer: { companyId } };
-
-  switch (opportunityType) {
-    case 'Retention-Churn':
-      return { ...owned, daysSinceLastOrder: { gte: 30, lt: 60 } };
-
-    case 'Retention-VIP':
-      return { ...owned, totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } };
-
-    case 'Upsell':
-      return { ...owned, totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } };
-
-    case 'Reactivation':
-      return { ...owned, daysSinceLastOrder: { gte: 60 } };
-
-    default: {
-      // Exhaustiveness check — unreachable while the enum is complete. Returning null
-      // rather than an empty predicate, so a new type can never target all customers.
-      const exhaustive: never = opportunityType;
-      logger.error({ opportunityType: exhaustive }, 'opportunity-discovery: unhandled opportunity type');
-      return null;
-    }
+  try {
+    return toPrismaWhere(opportunityType, companyId) as AudiencePredicate;
+  } catch (error) {
+    logger.error({ err: error, opportunityType }, 'opportunity-discovery: unhandled opportunity type');
+    return null;
   }
 }
 
