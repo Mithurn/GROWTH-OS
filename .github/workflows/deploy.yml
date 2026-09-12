@@ -1,0 +1,89 @@
+name: Deploy
+
+# Runs only after CI on main succeeds. Native Vercel/Render Git integrations should
+# also deploy from this repo; these jobs are the explicit backup and the place to
+# run a production Vercel promote when the GitHub app is not linked.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: CI passed on main
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    steps:
+      - run: echo "CI ${{ github.event.workflow_run.head_sha }} passed — deploying"
+
+  vercel:
+    name: Frontend — Vercel
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::warning::VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID are not set."
+            echo "Vercel will still auto-deploy if the project is connected to Mithurn/GROWTH-OS on main."
+            echo "To deploy from Actions: Vercel → Account Settings → Tokens, then Project Settings → IDs."
+            exit 0
+          fi
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+          vercel build --prod --token "$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+
+  render-backend:
+    name: Backend — Render
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger deploy hook
+        env:
+          HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::RENDER_BACKEND_DEPLOY_HOOK is not set."
+            echo "Render still auto-deploys after CI if the service is linked to this repo (autoDeployTrigger: checksPass)."
+            echo "Hook URL: Render → xeno-crm-backend → Settings → Deploy Hook."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK"
+
+  render-channel:
+    name: Channel service — Render
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger deploy hook
+        env:
+          HOOK: ${{ secrets.RENDER_CHANNEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::RENDER_CHANNEL_DEPLOY_HOOK is not set."
+            echo "Render still auto-deploys after CI if the service is linked to this repo."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK"

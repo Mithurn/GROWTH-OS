@@ -172,9 +172,10 @@ Every AI step uses a strict **prompt → JSON parse → Zod validate → DB writ
 - Cold-start mitigation — health ping warms both Render services on dashboard load
 
 ### CI / CD
-- **GitHub Actions** — three parallel jobs on every push: backend typecheck + 12 integration tests, frontend typecheck, channel-service typecheck
-- **Vercel** — automatic deploy from main branch
-- **Render** — `render.yaml` declarative config for both backend services
+- **GitHub Actions CI** — on every push and PR to `main`: backend typecheck + tests, frontend typecheck + lint + production build, channel-service typecheck
+- **GitHub Actions Deploy** — after CI passes on `main`, promotes the frontend on Vercel and hits Render deploy hooks when those secrets are set
+- **Vercel** — Git integration on `main` (root directory: `frontend`) plus the Actions backup
+- **Render** — `render.yaml` links both services to `Mithurn/GROWTH-OS` `main`, deploys only after CI checks pass, and runs `prisma migrate deploy` before the backend starts
 
 ---
 

@@ -1,5 +1,9 @@
 name: CI
 
+# Gate for production. Render is set to autoDeployTrigger: checksPass, so a failed
+# job here blocks backend and channel deploys. The Deploy workflow runs after this
+# succeeds on main and triggers Vercel/Render hooks when those secrets are set.
+
 on:
   push:
     branches: [main]

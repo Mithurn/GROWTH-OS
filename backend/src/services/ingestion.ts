@@ -57,8 +57,8 @@ export async function startIngestionJob(
       status: 'pending',
       step: 'queued',
       progress: 0,
-      customerCsv: customerBuffer,
-      orderCsv: orderBuffer,
+      customerCsv: Uint8Array.from(customerBuffer),
+      orderCsv: Uint8Array.from(orderBuffer),
     },
   });
 
