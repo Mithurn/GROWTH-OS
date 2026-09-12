@@ -5,9 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  Users,
   TrendingUp,
-  Percent,
   Sparkles,
   MessageCircle,
   Mail,
@@ -19,7 +17,8 @@ import {
   RefreshCw,
   ShoppingBag
 } from 'lucide-react';
-import { generateCampaign, getOpportunityCustomers, saveCampaign, launchCampaign, refineCampaign } from '@/lib/api';
+import { generateCampaign, getOpportunityCustomers, saveCampaign, refineCampaign } from '@/lib/api';
+import type { GeneratedCampaign, Opportunity } from '@/lib/types';
 
 function formatCurrency(value: number): string {
   if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
@@ -35,8 +34,8 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [opportunity, setOpportunity] = useState<any>(null);
-  const [campaign, setCampaign] = useState<any>(null);
+  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
+  const [campaign, setCampaign] = useState<GeneratedCampaign | null>(null);
   
   const [chatQuery, setChatQuery] = useState('');
   const [isRefining, setIsRefining] = useState(false);
@@ -48,8 +47,6 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   useEffect(() => {
     async function init() {
       try {
-        const companyId = window.localStorage.getItem('growthOS_company_id');
-        
         // Fetch opportunity
         const oppRes = await getOpportunityCustomers(opportunityId);
         if (!oppRes.success) throw new Error('Failed to load opportunity');
@@ -61,8 +58,8 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
         
         setCampaign(campRes.data.campaign);
         setActiveChannel(campRes.data.campaign.channel || 'WhatsApp');
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Something went wrong');
       } finally {
         setLoading(false);
       }
@@ -70,32 +67,50 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
     init();
   }, [opportunityId]);
 
-  const handleRefine = async () => {
-    if (!chatQuery.trim() || !campaign) return;
+  /**
+   * `generateCampaign` hands back an unsaved draft with no id, but the refine endpoint
+   * rewrites a stored row. So the draft has to be persisted before it can be refined.
+   * `saveCampaign` is idempotent per opportunity — it returns the existing row rather
+   * than inserting a second one — so calling it repeatedly is safe.
+   */
+  const persistDraft = async (draft: GeneratedCampaign): Promise<string> => {
+    if (draft.id) return draft.id;
+    const saveRes = await saveCampaign(opportunityId, draft);
+    if (!saveRes.success) throw new Error('Failed to save campaign');
+    return saveRes.data.id as string;
+  };
+
+  const applyRefinement = async (modifier: string) => {
+    if (!campaign) return;
+    setIsRefining(true);
     try {
-      setIsRefining(true);
-      const result = await refineCampaign(campaign.id, chatQuery.trim(), campaign.channel);
-      setCampaign({ ...campaign, campaign_content: result.data.message_content });
+      const campaignId = await persistDraft(campaign);
+      const result = await refineCampaign(campaignId, modifier, campaign.channel);
+      setCampaign({ ...campaign, id: campaignId, campaign_content: result.data.message_content });
       setChatQuery('');
-    } catch (err: any) {
-      console.error('Refine failed:', err);
     } finally {
       setIsRefining(false);
     }
   };
 
+  const handleRefine = async () => {
+    if (!chatQuery.trim() || !campaign) return;
+    try {
+      await applyRefinement(chatQuery.trim());
+    } catch (err) {
+      console.error('Refine failed:', err);
+      setError(err instanceof Error ? err.message : 'Could not refine the message');
+    }
+  };
+
   const handleApprove = async () => {
+    if (!campaign) return;
     try {
       setIsSaving(true);
-      const companyId = window.localStorage.getItem('growthOS_company_id');
-      
-      // Save campaign
-      const saveRes = await saveCampaign(opportunityId, campaign);
-      if (!saveRes.success) throw new Error('Failed to save campaign');
-      
+      await persistDraft(campaign);
       router.push('/opportunities');
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setIsSaving(false);
     }
@@ -330,14 +345,12 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
               <button
                 key={action}
                 onClick={async () => {
-                  setChatQuery(action);
-                  if (!campaign || isRefining) return;
+                  if (isRefining) return;
                   try {
-                    setIsRefining(true);
-                    const result = await refineCampaign(campaign.id, action, campaign.channel);
-                    setCampaign({ ...campaign, campaign_content: result.data.message_content });
-                    setChatQuery('');
-                  } catch { /* silent */ } finally { setIsRefining(false); }
+                    await applyRefinement(action);
+                  } catch (err) {
+                    console.error('Refine failed:', err);
+                  }
                 }}
                 disabled={isRefining}
                 className="bg-white border border-[#E5E7EB] text-[#4B5563] text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-sm hover:border-[#5B4FFF]/50 hover:text-[#5B4FFF] transition-colors disabled:opacity-50"

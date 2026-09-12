@@ -3,13 +3,17 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/keep-alive'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Always let public paths through
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.next();
   }
+
+  // "/" is the public landing page, so it can't short-circuit here — a signed-in
+  // visitor should still be forwarded to their dashboard. Handled after auth resolves.
+  const isLanding = pathname === '/';
 
   let response = NextResponse.next({ request });
 
@@ -31,21 +35,24 @@ export async function middleware(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
+  const onboardingDone = user?.user_metadata?.onboarding_complete === true;
 
-  if (!user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    return NextResponse.redirect(loginUrl);
+  const redirectTo = (path: string) => {
+    const url = request.nextUrl.clone();
+    url.pathname = path;
+    return NextResponse.redirect(url);
+  };
+
+  if (isLanding) {
+    if (!user) return response;                     // anonymous visitor → landing page
+    return redirectTo(onboardingDone ? '/dashboard' : '/onboarding');
   }
 
-  // New user hasn't finished onboarding — send them there
-  const onboardingDone = user.user_metadata?.onboarding_complete === true;
-  const onOnboarding = pathname.startsWith('/onboarding');
+  if (!user) return redirectTo('/login');
 
-  if (!onboardingDone && !onOnboarding) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/onboarding';
-    return NextResponse.redirect(url);
+  // New user hasn't finished onboarding — send them there
+  if (!onboardingDone && !pathname.startsWith('/onboarding')) {
+    return redirectTo('/onboarding');
   }
 
   return response;

@@ -49,6 +49,7 @@ model Customer {
   opportunities        OpportunityCustomer[]
   communications       Communication[]
 
+  @@unique([companyId, externalCustomerId])
   @@index([companyId])
   @@index([email])
   @@index([phone])
@@ -103,6 +104,10 @@ model IngestionSession {
   step         String?
   progress     Int      @default(0)
   errorMessage String?  @map("error_message")
+  // CSV payloads live here until the job finishes so a Render spin-down mid-run
+  // can resume from the same session instead of leaving it stuck forever.
+  customerCsv  Bytes?   @map("customer_csv")
+  orderCsv     Bytes?   @map("order_csv")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

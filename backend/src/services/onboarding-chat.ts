@@ -1,15 +1,7 @@
-import OpenAI from 'openai';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { openai, openRouterConfig } from '../config/openrouter';
 import { logger } from '../lib/logger';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: process.env.OPENROUTER_BASE_URL,
-  defaultHeaders: {
-    'HTTP-Referer': process.env.OPENROUTER_HTTP_REFERER,
-    'X-Title': process.env.OPENROUTER_APP_NAME,
-  },
-});
 
 const SYSTEM_PROMPT = `You are a friendly onboarding assistant for GrowthOS, an AI-powered customer growth platform.
 
@@ -175,7 +167,7 @@ async function generateAIMessage(
   }));
 
   const completion = await openai.chat.completions.create({
-    model: process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001',
+    model: openRouterConfig.defaultModel,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       ...conversationHistory,
@@ -230,7 +222,7 @@ Extract and return ONLY a valid JSON object with these fields (use arrays for al
 If any field is unclear, use an empty array. Return ONLY the JSON, no other text.`;
 
   const completion = await openai.chat.completions.create({
-    model: process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001',
+    model: openRouterConfig.defaultModel,
     messages: [{ role: 'user', content: extractionPrompt }],
     temperature: 0.3,
     max_tokens: 300,

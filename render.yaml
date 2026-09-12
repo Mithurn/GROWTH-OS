@@ -1,9 +1,15 @@
 services:
+  # Render's free tier grants 750 instance-hours per month shared across the whole
+  # workspace. Running one service 24/7 costs ~730h, so only the backend is kept warm
+  # by the keep-alive cron. The channel service is left to spin down and wakes on
+  # demand at campaign launch; keeping both warm would exhaust the allowance and
+  # suspend every free service until the next calendar month.
   - type: web
     name: xeno-crm-backend
     env: node
     plan: free
-    buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js --external:pg --external:pg-native --external:bullmq --external:ioredis
+    healthCheckPath: /health
+    buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npx esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js --external:pg --external:pg-native --external:bullmq --external:ioredis
     startCommand: cd backend && node dist/server.js
     envVars:
       - key: PORT
@@ -16,10 +22,14 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: REDIS_URL
+        sync: false  # Upstash free tier — without it, queues run inline and persona jobs are dropped
       - key: CHANNEL_SERVICE_URL
         value: "https://xeno-channel-service.onrender.com"
       - key: WEBHOOK_SECRET
         sync: false  # Set in Render dashboard — use: openssl rand -base64 32
+      - key: INTERNAL_API_SECRET
+        sync: false  # Guards /api/internal/*, called by the agent-run cron — openssl rand -base64 32
       - key: FRONTEND_URL
         sync: false  # e.g. https://your-app.vercel.app
 
@@ -27,7 +37,8 @@ services:
     name: xeno-channel-service
     env: node
     plan: free
-    buildCommand: cd channel-service && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node18 --outfile=dist/server.js
+    healthCheckPath: /health
+    buildCommand: cd channel-service && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js
     startCommand: cd channel-service && node dist/server.js
     envVars:
       - key: PORT

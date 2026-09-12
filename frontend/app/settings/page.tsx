@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Save } from 'lucide-react';
+import { getCompany, saveOnboardingProfile } from '@/lib/api';
 
 type OnboardingSettings = {
   companyName: string;
@@ -72,25 +73,9 @@ export default function SettingsPage() {
     budget: '10000',
   });
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  async function loadSettings() {
+  const loadSettings = useCallback(async () => {
     try {
-      const companyId = window.localStorage.getItem('growthOS_company_id');
-      if (!companyId) {
-        setError('No company found. Please complete onboarding first.');
-        setLoading(false);
-        return;
-      }
-
-      // Fetch company data from backend
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
-      const response = await fetch(`${API_BASE}/companies/${companyId}`);
-      if (!response.ok) throw new Error('Failed to load settings');
-
-      const data = await response.json();
+      const data = await getCompany();
       const profile = data.data?.onboarding_profile || {};
 
       setSettings({
@@ -109,20 +94,17 @@ export default function SettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to load settings');
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   async function handleSave() {
     try {
       setSaving(true);
       setError(null);
       setSuccess(false);
-
-      const companyId = window.localStorage.getItem('growthOS_company_id');
-      if (!companyId) {
-        setError('No company found');
-        setSaving(false);
-        return;
-      }
 
       const profile = {
         companyName: settings.companyName,
@@ -140,14 +122,7 @@ export default function SettingsPage() {
         },
       };
 
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
-      const response = await fetch(`${API_BASE}/onboarding/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId, profile }),
-      });
-
-      if (!response.ok) throw new Error('Failed to save settings');
+      await saveOnboardingProfile(profile);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -295,7 +270,6 @@ export default function SettingsPage() {
               options={channelOptions}
               selected={settings.channels}
               onToggle={(value) => toggleSelection('channels', value, true)}
-              multi
             />
           </Section>
 
@@ -366,12 +340,10 @@ function OptionGrid({
   options,
   selected,
   onToggle,
-  multi = false,
 }: {
   options: string[];
   selected: string[];
   onToggle: (value: string) => void;
-  multi?: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

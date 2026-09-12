@@ -28,6 +28,7 @@ import {
   getOpportunityDashboard,
   refineCampaign,
 } from '@/lib/api';
+import type { CampaignWithMetrics } from '@/lib/types';
 import { PhoneMockup } from '@/components/ui/phone-mockup';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -142,13 +143,13 @@ function CampaignsContent() {
       ]);
 
       const opp = (dashRes.data.opportunityDistribution ?? []).find(
-        (o: any) => o.opportunity_id === opportunityId,
+        (o: Opportunity) => o.opportunity_id === opportunityId,
       );
       if (!opp) { setError('Opportunity not found.'); return; }
       setOpportunity(opp);
 
       const existing = (campaignsRes.data ?? []).find(
-        (c: any) => c.opportunity_id === opportunityId,
+        (c: CampaignWithMetrics) => c.opportunity_id === opportunityId,
       );
 
       if (existing) {
@@ -236,10 +237,8 @@ function CampaignsContent() {
     setIsLaunching(true);
     setError(null);
     try {
-      // Wake both services before launching to prevent cold-start failures
-      fetch('https://xeno-crm-backend-n6d8.onrender.com/health').catch(() => {});
-      fetch('https://xeno-channel-service-0dpu.onrender.com/health').catch(() => {});
-      await new Promise(r => setTimeout(r, 5000)); // give both 5s to wake
+      // The backend warms the channel service itself before fanning out sends, so no
+      // client-side wake-up delay is needed here.
       await approveCampaign(savedCampaign.id);
       await launchCampaign(savedCampaign.id);
       setIsLaunching(false);
@@ -263,7 +262,7 @@ function CampaignsContent() {
             </div>
           </div>
           <h2 className="text-2xl font-extrabold text-white mb-2">Already Launched</h2>
-          <p className="text-[#8B92A5] text-sm mb-6">This opportunity's campaign has already been launched. Taking you to the analytics...</p>
+          <p className="text-[#8B92A5] text-sm mb-6">This opportunity&apos;s campaign has already been launched. Taking you to the analytics...</p>
           <div className="h-1 w-full bg-[#1E2545] rounded-full overflow-hidden">
             <div className="h-1 bg-emerald-500 rounded-full animate-[width_2.5s_ease-in-out_forwards]" style={{ width: '100%', transition: 'width 2.5s ease-in-out' }} />
           </div>
@@ -514,11 +513,11 @@ function CampaignsContent() {
         </div>
       </div>
 
-      {/* ── Launch contact modal ── */}
+      {/* ── Launch confirmation ── */}
       {showLaunchModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-          onClick={() => setShowLaunchModal(false)}
+          onClick={() => !isLaunching && setShowLaunchModal(false)}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
@@ -529,24 +528,29 @@ function CampaignsContent() {
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Ready to go live?</h2>
             <p className="text-sm text-gray-500 mb-1">
-              This campaign is ready to launch to
+              This will send
             </p>
-            <p className="text-sm font-semibold text-gray-800 mb-6">
-              {savedCampaign?.name ?? 'your audience'}
+            <p className="text-sm font-semibold text-gray-800 mb-4">
+              {savedCampaign?.name ?? 'your campaign'}
+              {savedCampaign?.audience_size ? ` to ${savedCampaign.audience_size.toLocaleString()} customers` : ''}
             </p>
-            <p className="text-sm text-gray-500 mb-6">
-              Reach out and we'll get it live for you — usually within the hour.
+            <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+              Messages go to the delivery simulator, not to real customers. You&apos;ll see
+              sent, delivered, read and clicked events stream in as the provider acknowledges them.
             </p>
-            <a
-              href={`mailto:openlogtech@gmail.com?subject=Launch Campaign: ${encodeURIComponent(savedCampaign?.name ?? 'Campaign')}&body=Hi, I'd like to launch the campaign "${savedCampaign?.name ?? ''}" on GrowthOS. Campaign ID: ${savedCampaign?.id ?? ''}`}
-              className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3"
+            <button
+              onClick={handleApproveAndLaunch}
+              disabled={isLaunching}
+              className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3 disabled:opacity-60"
             >
-              <Mail className="h-4 w-4" />
-              Email openlogtech@gmail.com
-            </a>
+              {isLaunching
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Launching…</>
+                : <><Rocket className="h-4 w-4" /> Launch campaign</>}
+            </button>
             <button
               onClick={() => setShowLaunchModal(false)}
-              className="w-full py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+              disabled={isLaunching}
+              className="w-full py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
             >
               Not now
             </button>

@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { clearApiCache } from '@/lib/api';
 import type { User } from '@supabase/supabase-js';
 
 const NAV_ITEMS = [
-  { label: 'Overview', href: '/' },
+  { label: 'Overview', href: '/dashboard' },
   { label: 'Opportunities', href: '/opportunities' },
   { label: 'Analytics', href: '/analytics' },
 ];
@@ -27,6 +28,7 @@ export function NavHeader() {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    clearApiCache();
     router.push('/login');
     router.refresh();
   };
@@ -44,17 +46,14 @@ export function NavHeader() {
       <div className="max-w-[1600px] mx-auto px-6 h-16 grid grid-cols-3 items-center">
 
         {/* Left: Logo */}
-        <Link href="/" className="flex items-center">
+        <Link href="/dashboard" className="flex items-center">
           <Image src="/logo.png" alt="GrowthOS" width={80} height={32} className="object-contain" />
         </Link>
 
         {/* Center: Navigation */}
         <nav className="flex items-center justify-center gap-1">
           {NAV_ITEMS.map((item) => {
-            const isActive =
-              item.href === '/'
-                ? pathname === '/'
-                : pathname.startsWith(item.href);
+            const isActive = pathname.startsWith(item.href);
 
             if (dark) {
               return (

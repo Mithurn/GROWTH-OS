@@ -24,6 +24,8 @@ vi.mock('pino-http', () => ({
 // Prevent BullMQ / Redis connections in tests
 vi.mock('../lib/queues', () => ({
   startWorkers: vi.fn(),
+  enqueueIngestion: vi.fn().mockResolvedValue(undefined),
+  enqueuePersonaGeneration: vi.fn().mockResolvedValue(undefined),
   ingestionQueue: { add: vi.fn() },
 }));
 
@@ -40,6 +42,30 @@ vi.mock('../lib/prisma', () => ({
     agentAction: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    ingestionSession: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 'sess_test' }),
+      update: vi.fn(),
+    },
+    company: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+    },
+    customer: {
+      count: vi.fn().mockResolvedValue(0),
+    },
+    communication: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+    },
+    communicationEvent: {
+      create: vi.fn(),
+    },
+    processedWebhookEvent: {
+      create: vi.fn(),
+    },
+    $transaction: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -48,5 +74,6 @@ vi.mock('../services/agent-orchestrator', () => ({
   agentOrchestrator: {
     start: vi.fn(),
     runAgentOnce: vi.fn().mockResolvedValue(undefined),
+    runAllAgents: vi.fn().mockResolvedValue({ ran: true, agentsProcessed: 0 }),
   },
 }));

@@ -1,29 +1,58 @@
-import { getAuthToken } from './supabase/client';
+import { getAuthToken, getUserId } from './supabase/client';
+import type {
+  AgentGuardrails,
+  ApiResponse,
+  CampaignWithMetrics,
+  GeneratedCampaign,
+  Opportunity,
+  OpportunityReport,
+  PaginatedResponse,
+} from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+
+// Origin without the /api suffix — for unauthenticated infra routes like /health.
+export const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 // ─── In-memory SWR cache ──────────────────────────────────────────────────────
 // Module-level singleton — persists across SPA navigation within a session.
 // On a cache hit, returns the stale value immediately and refreshes in background.
+//
+// Entries are namespaced by user id. Without that, signing out and into a second
+// account in the same tab serves the previous account's data until the TTL expires,
+// because the module singleton outlives the session.
 interface CacheEntry { data: unknown; at: number }
 const _cache = new Map<string, CacheEntry>();
 
-function swr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
-  const entry = _cache.get(key);
-  if (entry && Date.now() - entry.at < ttlMs) {
-    fetcher().then(data => _cache.set(key, { data, at: Date.now() })).catch(() => {});
-    return Promise.resolve(entry.data as T);
-  }
-  return fetcher().then(data => {
-    _cache.set(key, { data, at: Date.now() });
-    return data;
-  });
+async function scopedKey(key: string): Promise<string> {
+  return `${(await getUserId()) ?? 'anon'}:${key}`;
 }
 
-function bust(keyPrefix: string) {
-  for (const k of _cache.keys()) {
-    if (k.startsWith(keyPrefix)) _cache.delete(k);
+async function swr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  const k = await scopedKey(key);
+  const entry = _cache.get(k);
+
+  if (entry && Date.now() - entry.at < ttlMs) {
+    fetcher().then(data => _cache.set(k, { data, at: Date.now() })).catch(() => {});
+    return entry.data as T;
   }
+
+  const data = await fetcher();
+  _cache.set(k, { data, at: Date.now() });
+  return data;
+}
+
+/** Drop cached entries whose unscoped key starts with `keyPrefix`, for the current user. */
+async function bust(keyPrefix: string) {
+  const prefix = await scopedKey(keyPrefix);
+  for (const k of _cache.keys()) {
+    if (k.startsWith(prefix)) _cache.delete(k);
+  }
+}
+
+/** Call on sign-out so a subsequent session in the same tab starts clean. */
+export function clearApiCache() {
+  _cache.clear();
 }
 
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
@@ -44,6 +73,23 @@ async function authHeaders(extra: Record<string, string> = {}): Promise<Record<s
 async function apiFetch(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
   const headers = await authHeaders((options.headers as Record<string, string>) ?? {});
   return fetchWithTimeout(url, { ...options, headers }, timeoutMs);
+}
+
+async function apiJson<T>(
+  url: string,
+  fallbackError: string,
+  options: RequestInit = {},
+  timeoutMs = 12000,
+): Promise<T> {
+  const response = await apiFetch(url, options, timeoutMs);
+  if (!response.ok) throw new Error(fallbackError);
+  return response.json() as Promise<T>;
+}
+
+export async function getCompany() {
+  const response = await apiFetch(`${API_BASE_URL}/companies/me`);
+  if (!response.ok) throw new Error('Failed to load company');
+  return response.json();
 }
 
 export async function saveBusinessInfo(companyName: string, industry: string) {
@@ -149,6 +195,20 @@ export async function startIngestion(customerFile: File, orderFile: File) {
   return response.json();
 }
 
+/**
+ * Seed the caller's own company with the demo dataset bundled in the backend repo.
+ * Returns an ingestion session id that polls through `getIngestionStatus` exactly like
+ * a real CSV upload.
+ */
+export async function seedDemoData(): Promise<{ sessionId: string }> {
+  const response = await apiFetch(`${API_BASE_URL}/onboarding/demo-seed`, {
+    method: 'POST',
+  }, 60_000);
+  if (!response.ok) throw new Error('Failed to load demo data');
+  const json = await response.json();
+  return { sessionId: json.sessionId };
+}
+
 export async function getIngestionStatus(sessionId: string) {
   const response = await apiFetch(`${API_BASE_URL}/ingestion-status/${sessionId}`);
 
@@ -187,7 +247,7 @@ export async function generatePersonas(model?: string) {
     throw new Error('Failed to generate personas');
   }
 
-  bust('personas');
+  await bust('personas');
   return response.json();
 }
 
@@ -224,7 +284,7 @@ export async function createOpportunityFromGoal(goal: string, model?: string) {
     body: JSON.stringify({ goal, model }),
   }, 60000);
   if (!response.ok) throw new Error('Failed to create opportunity from goal');
-  bust('opp-dashboard');
+  await bust('opp-dashboard');
   return response.json();
 }
 
@@ -255,13 +315,13 @@ export async function generateCampaign(opportunityId: string, model?: string) {
   return response.json();
 }
 
-export async function saveCampaign(opportunityId: string, campaign: any) {
+export async function saveCampaign(opportunityId: string, campaign: GeneratedCampaign) {
   const response = await apiFetch(`${API_BASE_URL}/campaigns`, {
     method: 'POST',
     body: JSON.stringify({ opportunityId, campaign }),
   });
   if (!response.ok) throw new Error('Failed to save campaign');
-  bust('campaigns-');
+  await bust('campaigns-');
   return response.json();
 }
 
@@ -289,16 +349,25 @@ export async function approveCampaign(campaignId: string) {
     method: 'POST',
   });
   if (!response.ok) throw new Error('Failed to approve campaign');
-  bust('campaigns-');
+  await bust('campaigns-');
   return response.json();
 }
 
 export async function launchCampaign(campaignId: string) {
   const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/launch`, {
     method: 'POST',
-  });
+    // Launch fans out sends and first wakes the spun-down channel service.
+  }, 120_000);
   if (!response.ok) throw new Error('Failed to launch campaign');
-  bust('campaigns-');
+  await bust('campaigns-');
+  return response.json();
+}
+
+export async function getCampaignAnalytics(campaignId: string) {
+  const response = await apiFetch(
+    `${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/analytics`,
+  );
+  if (!response.ok) throw new Error('Failed to fetch campaign analytics');
   return response.json();
 }
 
@@ -306,7 +375,7 @@ export async function launchCampaign(campaignId: string) {
 // AI AGENTS
 // ============================================
 
-export async function createAgent(goal: string, guardrails?: any) {
+export async function createAgent(goal: string, guardrails?: AgentGuardrails) {
   const response = await apiFetch(`${API_BASE_URL}/agents`, {
     method: 'POST',
     body: JSON.stringify({ goal, guardrails }),
@@ -342,7 +411,7 @@ export async function runAgent(agentId: string) {
   return response.json();
 }
 
-export async function updateAgent(agentId: string, updates: { status?: string; guardrails?: any }) {
+export async function updateAgent(agentId: string, updates: { status?: string; guardrails?: AgentGuardrails }) {
   const response = await apiFetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`, {
     method: 'PATCH',
     body: JSON.stringify(updates),

@@ -1,6 +1,5 @@
-import OpenAI from 'openai';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { openRouterConfig } from '../config/openrouter';
+import { openRouterConfig, openai } from '../config/openrouter';
 
 // ============================================
 // TYPES
@@ -131,15 +130,7 @@ export async function generateIntelligenceBrief(
   };
 
   // Generate AI insights using OpenRouter
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   const prompt = `You are a Growth Intelligence Analyst for a retail CRM.
 
 Analyze this data and generate a concise intelligence brief:
@@ -169,7 +160,7 @@ Focus on:
 
 Be specific with numbers. Use Indian Rupee format (₹). Keep it concise and actionable.`;
 
-  const response = await client.chat.completions.create({
+  const response = await openai.chat.completions.create({
     model: openRouterConfig.defaultModel,
     temperature: 0.7,
     max_tokens: 600,
@@ -644,15 +635,7 @@ export async function getCampaignAnalytics(supabase: SupabaseClient, campaignId:
     nextAction: { title: '', description: '', potentialRevenue: 0, confidence: 0 },
   };
   try {
-    const client = new OpenAI({
-      apiKey: openRouterConfig.apiKey,
-      baseURL: openRouterConfig.baseUrl,
-      defaultHeaders: {
-        'HTTP-Referer': openRouterConfig.httpReferer,
-        'X-Title': openRouterConfig.appName,
-      },
-    });
-    const response = await client.chat.completions.create({
+        const response = await openai.chat.completions.create({
       model: openRouterConfig.defaultModel,
       temperature: 0.7,
       max_tokens: 500,

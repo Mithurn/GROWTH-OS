@@ -6,7 +6,15 @@ import { NavHeader } from './nav-header';
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname.startsWith('/onboarding') || pathname.startsWith('/login') || pathname.startsWith('/auth')) {
+  // The landing page and the auth/onboarding flows carry their own chrome — the app
+  // nav would be misleading there, since the visitor may not be signed in at all.
+  const isStandalone =
+    pathname === '/' ||
+    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/auth');
+
+  if (isStandalone) {
     return <>{children}</>;
   }
 

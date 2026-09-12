@@ -1,21 +1,12 @@
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import OpenAI from 'openai';
-import { openRouterConfig } from '../config/openrouter';
+import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { getSegmentCache, setSegmentCache } from '../lib/redis';
 import { parseWithRetry } from '../lib/ai';
 
 // ── OpenRouter client with required headers ───────────────────────────────────
-const openai = new OpenAI({
-  apiKey: openRouterConfig.apiKey,
-  baseURL: openRouterConfig.baseUrl,
-  defaultHeaders: {
-    'HTTP-Referer': openRouterConfig.httpReferer,
-    'X-Title': openRouterConfig.appName,
-  },
-});
 
 // ── Strict enum — every value must have a matching branch below ───────────────
 // Adding or changing a type here REQUIRES updating getAudienceSize and
@@ -96,7 +87,13 @@ export async function discoverOpportunities(
 // ── Analytics snapshot for the AI prompt ──────────────────────────────────────
 async function getCustomerAnalytics(companyId: string) {
   try {
-    const totalCustomers = await prisma.customer.count();
+    // customer_metrics and customer_attributes have no company_id of their own, so
+    // every count here is scoped through the customer relation. These were previously
+    // unscoped, which fed one tenant's totals into another tenant's agent prompt and
+    // audience sizing.
+    const ownedByCompany = { customer: { companyId } };
+
+    const totalCustomers = await prisma.customer.count({ where: { companyId } });
 
     if (totalCustomers === 0) return null;
 
@@ -111,32 +108,34 @@ async function getCustomerAnalytics(companyId: string) {
     ] = await Promise.all([
       // Retention-Churn: inactive 30–59 days
       prisma.customerMetrics.count({
-        where: { daysSinceLastOrder: { gte: 30, lt: 60 } },
+        where: { ...ownedByCompany, daysSinceLastOrder: { gte: 30, lt: 60 } },
       }),
 
       // Retention-VIP: high spenders inactive 15+ days
       prisma.customerMetrics.count({
-        where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
+        where: { ...ownedByCompany, totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
       }),
 
       // Reactivation: dormant 60+ days
       prisma.customerMetrics.count({
-        where: { daysSinceLastOrder: { gte: 60 } },
+        where: { ...ownedByCompany, daysSinceLastOrder: { gte: 60 } },
       }),
 
       // Upsell: repeat buyers with low AOV
       prisma.customerMetrics.count({
-        where: { totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
+        where: { ...ownedByCompany, totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
       }),
 
       prisma.customerAttributes.groupBy({
         by: ['favoriteCategory'],
+        where: ownedByCompany,
         _count: { id: true },
         orderBy: { _count: { id: 'desc' } },
         take: 10,
       }),
 
       prisma.customerMetrics.aggregate({
+        where: ownedByCompany,
         _avg: { totalSpent: true, avgOrderValue: true, totalOrders: true },
       }),
 
@@ -246,7 +245,10 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
           continue;
         }
 
-        const audienceSize = await getAudienceSize(oppData.opportunity_type as OpportunityType);
+        const audienceSize = await getAudienceSize(
+          oppData.opportunity_type as OpportunityType,
+          companyId,
+        );
 
         const opportunity = await prisma.opportunity.create({
           data: {
@@ -275,6 +277,7 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
 
         const audienceCustomerIds = await getAudienceCustomers(
           oppData.opportunity_type as OpportunityType,
+          companyId,
           audienceSize > 0 ? audienceSize : oppData.audience_size,
         );
 
@@ -307,91 +310,75 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
   }
 }
 
-// ── Audience sizing — every branch is explicit, no dangerous default ───────────
-async function getAudienceSize(opportunityType: OpportunityType): Promise<number> {
-  try {
-    switch (opportunityType) {
-      case 'Retention-Churn':
-        return prisma.customerMetrics.count({
-          where: { daysSinceLastOrder: { gte: 30, lt: 60 } },
-        });
+// ── Audience predicates ───────────────────────────────────────────────────────
+// Single source of truth for what each opportunity type targets. Sizing and customer
+// selection previously duplicated these four predicates, which is how they drifted
+// out of sync on tenant scoping.
+//
+// Every predicate is scoped through the customer relation: customer_metrics has no
+// company_id of its own, so an unscoped count returns every tenant's customers.
+type AudiencePredicate = NonNullable<
+  Parameters<typeof prisma.customerMetrics.count>[0]
+>['where'];
 
-      case 'Retention-VIP':
-        return prisma.customerMetrics.count({
-          where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
-        });
+function audiencePredicate(
+  opportunityType: OpportunityType,
+  companyId: string,
+): AudiencePredicate | null {
+  const owned = { customer: { companyId } };
 
-      case 'Upsell':
-        return prisma.customerMetrics.count({
-          where: { totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
-        });
+  switch (opportunityType) {
+    case 'Retention-Churn':
+      return { ...owned, daysSinceLastOrder: { gte: 30, lt: 60 } };
 
-      case 'Reactivation':
-        return prisma.customerMetrics.count({
-          where: { daysSinceLastOrder: { gte: 60 } },
-        });
+    case 'Retention-VIP':
+      return { ...owned, totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } };
 
-      default: {
-        // TypeScript exhaustiveness check — this branch is unreachable if the
-        // enum is complete, but we log and return 0 rather than blast all customers.
-        const exhaustive: never = opportunityType;
-        logger.error({ opportunityType: exhaustive }, 'opportunity-discovery: unhandled opportunity type');
-        return 0;
-      }
+    case 'Upsell':
+      return { ...owned, totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } };
+
+    case 'Reactivation':
+      return { ...owned, daysSinceLastOrder: { gte: 60 } };
+
+    default: {
+      // Exhaustiveness check — unreachable while the enum is complete. Returning null
+      // rather than an empty predicate, so a new type can never target all customers.
+      const exhaustive: never = opportunityType;
+      logger.error({ opportunityType: exhaustive }, 'opportunity-discovery: unhandled opportunity type');
+      return null;
     }
+  }
+}
+
+async function getAudienceSize(
+  opportunityType: OpportunityType,
+  companyId: string,
+): Promise<number> {
+  const where = audiencePredicate(opportunityType, companyId);
+  if (!where) return 0;
+
+  try {
+    return await prisma.customerMetrics.count({ where });
   } catch (error) {
     logger.error({ err: error }, 'Error getting audience size');
     return 0;
   }
 }
 
-// ── Customer ID fetch — mirrors getAudienceSize exactly ───────────────────────
 async function getAudienceCustomers(
   opportunityType: OpportunityType,
+  companyId: string,
   limit: number,
 ): Promise<string[]> {
+  const where = audiencePredicate(opportunityType, companyId);
+  if (!where) return [];
+
   try {
-    let rows: Array<{ customerId: string }> = [];
-
-    switch (opportunityType) {
-      case 'Retention-Churn':
-        rows = await prisma.customerMetrics.findMany({
-          where: { daysSinceLastOrder: { gte: 30, lt: 60 } },
-          select: { customerId: true },
-          take: limit,
-        });
-        break;
-
-      case 'Retention-VIP':
-        rows = await prisma.customerMetrics.findMany({
-          where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
-          select: { customerId: true },
-          take: limit,
-        });
-        break;
-
-      case 'Upsell':
-        rows = await prisma.customerMetrics.findMany({
-          where: { totalOrders: { gte: 3 }, avgOrderValue: { lte: 2000 } },
-          select: { customerId: true },
-          take: limit,
-        });
-        break;
-
-      case 'Reactivation':
-        rows = await prisma.customerMetrics.findMany({
-          where: { daysSinceLastOrder: { gte: 60 } },
-          select: { customerId: true },
-          take: limit,
-        });
-        break;
-
-      default: {
-        const exhaustive: never = opportunityType;
-        logger.error({ opportunityType: exhaustive }, 'opportunity-discovery: unhandled opportunity type');
-        return [];
-      }
-    }
+    const rows = await prisma.customerMetrics.findMany({
+      where,
+      select: { customerId: true },
+      take: limit,
+    });
 
     return rows.map(r => r.customerId);
   } catch (error) {

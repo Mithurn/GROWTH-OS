@@ -36,7 +36,7 @@
 }
 
 @custom-variant dark (&:is(.dark *));
-/* Design system: Warm premium aesthetic with rust/cream palette */
+/* Design system: indigo accent on near-white surfaces — see DESIGN_SYSTEM.md */
 
 @theme inline {
   --color-background: var(--background);

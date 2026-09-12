@@ -1,10 +1,11 @@
-import OpenAI from 'openai';
+import crypto from 'crypto';
 import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { openRouterConfig } from '../config/openrouter';
+import { openRouterConfig, openai } from '../config/openrouter';
 import { checkAndIncrFrequencyCap } from '../lib/redis';
 import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
+import { selectIn } from '../lib/scoped-query';
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -123,33 +124,25 @@ function buildCampaignPrompt(opportunity: OpportunityRow, company: CompanyRow): 
   ].join('\n');
 }
 
+/**
+ * Load a company by id, failing closed. The previous fallback to the oldest row in
+ * `companies` meant a missing id quietly resolved to some other tenant.
+ */
 async function ensureCompanyRow(supabase: SupabaseClient, companyId?: string): Promise<CompanyRow> {
-  if (companyId) {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id, company_name, industry')
-      .eq('id', companyId)
-      .maybeSingle();
-
-    if (error) throw new Error(`Failed to load company ${companyId}: ${error.message}`);
-    if (data) return data as CompanyRow;
+  if (!companyId) {
+    throw new Error('companyId is required');
   }
 
-  const { data: existing, error: existingError } = await supabase
+  const { data, error } = await supabase
     .from('companies')
     .select('id, company_name, industry')
-    .order('created_at', { ascending: true })
-    .limit(1);
+    .eq('id', companyId)
+    .maybeSingle();
 
-  if (existingError) {
-    throw new Error(`Failed to inspect companies table: ${existingError.message}`);
-  }
+  if (error) throw new Error(`Failed to load company ${companyId}: ${error.message}`);
+  if (!data) throw new Error(`Company ${companyId} not found`);
 
-  if (existing && existing.length > 0) {
-    return existing[0] as CompanyRow;
-  }
-
-  throw new Error('No company found');
+  return data as CompanyRow;
 }
 
 async function fetchOpportunity(supabase: SupabaseClient, opportunityId: string): Promise<OpportunityRow> {
@@ -178,18 +171,10 @@ export async function generateCampaign(
   const opportunity = await fetchOpportunity(supabase, request.opportunityId);
 
   const model = request.model ?? openRouterConfig.defaultModel;
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   try {
     const campaign = await parseWithRetry(
-      () => client.chat.completions.create({
+      () => openai.chat.completions.create({
         model,
         temperature: 0.7,
         max_tokens: 800,
@@ -288,7 +273,7 @@ export async function saveCampaign(
   const { data, error } = await supabase
     .from('campaigns')
     .insert({
-      id: require('crypto').randomUUID(),
+      id: crypto.randomUUID(),
       company_id: company.id,
       opportunity_id: opportunityId,
       name: campaign.name,
@@ -343,6 +328,32 @@ export async function approveCampaign(
   return data as CampaignRow;
 }
 
+const CHANNEL_WAKE_TIMEOUT_MS = 90_000;
+const CHANNEL_SEND_TIMEOUT_MS = 60_000;
+
+/**
+ * Block until the channel service answers /health, or until the wake budget runs out.
+ * Resolves either way — a failed wake-up still lets individual sends attempt and record
+ * their own failure reasons rather than aborting the whole launch.
+ */
+async function warmChannelService(baseUrl: string): Promise<void> {
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(`${baseUrl}/health`, {
+      signal: AbortSignal.timeout(CHANNEL_WAKE_TIMEOUT_MS),
+    });
+    logger.info(
+      { ok: response.ok, waitedMs: Date.now() - startedAt },
+      'Launch: channel service warm',
+    );
+  } catch (error) {
+    logger.warn(
+      { err: error, waitedMs: Date.now() - startedAt },
+      'Launch: channel service did not wake in time — attempting sends anyway',
+    );
+  }
+}
+
 export async function launchCampaign(
   supabase: SupabaseClient,
   campaignId: string,
@@ -356,10 +367,6 @@ export async function launchCampaign(
 
   if (campaignError) {
     throw new Error(`Failed to load campaign: ${campaignError.message}`);
-  }
-
-  if (campaign.status !== 'Approved') {
-    throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
   }
 
   const audienceCap = (campaign as any).opportunities?.audience_size ?? null;
@@ -382,40 +389,65 @@ export async function launchCampaign(
     throw new Error('No customers found in opportunity audience');
   }
 
-  // Create communications in QUEUED state
-  const crypto = require('crypto');
-  const now = new Date().toISOString();
-  
-  const communications = audienceRows.map((row: any) => ({
-    id: crypto.randomUUID(),
-    campaign_id: campaignId,
-    customer_id: row.customer_id,
-    channel: campaign.channel,
-    message: campaign.message_content,
-    status: 'QUEUED',
-    updated_at: now,
-  }));
+  // ── Claim the campaign ───────────────────────────────────────────────────────
+  // A single conditional UPDATE, so exactly one caller can move a campaign out of
+  // Approved. The status used to be flipped at the very end, after a fan-out that
+  // can take a minute — two clicks on Launch both passed the status read and
+  // messaged the entire audience twice.
+  //
+  // Claiming up front means a crash mid-fan-out leaves the campaign Launched with
+  // some communications still QUEUED, which the per-communication status already
+  // models. That is the safer failure: unsent beats double-sent when the recipients
+  // are real customers.
+  const { data: claimed, error: claimError } = await supabase
+    .from('campaigns')
+    .update({ status: 'Launched', launched_at: new Date().toISOString() })
+    .eq('id', campaignId)
+    .eq('status', 'Approved')
+    .select()
+    .maybeSingle();
 
-  const { error: commsError } = await supabase
+  if (claimError) {
+    throw new Error(`Failed to update campaign status: ${claimError.message}`);
+  }
+
+  if (!claimed) {
+    throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const now = new Date().toISOString();
+
+  // Inserted with `.select()` so we get back exactly the rows we created. The old
+  // code re-queried by campaign_id, which also picked up communications from any
+  // earlier launch attempt and re-sent to customers who had already been messaged.
+  const { data: createdComms, error: commsError } = await supabase
     .from('communications')
-    .insert(communications);
+    .insert(
+      audienceRows.map((row: any) => ({
+        id: crypto.randomUUID(),
+        campaign_id: campaignId,
+        customer_id: row.customer_id,
+        channel: campaign.channel,
+        message: campaign.message_content,
+        status: 'QUEUED',
+        updated_at: now,
+      })),
+    )
+    .select('id, customer_id, channel, message, customers(email, phone)');
 
   if (commsError) {
     throw new Error(`Failed to create communications: ${commsError.message}`);
   }
 
-  // Fetch created communications with customer details
-  const { data: createdComms, error: fetchCommsError } = await supabase
-    .from('communications')
-    .select('id, customer_id, channel, message, customers(email, phone)')
-    .eq('campaign_id', campaignId);
-
-  if (fetchCommsError) {
-    throw new Error(`Failed to fetch created communications: ${fetchCommsError.message}`);
-  }
-
   // Send all communications to Channel Service in parallel
   const CHANNEL_SERVICE_URL = process.env.CHANNEL_SERVICE_URL || 'http://localhost:5001';
+
+  // The channel service runs on Render's free tier and is deliberately left to spin
+  // down, so it may be cold here. Pay the ~15-60s wake-up once, before the fan-out —
+  // otherwise every recipient's send races the same cold start in parallel and the
+  // whole audience fails together.
+  await warmChannelService(CHANNEL_SERVICE_URL);
 
   await Promise.allSettled(createdComms.map(async (comm) => {
     try {
@@ -439,29 +471,20 @@ export async function launchCampaign(
         return;
       }
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(`${CHANNEL_SERVICE_URL}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          communicationId: comm.id,
+          recipient,
+          channel: campaign.channel,
+          content: comm.message,
+        }),
+        signal: AbortSignal.timeout(CHANNEL_SEND_TIMEOUT_MS),
+      });
 
-      let result: { providerMessageId?: string };
-      try {
-        const response = await fetch(`${CHANNEL_SERVICE_URL}/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            communicationId: comm.id,
-            recipient,
-            channel: campaign.channel,
-            content: comm.message,
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        if (!response.ok) throw new Error(`Channel Service responded with ${response.status}`);
-        result = await response.json() as { providerMessageId?: string };
-      } catch (err) {
-        clearTimeout(timer);
-        throw err;
-      }
+      if (!response.ok) throw new Error(`Channel Service responded with ${response.status}`);
+      const result = await response.json() as { providerMessageId?: string };
 
       await supabase
         .from('communications')
@@ -499,24 +522,9 @@ export async function launchCampaign(
     throw new Error(`Failed to create communication events: ${eventsError.message}`);
   }
 
-  // Update campaign status to Launched
-  const { data: updatedCampaign, error: updateError } = await supabase
-    .from('campaigns')
-    .update({
-      status: 'Launched',
-      launched_at: new Date().toISOString(),
-    })
-    .eq('id', campaignId)
-    .select()
-    .single();
-
-  if (updateError) {
-    throw new Error(`Failed to update campaign status: ${updateError.message}`);
-  }
-
   return {
-    campaign: updatedCampaign as CampaignRow,
-    communications_created: communications.length,
+    campaign: claimed as CampaignRow,
+    communications_created: createdComms.length,
   };
 }
 
@@ -542,36 +550,56 @@ export async function getCampaigns(
     throw new Error(`Failed to load campaigns: ${error.message}`);
   }
 
-  // Get communication counts for each campaign in this page
-  const campaignsWithMetrics = await Promise.all(
-    (campaigns ?? []).map(async (campaign: any) => {
-      const { data: events } = await supabase
-        .from('communication_events')
-        .select('event_type, communication_id')
-        .in('communication_id',
-          await supabase
-            .from('communications')
-            .select('id')
-            .eq('campaign_id', campaign.id)
-            .then(res => res.data?.map((c: any) => c.id) ?? [])
-        );
+  // Delivery counters for the whole page in two queries rather than two per campaign.
+  // The previous version also passed an unchunked `.in()` over every communication id,
+  // which overflows the URL once a campaign has more than a few hundred recipients.
+  const campaignIds = (campaigns ?? []).map((c: any) => c.id as string);
 
-      const eventCounts = (events ?? []).reduce((acc: any, event: any) => {
-        acc[event.event_type] = (acc[event.event_type] || 0) + 1;
-        return acc;
-      }, {});
-
-      return {
-        ...campaign,
-        audience_size: campaign.opportunities?.audience_size ?? 0,
-        communications_sent: eventCounts.SENT ?? 0,
-        communications_delivered: eventCounts.DELIVERED ?? 0,
-        communications_read: eventCounts.READ ?? 0,
-        communications_clicked: eventCounts.CLICKED ?? 0,
-        communications_failed: eventCounts.FAILED ?? 0,
-      };
-    })
+  const communications = await selectIn<{ id: string; campaign_id: string }>(
+    supabase,
+    'communications',
+    'id, campaign_id',
+    'campaign_id',
+    campaignIds,
   );
+
+  const campaignIdByCommunication = new Map(
+    communications.map((c) => [c.id, c.campaign_id]),
+  );
+
+  const events = await selectIn<{ event_type: string; communication_id: string }>(
+    supabase,
+    'communication_events',
+    'event_type, communication_id',
+    'communication_id',
+    communications.map((c) => c.id),
+  );
+
+  const countsByCampaign = new Map<string, Record<string, number>>();
+  for (const event of events) {
+    const campaignId = campaignIdByCommunication.get(event.communication_id);
+    if (!campaignId) continue;
+
+    let counts = countsByCampaign.get(campaignId);
+    if (!counts) {
+      counts = {};
+      countsByCampaign.set(campaignId, counts);
+    }
+    counts[event.event_type] = (counts[event.event_type] ?? 0) + 1;
+  }
+
+  const campaignsWithMetrics = (campaigns ?? []).map((campaign: any) => {
+    const counts = countsByCampaign.get(campaign.id) ?? {};
+    return {
+      ...campaign,
+      audience_size: campaign.opportunities?.audience_size ?? 0,
+      communications_sent: counts.SENT ?? 0,
+      communications_delivered: counts.DELIVERED ?? 0,
+      communications_read: counts.READ ?? 0,
+      communications_clicked: counts.CLICKED ?? 0,
+      communications_failed: counts.FAILED ?? 0,
+    };
+  });
 
   return { data: campaignsWithMetrics as CampaignWithMetrics[], total: count ?? 0 };
 }
@@ -618,17 +646,9 @@ export async function refineCampaignMessage(
   ].filter(Boolean).join('\n');
 
   const model = options.model ?? openRouterConfig.defaultModel;
-  const client = new OpenAI({
-    apiKey: openRouterConfig.apiKey,
-    baseURL: openRouterConfig.baseUrl,
-    defaultHeaders: {
-      'HTTP-Referer': openRouterConfig.httpReferer,
-      'X-Title': openRouterConfig.appName,
-    },
-  });
-
+  
   const parsed = await parseWithRetry(
-    () => client.chat.completions.create({
+    () => openai.chat.completions.create({
       model,
       temperature: 0.4,
       max_tokens: 400,

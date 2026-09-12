@@ -23,11 +23,14 @@ export async function logAgentAction(params: LogActionParams) {
         actionType,
         description,
         details: details || {}
-      }
+      },
+      // companyId travels with the event so the SSE stream can scope it to one tenant.
+      include: { agent: { select: { companyId: true } } },
     });
 
     emitActivity({
       id: action.id,
+      companyId: action.agent.companyId,
       agentId: action.agentId,
       actionType: action.actionType,
       description: action.description,
@@ -69,28 +72,6 @@ export async function getRecentActions(companyId: string, limit: number = 50, pa
     return actions;
   } catch (error) {
     logger.error({ err: error }, 'Error fetching recent actions');
-    throw error;
-  }
-}
-
-/**
- * Get actions for a specific agent
- */
-export async function getAgentActions(agentId: string, limit: number = 100) {
-  try {
-    const actions = await prisma.agentAction.findMany({
-      where: {
-        agentId
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: limit
-    });
-
-    return actions;
-  } catch (error) {
-    logger.error({ err: error }, 'Error fetching agent actions');
     throw error;
   }
 }
