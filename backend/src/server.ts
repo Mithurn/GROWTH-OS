@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -22,6 +23,8 @@ import { analyticsRouter } from './routes/analytics';
 import { agentsRouter } from './routes/agents';
 import { webhooksRouter } from './routes/webhooks';
 import { internalRouter } from './routes/internal';
+import { integrationsRouter } from './routes/integrations';
+import { attachAgentSteer } from './lib/agent-steer';
 
 const app = express();
 
@@ -68,6 +71,7 @@ app.use('/api', opportunitiesRouter);
 app.use('/api', campaignsRouter);
 app.use('/api', analyticsRouter);
 app.use('/api', agentsRouter);
+app.use('/api', integrationsRouter);
 app.use('/api', webhooksRouter);
 app.use('/api', internalRouter);
 
@@ -78,7 +82,9 @@ export { app };
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3001;
-  app.listen(Number(PORT), '0.0.0.0', () => {
+  const server = http.createServer(app);
+  attachAgentSteer(server);
+  server.listen(Number(PORT), '0.0.0.0', () => {
     logger.info({ port: PORT }, 'Backend server started');
     startWorkers();
 

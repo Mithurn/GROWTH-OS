@@ -36,6 +36,11 @@ const navItems = [
     icon: BarChart3,
   },
   {
+    name: 'Agent',
+    href: '/agent',
+    icon: Activity,
+  },
+  {
     name: 'Customers',
     href: '/intelligence',
     icon: Users,

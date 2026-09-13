@@ -35,6 +35,7 @@ vi.mock('../lib/prisma', () => ({
     agent: {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
       count: vi.fn().mockResolvedValue(0),
       create: vi.fn(),
       update: vi.fn(),
@@ -54,6 +55,56 @@ vi.mock('../lib/prisma', () => ({
     },
     customer: {
       count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    customerAttributes: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    persona: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    customerMetrics: {
+      count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
+      aggregate: vi.fn().mockResolvedValue({ _avg: {} }),
+    },
+    opportunity: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+      upsert: vi.fn(),
+    },
+    opportunityCustomer: {
+      findMany: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    campaign: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn(),
+    },
+    integration: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn(),
+      update: vi.fn(),
+    },
+    costLedger: {
+      create: vi.fn(),
+      aggregate: vi.fn().mockResolvedValue({ _sum: {} }),
+    },
+    agentRun: {
+      create: vi.fn().mockRejectedValue(new Error('agent_runs table missing')),
+      update: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      count: vi.fn().mockResolvedValue(0),
+    },
+    agentStep: {
+      create: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     communication: {
       findUnique: vi.fn().mockResolvedValue(null),

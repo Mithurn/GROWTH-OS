@@ -254,13 +254,14 @@ export default function HomePage() {
 
   // Fetch opportunities with cold-start retry
   useEffect(() => {
+    const wakeTimer = setTimeout(() => setColdStart(true), 2500);
     const run = async () => {
-      const MAX_RETRIES = 4;
+      const MAX_RETRIES = 3;
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
           if (attempt > 0) {
             setColdStart(true);
-            await new Promise(r => setTimeout(r, 5000));
+            await new Promise(r => setTimeout(r, 3000));
           }
           const data = await getOpportunityDashboard();
           if (data.success && data.data.topOpportunities) {
@@ -279,6 +280,7 @@ export default function HomePage() {
       }
     };
     run();
+    return () => clearTimeout(wakeTimer);
   }, []);
 
   // Activity feed — poll every 10s (EventSource can't send auth headers)

@@ -4,9 +4,9 @@ import { logger } from '../lib/logger';
 import {
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership,
   type AuthRequest,
 } from '../middleware/auth';
+import { requireOwnedOpportunity } from '../middleware/prisma-ownership';
 import { llmLimiter } from '../middleware/rate-limits';
 import { validateBody } from '../middleware/validate';
 import {
@@ -91,7 +91,7 @@ opportunitiesRouter.get(
   '/opportunities/:opportunityId',
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership('opportunities', 'opportunityId'),
+  requireOwnedOpportunity('opportunityId'),
   async (req: AuthRequest, res) => {
     try {
       const opportunityId = req.params['opportunityId'] as string;
@@ -108,7 +108,7 @@ opportunitiesRouter.post(
   '/opportunities/:id/refine',
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership('opportunities'),
+  requireOwnedOpportunity(),
   validateBody(RefineOpportunitySchema),
   async (req: AuthRequest, res) => {
     try {

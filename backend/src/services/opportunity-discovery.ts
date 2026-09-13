@@ -397,6 +397,117 @@ async function getAudienceSize(
   }
 }
 
+const CODED_COPY: Record<
+  OpportunityType,
+  { key: string; title: string; description: string; segment: string; action: string; trigger: string; summary: string }
+> = {
+  'Retention-Churn': {
+    key: 'coded_retention_churn',
+    title: 'Win back buyers silent 30–59 days',
+    description: 'These customers bought recently enough to remember you and have gone quiet. A short win-back lands before they churn.',
+    segment: 'Inactive 30–59 days',
+    action: 'Send a WhatsApp win-back with their last category and a time-bound reason to return.',
+    trigger: 'Last order was 30–59 days ago.',
+    summary: 'Coded churn-risk segment — audience is a metric predicate, not a model guess.',
+  },
+  'Retention-VIP': {
+    key: 'coded_retention_vip',
+    title: 'Re-engage high-spend customers idle 15+ days',
+    description: 'High-spend buyers who have gone quiet. Recovering them is usually worth more than acquiring a new one.',
+    segment: '₹5,000+ spend, idle 15+ days',
+    action: 'Email a VIP-style note with a relevant next product, not a blanket discount.',
+    trigger: 'Lifetime spend ≥ ₹5,000 and no order in 15+ days.',
+    summary: 'Coded VIP-idle segment from this tenant’s metrics.',
+  },
+  Upsell: {
+    key: 'coded_upsell',
+    title: 'Lift AOV for repeat buyers under ₹2,000',
+    description: 'Repeat buyers with a low average order. Attach a complementary item instead of another acquisition campaign.',
+    segment: '3+ orders, AOV ≤ ₹2,000',
+    action: 'WhatsApp an add-on from the last category at checkout-adjacent timing.',
+    trigger: 'Three or more orders with average order value at or below ₹2,000.',
+    summary: 'Coded low-AOV repeat segment.',
+  },
+  Reactivation: {
+    key: 'coded_reactivation',
+    title: 'Wake dormant customers idle 60+ days',
+    description: 'These buyers have gone cold. A reactivation pass is the honest play — not a churn-risk label.',
+    segment: 'Inactive 60+ days',
+    action: 'Email a come-back note tied to what they actually bought, then stop if they stay silent.',
+    trigger: 'Last order was 60 or more days ago.',
+    summary: 'Coded dormant segment from this tenant’s metrics.',
+  },
+};
+
+/** Write one opportunity per coded type that has a real local audience. No LLM. */
+export async function materializeCodedOpportunities(companyId: string, agentId?: string) {
+  const avg = await prisma.customerMetrics.aggregate({
+    where: { customer: { companyId } },
+    _avg: { avgOrderValue: true },
+  });
+  const avgOrderValue = Number(avg._avg.avgOrderValue ?? 0);
+  const created: Array<{ id: string; type: OpportunityType; audienceSize: number }> = [];
+
+  for (const type of OPPORTUNITY_TYPE_ENUM) {
+    const audienceSize = await getAudienceSize(type, companyId);
+    if (audienceSize === 0) continue;
+
+    const copy = CODED_COPY[type];
+    const historical = await getHistoricalOutcomes(companyId, type);
+    const impact = estimateImpact({ audienceSize, avgOrderValue, historical });
+    const opportunity = await prisma.opportunity.upsert({
+      where: { companyId_opportunityKey: { companyId, opportunityKey: copy.key } },
+      create: {
+        companyId,
+        agentId,
+        opportunityKey: copy.key,
+        opportunityType: type,
+        title: copy.title,
+        description: copy.description,
+        audienceSize,
+        potentialRevenue: impact.expectedRevenue,
+        potentialRevenueLow: impact.lowRevenue,
+        potentialRevenueHigh: impact.highRevenue,
+        confidenceScore: impact.confidenceScore,
+        priorityScore: impact.priorityScore,
+        predictedConversionRate: impact.conversionRate,
+        supportingCustomerSegment: copy.segment,
+        recommendedAction: copy.action,
+        audienceDefinition: { type, segment: copy.segment },
+        triggerReason: copy.trigger,
+        aiSummary: copy.summary,
+        status: 'Detected',
+      },
+      update: {
+        audienceSize,
+        potentialRevenue: impact.expectedRevenue,
+        potentialRevenueLow: impact.lowRevenue,
+        potentialRevenueHigh: impact.highRevenue,
+        confidenceScore: impact.confidenceScore,
+        priorityScore: impact.priorityScore,
+        predictedConversionRate: impact.conversionRate,
+        agentId,
+      },
+    });
+
+    await prisma.opportunityCustomer.deleteMany({ where: { opportunityId: opportunity.id } });
+    const audienceCustomerIds = await getAudienceCustomers(type, companyId, audienceSize);
+    if (audienceCustomerIds.length > 0) {
+      await prisma.opportunityCustomer.createMany({
+        data: audienceCustomerIds.map((customerId) => ({
+          opportunityId: opportunity.id,
+          customerId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    created.push({ id: opportunity.id, type, audienceSize });
+  }
+
+  logger.info({ companyId, count: created.length }, 'Coded opportunities materialized');
+  return created;
+}
+
 async function getAudienceCustomers(
   opportunityType: OpportunityType,
   companyId: string,
