@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { prisma } from '../lib/prisma';
 import { logger as rootLogger } from '../lib/logger';
 import {
   toNumber,
@@ -410,5 +411,73 @@ export async function generateCustomerMetrics(
     top10CustomersByOrderCount,
     top10DormantCustomers,
     sampleValidations,
+  };
+}
+
+/** Same RFM math as the Supabase path, written to the Prisma DATABASE_URL. */
+export async function generateCustomerMetricsPrisma(companyId: string): Promise<CustomerMetricsReport> {
+  const now = new Date();
+  const customers = await prisma.customer.findMany({
+    where: { companyId },
+    select: { id: true, firstName: true, lastName: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const orders = await prisma.order.findMany({
+    where: { customer: { companyId } },
+    select: { customerId: true, totalAmount: true, orderDate: true },
+  });
+
+  const aggregates = aggregateOrdersByCustomer(
+    orders.map((order) => ({
+      customer_id: order.customerId,
+      total_amount: Number(order.totalAmount),
+      order_date: order.orderDate.toISOString(),
+    })),
+  );
+
+  const metrics = customers.map((customer) =>
+    buildMetrics(
+      { id: customer.id, first_name: customer.firstName, last_name: customer.lastName },
+      aggregates.get(customer.id),
+      now,
+    ),
+  );
+
+  for (const metric of metrics) {
+    await prisma.customerMetrics.upsert({
+      where: { customerId: metric.customer_id },
+      create: {
+        customerId: metric.customer_id,
+        totalOrders: metric.total_orders,
+        totalSpent: metric.total_spent,
+        avgOrderValue: metric.avg_order_value,
+        lastOrderDate: metric.last_order_date ? new Date(metric.last_order_date) : null,
+        daysSinceLastOrder: metric.days_since_last_order,
+        purchaseFrequency: metric.purchase_frequency,
+        engagementScore: metric.engagement_score,
+      },
+      update: {
+        totalOrders: metric.total_orders,
+        totalSpent: metric.total_spent,
+        avgOrderValue: metric.avg_order_value,
+        lastOrderDate: metric.last_order_date ? new Date(metric.last_order_date) : null,
+        daysSinceLastOrder: metric.days_since_last_order,
+        purchaseFrequency: metric.purchase_frequency,
+        engagementScore: metric.engagement_score,
+      },
+    });
+  }
+
+  const zeroOrderCustomers = metrics.filter((metric) => metric.total_orders === 0).length;
+  return {
+    generatedAt: now.toISOString(),
+    totalCustomers: customers.length,
+    totalOrders: orders.length,
+    totalMetricsRecords: metrics.length,
+    zeroOrderCustomers,
+    top10CustomersBySpend: metrics.slice().sort((a, b) => b.total_spent - a.total_spent).slice(0, 10),
+    top10CustomersByOrderCount: metrics.slice().sort((a, b) => b.total_orders - a.total_orders).slice(0, 10),
+    top10DormantCustomers: [],
+    sampleValidations: [],
   };
 }

@@ -1,20 +1,22 @@
 import { Resend } from 'resend';
 import type { ChannelProvider } from './base';
 import type { SendRequest } from '../types';
-
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'campaigns@xeno.grow';
+import { resolveProviderEnv, type ProviderCredentials } from './credentials';
 
 export class ResendProvider implements ChannelProvider {
   private client: Resend;
+  private fromEmail: string;
 
-  constructor() {
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is required');
-    this.client = new Resend(process.env.RESEND_API_KEY);
+  constructor(credentials?: ProviderCredentials) {
+    const env = resolveProviderEnv(credentials);
+    if (!env.resendApiKey) throw new Error('Resend API key is required');
+    this.client = new Resend(env.resendApiKey);
+    this.fromEmail = env.resendFromEmail;
   }
 
   async send(request: SendRequest): Promise<string> {
     const { data, error } = await this.client.emails.send({
-      from: FROM_EMAIL,
+      from: this.fromEmail,
       to:   request.recipient,
       subject: 'A message for you',
       text: request.content,

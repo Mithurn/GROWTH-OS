@@ -1,0 +1,21 @@
+{
+  // Same job as packages/contracts/tsconfig.json: tell esbuild where this
+  // package's npm dependencies live. They are installed in backend/node_modules
+  // (see backend/package.json) and there is no root node_modules, so a bare
+  // `import '@langchain/langgraph'` from this directory cannot be resolved by
+  // walking up the tree. backend/tsconfig.json's paths satisfy `tsc`; esbuild
+  // reads the tsconfig nearest the importing file and needs this one.
+  //
+  // If a future package needs a dependency the backend must not install, or a
+  // second consumer appears on a different major, stop patching these files and
+  // move the repo to npm workspaces — that change has to be verified against
+  // Render (`cd backend && npm install`) and Vercel (root dir `frontend/`).
+  "compilerOptions": {
+    "paths": {
+      "@langchain/langgraph": ["../../backend/node_modules/@langchain/langgraph"],
+      "@langchain/core": ["../../backend/node_modules/@langchain/core"],
+      "@growthos/contracts": ["../contracts/src/index.ts"],
+      "zod": ["../../backend/node_modules/zod"]
+    }
+  }
+}

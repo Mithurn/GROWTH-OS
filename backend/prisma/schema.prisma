@@ -73,7 +73,10 @@ model Company {
   opportunities Opportunity[]
   campaigns    Campaign[]
   agents       Agent[]
+  agentRuns    AgentRun[]
   ingestionSessions IngestionSession[]
+  integrations Integration[]
+  costLedger   CostLedger[]
 
   @@index([companyName])
   @@map("companies")
@@ -396,6 +399,7 @@ model Agent {
   opportunities   Opportunity[]
   campaigns       Campaign[]
   actions         AgentAction[]
+  runs            AgentRun[]
 
   @@index([companyId])
   @@index([status])
@@ -417,4 +421,93 @@ model AgentAction {
   @@index([actionType])
   @@index([createdAt])
   @@map("agent_actions")
+}
+
+// Phase 2: queryable run trace. Separate from LangGraph checkpoint tables.
+// Checkpoint = how to resume. These rows = what happened (Run Trace / audit).
+model AgentRun {
+  id          String    @id @default(uuid())
+  companyId   String    @map("company_id")
+  agentId     String?   @map("agent_id")
+  threadId    String    @unique @map("thread_id")
+  goal        String
+  status      String    @default("running") // running | finished | stopped
+  summary     String    @default("")
+  stepCount   Int       @default(0) @map("step_count")
+  mode        String    @default("shadow")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agent       Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  steps       AgentStep[]
+
+  @@index([companyId])
+  @@index([agentId])
+  @@index([startedAt])
+  @@map("agent_runs")
+}
+
+model AgentStep {
+  id          String   @id @default(uuid())
+  runId       String   @map("run_id")
+  companyId   String   @map("company_id")
+  node        String
+  toolName    String?  @map("tool_name")
+  args        Json?
+  result      Json?
+  error       String?
+  latencyMs   Int      @default(0) @map("latency_ms")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  run         AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("agent_steps")
+}
+
+// Phase 5: BYOK credentials. Ciphertext is AES-256-GCM. Never select these
+// columns into a log line or an API response — use services/integrations.ts.
+model Integration {
+  id             String    @id @default(uuid())
+  companyId      String    @map("company_id")
+  kind           String    // llm | email | whatsapp
+  provider       String
+  mode           String    @default("simulator") // simulator | byok | platform
+  ciphertext     String?
+  iv             String?
+  authTag        String?   @map("auth_tag")
+  keyVersion     Int       @default(1) @map("key_version")
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  status         String    @default("unconfigured")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, kind])
+  @@index([companyId])
+  @@map("integrations")
+}
+
+model CostLedger {
+  id            String   @id @default(uuid())
+  companyId     String   @map("company_id")
+  runId         String?  @map("run_id")
+  provider      String
+  model         String?
+  tokensIn      Int      @default(0) @map("tokens_in")
+  tokensOut     Int      @default(0) @map("tokens_out")
+  estimatedCost Decimal  @default(0) @map("estimated_cost") @db.Decimal(12, 6)
+  source        String   @default("platform") // platform | byok
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([runId])
+  @@index([createdAt])
+  @@map("cost_ledger")
 }

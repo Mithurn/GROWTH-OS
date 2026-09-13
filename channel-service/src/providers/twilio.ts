@@ -1,21 +1,23 @@
 import twilio from 'twilio';
 import type { ChannelProvider } from './base';
 import type { SendRequest } from '../types';
+import { resolveProviderEnv, type ProviderCredentials } from './credentials';
 
 export class TwilioSmsProvider implements ChannelProvider {
   private client: ReturnType<typeof twilio>;
   private from: string;
   private statusCallback: string;
 
-  constructor() {
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-      throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required');
+  constructor(credentials?: ProviderCredentials) {
+    const env = resolveProviderEnv(credentials);
+    if (!env.twilioAccountSid || !env.twilioAuthToken) {
+      throw new Error('Twilio account credentials are required');
     }
-    if (!process.env.TWILIO_PHONE_NUMBER) throw new Error('TWILIO_PHONE_NUMBER is required');
-    if (!process.env.CHANNEL_SERVICE_URL) throw new Error('CHANNEL_SERVICE_URL is required');
-    this.client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    this.from = process.env.TWILIO_PHONE_NUMBER;
-    this.statusCallback = `${process.env.CHANNEL_SERVICE_URL}/webhooks/twilio`;
+    if (!env.twilioPhoneNumber) throw new Error('Twilio phone number is required');
+    if (!env.channelServiceUrl) throw new Error('CHANNEL_SERVICE_URL is required');
+    this.client = twilio(env.twilioAccountSid, env.twilioAuthToken);
+    this.from = env.twilioPhoneNumber;
+    this.statusCallback = `${env.channelServiceUrl}/webhooks/twilio`;
   }
 
   async send(request: SendRequest): Promise<string> {
@@ -35,15 +37,16 @@ export class TwilioWhatsAppProvider implements ChannelProvider {
   private from: string;
   private statusCallback: string;
 
-  constructor() {
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
-      throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required');
+  constructor(credentials?: ProviderCredentials) {
+    const env = resolveProviderEnv(credentials);
+    if (!env.twilioAccountSid || !env.twilioAuthToken) {
+      throw new Error('Twilio account credentials are required');
     }
-    if (!process.env.TWILIO_WHATSAPP_NUMBER) throw new Error('TWILIO_WHATSAPP_NUMBER is required');
-    if (!process.env.CHANNEL_SERVICE_URL) throw new Error('CHANNEL_SERVICE_URL is required');
-    this.client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    this.from = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`;
-    this.statusCallback = `${process.env.CHANNEL_SERVICE_URL}/webhooks/twilio`;
+    if (!env.twilioWhatsappNumber) throw new Error('Twilio WhatsApp number is required');
+    if (!env.channelServiceUrl) throw new Error('CHANNEL_SERVICE_URL is required');
+    this.client = twilio(env.twilioAccountSid, env.twilioAuthToken);
+    this.from = `whatsapp:${env.twilioWhatsappNumber}`;
+    this.statusCallback = `${env.channelServiceUrl}/webhooks/twilio`;
   }
 
   async send(request: SendRequest): Promise<string> {
