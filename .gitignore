@@ -54,3 +54,7 @@ backend/.mcp.json
 
 # Scratch assets not referenced by the app
 /frontend/public/Gemini_Generated_Image_*.png
+
+# Python eval venv and script outputs
+packages/evals/python/.venv/
+packages/evals/python/*.csv
