@@ -2,11 +2,6 @@ import type { Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import type { AuthRequest } from './auth';
 
-/**
- * Agents (and their runs) live in Prisma. Checking ownership through the
- * Supabase JS client looks at a different database in local env, so a real
- * row 404s. Same companyId check as requireCompanyOwnership — different store.
- */
 export function requireOwnedAgent(paramName = 'id') {
   return async function (req: AuthRequest, res: Response, next: NextFunction) {
     const id = req.params[paramName] as string;

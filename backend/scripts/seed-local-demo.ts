@@ -5,13 +5,14 @@ import { parseCSV } from '../src/services/ingestion';
 import { ingestCsvIntoPrisma } from '../src/services/ingest-prisma';
 import { materializeCodedOpportunities } from '../src/services/opportunity-discovery';
 
-const COMPANY_ID = process.env.COMPANY_ID ?? 'a2b5adf8-901f-466b-87ec-fd8f489afe2c';
+const COMPANY_ID = process.env.COMPANY_ID;
+if (!COMPANY_ID) throw new Error('Set COMPANY_ID to the local company to seed.');
 const DEMO_DIR = path.resolve(process.cwd(), 'generated-data');
 
 async function main() {
   const company = await prisma.company.findUnique({ where: { id: COMPANY_ID } });
   if (!company) {
-    throw new Error(`Company ${COMPANY_ID} is not in local Prisma. Finish onboarding first.`);
+    throw new Error(`Company ${COMPANY_ID} does not exist. Finish onboarding first.`);
   }
 
   const [customerBuffer, orderBuffer] = await Promise.all([
