@@ -1,4 +1,31 @@
-import { Queue, Worker } from 'bullmq';
+import { Queue, Worker, type Job } from 'bullmq';
+import { SpanStatusCode } from '@opentelemetry/api';
+import { tracer } from './tracing';
+
+/** One span per job execution, wrapping whatever the processor already does. */
+function withJobSpan<T, R>(queueName: string, handler: (job: Job<T>) => Promise<R>) {
+  return async (job: Job<T>): Promise<R> => {
+    return tracer.startActiveSpan(`bullmq.${queueName}`, async (span) => {
+      span.setAttribute('bullmq.queue', queueName);
+      span.setAttribute('bullmq.job_id', job.id ?? 'unknown');
+      span.setAttribute('bullmq.attempt', job.attemptsMade);
+      const companyId = (job.data as { companyId?: string }).companyId;
+      if (companyId) {
+        span.setAttribute('company.id', companyId);
+        span.setAttribute('langfuse.user.id', companyId);
+      }
+      try {
+        return await handler(job);
+      } catch (err) {
+        span.recordException(err as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
+  };
+}
 
 if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required.');
 const connection = { url: process.env.REDIS_URL };
@@ -75,7 +102,7 @@ export function startWorkers(): void {
   // jobs for every newly found opportunity so the whole flow is durable end-to-end.
   new Worker<OpportunityDiscoveryJob>(
     'opportunity-discovery',
-    async (job) => {
+    withJobSpan('opportunity-discovery', async (job) => {
       const { companyId, agentId, goal, guardrails, involvement } = job.data;
 
       const { discoverOpportunities } = await import('../services/opportunity-discovery');
@@ -110,7 +137,7 @@ export function startWorkers(): void {
       }
 
       return { discovered: discovered.length };
-    },
+    }),
     { connection, concurrency: 2 },
   );
 
@@ -119,7 +146,7 @@ export function startWorkers(): void {
   // Includes an idempotency check so duplicate jobs are safe to retry.
   new Worker<CampaignGenerationJob>(
     'campaign-generation',
-    async (job) => {
+    withJobSpan('campaign-generation', async (job) => {
       const { opportunityId, companyId, agentId, guardrails, involvement, audienceSize, potentialRevenue } = job.data;
 
       const { prisma } = await import('../lib/prisma');
@@ -166,29 +193,29 @@ export function startWorkers(): void {
       }
 
       return { campaignId: campaign.id, autoLaunched: shouldAutoLaunch };
-    },
+    }),
     { connection, concurrency: 3 },
   );
 
   // Persona generation worker
   new Worker<PersonaGenerationJob>(
     'persona-generation',
-    async (job) => {
+    withJobSpan('persona-generation', async (job) => {
       const { companyId, model } = job.data;
       const { supabase } = await import('./supabase');
       const { generatePersonas } = await import('../services/personas');
       return generatePersonas(supabase, { companyId, model });
-    },
+    }),
     { connection, concurrency: 1 },
   );
 
   new Worker<IngestionJob>(
     'ingestion',
-    async (job) => {
+    withJobSpan('ingestion', async (job) => {
       const { processIngestion } = await import('../services/ingestion');
       await processIngestion(job.data.sessionId);
       return { sessionId: job.data.sessionId };
-    },
+    }),
     { connection, concurrency: 1 },
   );
 

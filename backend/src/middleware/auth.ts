@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
+import { trace } from '@opentelemetry/api';
 import { supabase } from '../lib/supabase';
 
 export interface AuthRequest extends Request {
@@ -40,6 +41,11 @@ export async function resolveCompanyMiddleware(req: AuthRequest, res: Response, 
   }
 
   req.companyId = data.company_id;
+  const span = trace.getActiveSpan();
+  if (span) {
+    span.setAttribute('company.id', data.company_id);
+    span.setAttribute('langfuse.user.id', data.company_id);
+  }
   next();
 }
 

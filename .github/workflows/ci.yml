@@ -54,6 +54,19 @@ jobs:
       - name: Build
         run: npm run build
 
+      # esbuild silently bundles @opentelemetry/api's CJS and ESM builds as two
+      # separate classes when nothing forces a single resolution — tracing then
+      # "works" (no error, no crash) while every span is a disconnected no-op.
+      # Only the real bundle can show this; tsc and vitest never touch esbuild's
+      # module resolution. Guards the exact regression, not a proxy for it.
+      - name: Verify tracing was not silently duplicated by bundling
+        run: |
+          if grep -q "ProxyTracer2" dist/server.js; then
+            echo "esbuild bundled two copies of @opentelemetry/api — tracing would silently no-op in production."
+            echo "Check the --alias:@opentelemetry/api flag in package.json's build script."
+            exit 1
+          fi
+
   channel-service:
     name: Channel service — typecheck
     runs-on: ubuntu-latest
@@ -75,6 +88,16 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify tracing was not silently duplicated by bundling
+        run: |
+          if grep -q "ProxyTracer2" dist/server.js; then
+            echo "esbuild bundled two copies of @opentelemetry/api — tracing would silently no-op in production."
+            exit 1
+          fi
 
   frontend:
     name: Frontend — typecheck, lint, build

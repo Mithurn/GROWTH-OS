@@ -1,5 +1,9 @@
-import express from 'express';
 import 'dotenv/config';
+import { initTracing, tracer, withTraceCarrier } from './tracing';
+initTracing();
+
+import express from 'express';
+import { context, propagation, SpanStatusCode } from '@opentelemetry/api';
 import { v4 as uuidv4 } from 'uuid';
 import { queueMessage, getMessageStatus, getAllMessages, messageRegistry, updateRegistryStatus } from './queue';
 import { sendWebhook } from './webhook';
@@ -14,26 +18,41 @@ const PORT = process.env.PORT || 5001;
 // ── Send ──────────────────────────────────────────────────────────────────────
 
 app.post('/send', async (req, res) => {
-  try {
-    const { communicationId, recipient, channel, content, credentials } = req.body as SendRequest;
+  const parent = propagation.extract(context.active(), req.headers);
+  await tracer.startActiveSpan(
+    'POST /send',
+    { attributes: { 'http.method': 'POST', 'http.target': '/send' } },
+    parent,
+    async (span) => {
+      try {
+        const { communicationId, recipient, channel, content, credentials } = req.body as SendRequest;
 
-    if (!communicationId || !recipient || !channel || !content) {
-      return res.status(400).json({
-        error: 'Missing required fields: communicationId, recipient, channel, content',
-      });
-    }
+        if (!communicationId || !recipient || !channel || !content) {
+          res.status(400).json({
+            error: 'Missing required fields: communicationId, recipient, channel, content',
+          });
+          return;
+        }
 
-    if (!['WhatsApp', 'Email', 'SMS'].includes(channel)) {
-      return res.status(400).json({ error: 'Invalid channel. Must be WhatsApp, Email, or SMS' });
-    }
+        if (!['WhatsApp', 'Email', 'SMS'].includes(channel)) {
+          res.status(400).json({ error: 'Invalid channel. Must be WhatsApp, Email, or SMS' });
+          return;
+        }
 
-    const providerMessageId = await queueMessage({ communicationId, recipient, channel, content, credentials });
-
-    res.status(202).json({ accepted: true, providerMessageId, message: 'Communication accepted for delivery' });
-  } catch (error) {
-    console.error('[Server] Error accepting message:', error);
-    res.status(500).json({ error: 'Failed to accept message' });
-  }
+        span.setAttribute('channel.communication_id', communicationId);
+        span.setAttribute('channel.kind', channel);
+        const providerMessageId = await queueMessage({ communicationId, recipient, channel, content, credentials });
+        res.status(202).json({ accepted: true, providerMessageId, message: 'Communication accepted for delivery' });
+      } catch (error) {
+        console.error('[Server] Error accepting message:', error);
+        span.recordException(error as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        res.status(500).json({ error: 'Failed to accept message' });
+      } finally {
+        span.end();
+      }
+    },
+  );
 });
 
 // ── Twilio delivery status callback ──────────────────────────────────────────
@@ -62,14 +81,16 @@ app.post('/webhooks/twilio', express.urlencoded({ extended: false }), async (req
     if (!ourStatus) return res.sendStatus(200); // no-op status
 
     updateRegistryStatus(MessageSid, ourStatus);
-    await sendWebhook({
-      eventId:          uuidv4(),
-      providerMessageId: MessageSid,
-      communicationId:  entry.communicationId,
-      status:           ourStatus,
-      timestamp:        new Date().toISOString(),
-      sequenceNumber:   SequenceNumbers[ourStatus],
-    });
+    await withTraceCarrier(entry.traceCarrier, () =>
+      sendWebhook({
+        eventId:          uuidv4(),
+        providerMessageId: MessageSid,
+        communicationId:  entry.communicationId,
+        status:           ourStatus,
+        timestamp:        new Date().toISOString(),
+        sequenceNumber:   SequenceNumbers[ourStatus],
+      }),
+    );
 
     res.sendStatus(200);
   } catch (err) {
@@ -105,14 +126,16 @@ app.post('/webhooks/resend', async (req, res) => {
     if (!ourStatus) return res.sendStatus(200);
 
     updateRegistryStatus(messageId, ourStatus);
-    await sendWebhook({
-      eventId:          uuidv4(),
-      providerMessageId: messageId,
-      communicationId:  entry.communicationId,
-      status:           ourStatus,
-      timestamp:        new Date().toISOString(),
-      sequenceNumber:   SequenceNumbers[ourStatus],
-    });
+    await withTraceCarrier(entry.traceCarrier, () =>
+      sendWebhook({
+        eventId:          uuidv4(),
+        providerMessageId: messageId,
+        communicationId:  entry.communicationId,
+        status:           ourStatus,
+        timestamp:        new Date().toISOString(),
+        sequenceNumber:   SequenceNumbers[ourStatus],
+      }),
+    );
 
     res.sendStatus(200);
   } catch (err) {

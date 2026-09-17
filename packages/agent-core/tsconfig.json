@@ -16,6 +16,7 @@
       "@langchain/langgraph-checkpoint": ["../../backend/node_modules/@langchain/langgraph-checkpoint"],
       "@langchain/langgraph-checkpoint-postgres": ["../../backend/node_modules/@langchain/langgraph-checkpoint-postgres"],
       "@langchain/core": ["../../backend/node_modules/@langchain/core"],
+      "@opentelemetry/api": ["../../backend/node_modules/@opentelemetry/api"],
       "@growthos/contracts": ["../contracts/src/index.ts"],
       "zod": ["../../backend/node_modules/zod"]
     }

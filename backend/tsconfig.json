@@ -23,7 +23,8 @@
       "@langchain/langgraph": ["./node_modules/@langchain/langgraph"],
       "@langchain/langgraph-checkpoint": ["./node_modules/@langchain/langgraph-checkpoint"],
       "@langchain/langgraph-checkpoint-postgres": ["./node_modules/@langchain/langgraph-checkpoint-postgres"],
-      "@langchain/core": ["./node_modules/@langchain/core"]
+      "@langchain/core": ["./node_modules/@langchain/core"],
+      "@opentelemetry/api": ["./node_modules/@opentelemetry/api"]
     }
   },
   "include": [
