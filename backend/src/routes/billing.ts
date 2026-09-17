@@ -2,10 +2,10 @@ import { Router } from 'express';
 import { logger } from '../lib/logger';
 import { requireAuth, resolveCompanyMiddleware, type AuthRequest } from '../middleware/auth';
 import {
-  createCheckoutSubscription,
+  constructWebhookEvent,
+  createCheckoutSession,
   getBillingStatus,
   processWebhookEvent,
-  verifyWebhookSignature,
 } from '../services/billing';
 
 export const billingRouter = Router();
@@ -31,7 +31,8 @@ billingRouter.post(
   resolveCompanyMiddleware,
   async (req: AuthRequest, res) => {
     try {
-      const data = await createCheckoutSubscription(req.companyId!, req.userEmail ?? '');
+      const returnUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/settings`;
+      const data = await createCheckoutSession(req.companyId!, req.userEmail ?? '', returnUrl);
       res.json({ success: true, data });
     } catch (error) {
       logger.error({ err: error }, 'Error creating billing checkout');
@@ -44,26 +45,18 @@ billingRouter.post(
 );
 
 /**
- * Razorpay signs the *raw* request bytes — a re-stringified body will not
+ * Stripe signs the *raw* request bytes — a re-stringified body will not
  * match, so this route is mounted with express.raw() ahead of the global
  * express.json() in server.ts, unlike every other route.
  */
-billingRouter.post('/webhooks/razorpay', async (req, res) => {
+billingRouter.post('/webhooks/stripe', async (req, res) => {
   try {
-    const signature = req.headers['x-razorpay-signature'] as string | undefined;
-    const rawBody = req.body as Buffer;
-
-    if (!verifyWebhookSignature(rawBody, signature)) {
-      logger.warn('Razorpay webhook invalid signature received');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-
-    const event = JSON.parse(rawBody.toString('utf8'));
+    const signature = req.headers['stripe-signature'] as string | undefined;
+    const event = constructWebhookEvent(req.body as Buffer, signature);
     await processWebhookEvent(event);
-
     res.json({ success: true });
   } catch (error) {
-    logger.error({ err: error }, 'Razorpay webhook processing error');
-    res.status(500).json({ error: 'Failed to process webhook' });
+    logger.warn({ err: error }, 'Stripe webhook rejected or failed to process');
+    res.status(400).json({ error: 'Invalid webhook' });
   }
 });
