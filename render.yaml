@@ -40,6 +40,24 @@ services:
         sync: false  # e.g. https://your-app.vercel.app
       - key: INTEGRATION_MASTER_KEY
         sync: false  # Encrypts saved integration keys — openssl rand -hex 32. Unset only disables saving integrations.
+      - key: RAZORPAY_KEY_ID
+        sync: false  # Unset disables billing — the Upgrade button is hidden client-side, checkout route errors clearly.
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_PLAN_ID
+        sync: false  # Created once in the Razorpay dashboard (Subscriptions → Plans)
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false  # Set to match the secret entered when creating the webhook in the Razorpay dashboard
+      - key: PLATFORM_RESEND_API_KEY
+        sync: false  # GrowthOS's own Resend key, used only for Pro-plan tenants with no BYOK key. Optional.
+      - key: PLATFORM_RESEND_FROM_EMAIL
+        sync: false
+      - key: PLATFORM_TWILIO_ACCOUNT_SID
+        sync: false  # GrowthOS's own Twilio account, used only for Pro-plan tenants with no BYOK key. Optional.
+      - key: PLATFORM_TWILIO_AUTH_TOKEN
+        sync: false
+      - key: PLATFORM_TWILIO_WHATSAPP_NUMBER
+        sync: false
 
   - type: web
     name: xeno-channel-service

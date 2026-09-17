@@ -8,7 +8,7 @@ import { getProvider } from './providers';
 export const messageRegistry = new Map<string, QueuedMessage>();
 
 export async function queueMessage(request: SendRequest): Promise<string> {
-  const provider = getProvider(request.channel);
+  const provider = getProvider(request.channel, request.credentials);
   const providerMessageId = await provider.send(request);
 
   messageRegistry.set(providerMessageId, {

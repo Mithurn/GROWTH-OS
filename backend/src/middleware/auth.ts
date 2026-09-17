@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 
 export interface AuthRequest extends Request {
   userId?: string;
+  userEmail?: string;
   companyId?: string;
 }
 
@@ -19,6 +20,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   }
 
   req.userId = user.id;
+  req.userEmail = user.email;
   next();
 }
 

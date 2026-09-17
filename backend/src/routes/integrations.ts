@@ -16,7 +16,7 @@ export const integrationsRouter = Router();
 const UpsertIntegrationSchema = z.object({
   provider: z.string().min(1).max(40).optional(),
   mode: z.enum(['simulator', 'byok']).optional(),
-  apiKey: z.string().min(4).max(200).optional(),
+  credentials: z.record(z.string(), z.string().max(200)).optional(),
 });
 
 function parseKind(raw: string | undefined): IntegrationKind | null {
