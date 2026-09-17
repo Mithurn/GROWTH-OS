@@ -84,3 +84,44 @@ services:
         sync: false
       - key: OTEL_EXPORTER_OTLP_HEADERS
         sync: false
+
+  # BullMQ workers, split out of xeno-crm-backend (docs/V3_PLAN.md Phase 0.2) so a
+  # backend deploy can no longer kill a job — including a message send — mid-flight.
+  #
+  # NOT ENABLED YET: a worker has no inbound HTTP traffic to spin down on, so it must
+  # run warm 24/7 like the backend (~730h/mo). Adding it as a third always-on free
+  # service exceeds the workspace's shared 750h/mo allowance (see the comment on
+  # xeno-crm-backend above) and would suspend every free service once exhausted.
+  # Needs one of: upgrade this or xeno-crm-backend off the free plan, or accept the
+  # channel service loses its always-free on-demand slot. Flagged for a decision
+  # rather than deployed silently — uncomment once decided.
+  # - type: worker
+  #   name: xeno-crm-worker
+  #   env: node
+  #   plan: free
+  #   repo: https://github.com/Mithurn/GROWTH-OS
+  #   branch: main
+  #   autoDeployTrigger: checksPass
+  #   buildCommand: cd backend && npm install --include=dev && npx prisma generate --schema=prisma/schema.prisma && npm run build:worker
+  #   startCommand: cd backend && node dist/worker.js
+  #   envVars:
+  #     - key: DATABASE_URL
+  #       sync: false
+  #     - key: DIRECT_URL
+  #       sync: false
+  #     - key: OPENROUTER_API_KEY
+  #       sync: false
+  #     - key: REDIS_URL
+  #       sync: false
+  #     - key: CHANNEL_SERVICE_URL
+  #       value: "https://xeno-channel-service.onrender.com"
+  #     - key: WEBHOOK_SECRET
+  #       sync: false
+  #     - key: INTEGRATION_MASTER_KEY
+  #       sync: false
+  #     - key: SENTRY_DSN
+  #       sync: false
+  #     - key: OTEL_EXPORTER_OTLP_ENDPOINT
+  #       sync: false
+  #     - key: OTEL_EXPORTER_OTLP_HEADERS
+  #       sync: false

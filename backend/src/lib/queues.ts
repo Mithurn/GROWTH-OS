@@ -92,6 +92,7 @@ export async function enqueueIngestion(data: IngestionJob): Promise<void> {
 // ── Workers ───────────────────────────────────────────────────────────────────
 
 let workersStarted = false;
+const activeWorkers: Worker[] = [];
 
 export function startWorkers(): void {
   if (workersStarted) return;
@@ -100,7 +101,7 @@ export function startWorkers(): void {
   // Opportunity discovery worker
   // Calls discoverOpportunities(), logs the result, then chains campaign-generation
   // jobs for every newly found opportunity so the whole flow is durable end-to-end.
-  new Worker<OpportunityDiscoveryJob>(
+  activeWorkers.push(new Worker<OpportunityDiscoveryJob>(
     'opportunity-discovery',
     withJobSpan('opportunity-discovery', async (job) => {
       const { companyId, agentId, goal, guardrails, involvement } = job.data;
@@ -139,28 +140,26 @@ export function startWorkers(): void {
       return { discovered: discovered.length };
     }),
     { connection, concurrency: 2 },
-  );
+  ));
 
   // Campaign generation worker
   // Creates the campaign in DB, logs it, and auto-launches based on involvement.
   // Includes an idempotency check so duplicate jobs are safe to retry.
-  new Worker<CampaignGenerationJob>(
+  activeWorkers.push(new Worker<CampaignGenerationJob>(
     'campaign-generation',
     withJobSpan('campaign-generation', async (job) => {
       const { opportunityId, companyId, agentId, guardrails, involvement, audienceSize, potentialRevenue } = job.data;
 
       const { prisma } = await import('../lib/prisma');
-
-      // Idempotency: skip if a live campaign already exists for this opportunity
-      const existing = await prisma.campaign.findFirst({
-        where: { opportunityId, status: { in: ['Draft', 'Approved', 'Running', 'Launched'] } },
-      });
-      if (existing) return { skipped: true, campaignId: existing.id };
-
       const { createCampaignForOpportunity } = await import('../services/campaign-planner');
       const { logAgentAction } = await import('../services/agent-logger');
 
-      const campaign = await createCampaignForOpportunity(opportunityId, companyId, agentId, guardrails as any);
+      // Idempotency is enforced by the database, not this check (see
+      // campaigns_one_live_per_opportunity + the P2002 handling inside
+      // createCampaignForOpportunity) — two concurrent jobs for the same
+      // opportunity can both reach this line; only one of them creates a row.
+      const { campaign, deduped } = await createCampaignForOpportunity(opportunityId, companyId, agentId, guardrails as any);
+      if (deduped) return { skipped: true, campaignId: campaign.id };
 
       await logAgentAction({
         agentId,
@@ -195,10 +194,10 @@ export function startWorkers(): void {
       return { campaignId: campaign.id, autoLaunched: shouldAutoLaunch };
     }),
     { connection, concurrency: 3 },
-  );
+  ));
 
   // Persona generation worker
-  new Worker<PersonaGenerationJob>(
+  activeWorkers.push(new Worker<PersonaGenerationJob>(
     'persona-generation',
     withJobSpan('persona-generation', async (job) => {
       const { companyId, model } = job.data;
@@ -207,9 +206,9 @@ export function startWorkers(): void {
       return generatePersonas(supabase, { companyId, model });
     }),
     { connection, concurrency: 1 },
-  );
+  ));
 
-  new Worker<IngestionJob>(
+  activeWorkers.push(new Worker<IngestionJob>(
     'ingestion',
     withJobSpan('ingestion', async (job) => {
       const { processIngestion } = await import('../services/ingestion');
@@ -217,11 +216,27 @@ export function startWorkers(): void {
       return { sessionId: job.data.sessionId };
     }),
     { connection, concurrency: 1 },
-  );
+  ));
 
   console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation, ingestion');
 
   void resumeIncompleteIngestions();
+}
+
+/**
+ * Drains every worker before the process exits — `Worker.close()` stops pulling
+ * new jobs and waits for whatever is already active to finish, so a deploy can no
+ * longer kill a send mid-flight. Queues are closed after, once nothing is adding
+ * to them.
+ */
+export async function closeWorkers(): Promise<void> {
+  await Promise.all(activeWorkers.map((w) => w.close()));
+  await Promise.all([
+    opportunityQueue.close(),
+    campaignQueue.close(),
+    personaQueue.close(),
+    ingestionQueue.close(),
+  ]);
 }
 
 /**

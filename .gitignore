@@ -51,7 +51,9 @@ backend/.mcp.json
 /docs/PROGRESS.md
 /docs/breaks.md
 /docs/GROWTHOS_FINAL_ARCHITECTURE.md
+/docs/V3_PLAN.md
 /yes.md
+/handover.md
 
 # Scratch assets not referenced by the app
 /frontend/public/Gemini_Generated_Image_*.png
