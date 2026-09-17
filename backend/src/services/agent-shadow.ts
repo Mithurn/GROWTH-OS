@@ -5,7 +5,9 @@ import {
   buildGrowthAgent,
   observeScriptPlanner,
   runGrowthAgent,
+  runSupervisedAgent,
   type Planner,
+  type RunContext,
   type ToolHandler,
   type TraceStep,
 } from '@growthos/agent-core';
@@ -73,14 +75,19 @@ export async function runShadowObserve(
     );
   }
 
-  const onStep = async (step: TraceStep) => {
+  // A supervised run's steps come from four separate sub-runs (one per
+  // role) — prefixing `node` with the role keeps every step in one
+  // `agent_steps` timeline under the single top-level `runId`, so the Run
+  // Trace UI needs no schema change to render either path.
+  const onStep = async (step: TraceStep, ctx?: RunContext) => {
+    const node = ctx?.role ? `${ctx.role}.${step.node}` : step.node;
     if (persistedRunId) {
       try {
         await prisma.agentStep.create({
           data: {
             runId: persistedRunId,
             companyId: input.companyId,
-            node: step.node,
+            node,
             toolName: step.tool,
             args: jsonOrUndefined(step.args),
             result: jsonOrUndefined(step.result),
@@ -93,32 +100,37 @@ export async function runShadowObserve(
       }
     }
     emitActivity({
-      id: `${runId}:${step.node}:${step.tool ?? 'step'}`,
+      id: `${runId}:${node}:${step.tool ?? 'step'}`,
       companyId: input.companyId,
       agentId: input.agentId,
       actionType: 'agent_step',
-      description: step.tool ?? step.node,
-      details: { runId, error: step.error, latencyMs: step.latencyMs, node: step.node },
+      description: step.tool ?? node,
+      details: { runId, error: step.error, latencyMs: step.latencyMs, node },
       createdAt: new Date(),
     });
   };
 
-  const graph = buildGrowthAgent({
-    planner: resolvePlanner(deps?.planner),
-    handlers: deps?.handlers ?? buildToolHandlers(),
-    mode: 'shadow',
-    maxSteps: 8,
-    onStep,
-    checkpointer: deps?.checkpointer ?? (await getAgentCheckpointer()),
-  });
+  const planner = resolvePlanner(deps?.planner);
+  const handlers = deps?.handlers ?? buildToolHandlers();
+  const checkpointer = deps?.checkpointer ?? (await getAgentCheckpointer());
 
-  const out = await runGrowthAgent(graph, {
-    companyId: input.companyId,
-    agentId: input.agentId,
-    goal: input.goal,
-    runId,
-    guardrails: input.guardrails,
-  });
+  const useSupervisor = process.env.SHADOW_SUPERVISOR === '1';
+  const out = useSupervisor
+    ? await runSupervisedAgent({
+        companyId: input.companyId,
+        agentId: input.agentId,
+        goal: input.goal,
+        runId,
+        guardrails: input.guardrails,
+        planner,
+        handlers,
+        checkpointer,
+        onStep,
+      }).then((r) => ({ ...r, stepCount: r.roles.reduce((sum, role) => sum + role.stepCount, 0) }))
+    : await runGrowthAgent(
+        buildGrowthAgent({ planner, handlers, mode: 'shadow', maxSteps: 8, onStep, checkpointer }),
+        { companyId: input.companyId, agentId: input.agentId, goal: input.goal, runId, guardrails: input.guardrails },
+      );
 
   if (persistedRunId) {
     try {
