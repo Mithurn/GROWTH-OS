@@ -71,11 +71,11 @@ model Company {
   // own provider keys, funded by the subscription rather than the founder's
   // pocket. A tenant with their own verified BYOK integration can send for
   // real regardless of plan — billing gates the platform-funded path only.
-  plan               String   @default("free") @map("plan")
-  razorpayCustomerId     String?   @map("razorpay_customer_id")
-  razorpaySubscriptionId String?   @map("razorpay_subscription_id")
-  subscriptionStatus     String?   @map("subscription_status")
-  planUpdatedAt          DateTime? @map("plan_updated_at")
+  plan             String    @default("free") @map("plan")
+  stripeCustomerId     String?   @map("stripe_customer_id")
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  subscriptionStatus   String?   @map("subscription_status")
+  planUpdatedAt        DateTime? @map("plan_updated_at")
 
   profiles     Profile[]
   customers    Customer[]
