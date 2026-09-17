@@ -38,6 +38,8 @@ services:
         sync: false  # Guards /api/internal/*, called by the agent-run cron — openssl rand -base64 32
       - key: FRONTEND_URL
         sync: false  # e.g. https://your-app.vercel.app
+      - key: INTEGRATION_MASTER_KEY
+        sync: false  # Encrypts saved integration keys — openssl rand -hex 32. Unset only disables saving integrations.
 
   - type: web
     name: xeno-channel-service
