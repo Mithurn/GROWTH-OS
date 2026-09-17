@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq';
 
-const REDIS_URL = process.env.REDIS_URL;
-const connection = REDIS_URL ? { url: REDIS_URL } : null;
+if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required.');
+const connection = { url: process.env.REDIS_URL };
 
 const JOB_OPTIONS = {
   attempts: 3,
@@ -39,89 +39,27 @@ export interface IngestionJob {
   sessionId: string;
 }
 
-// ── Queue instances (created only when Redis is available) ────────────────────
+// ── Queues ────────────────────────────────────────────────────────────────────
 
-export const opportunityQueue = connection
-  ? new Queue<OpportunityDiscoveryJob>('opportunity-discovery', { connection })
-  : null;
-
-export const campaignQueue = connection
-  ? new Queue<CampaignGenerationJob>('campaign-generation', { connection })
-  : null;
-
-export const personaQueue = connection
-  ? new Queue<PersonaGenerationJob>('persona-generation', { connection })
-  : null;
-
-export const ingestionQueue = connection
-  ? new Queue<IngestionJob>('ingestion', { connection })
-  : null;
-
-// ── Enqueue helpers (fail-open: run inline when Redis is absent) ──────────────
+export const opportunityQueue = new Queue<OpportunityDiscoveryJob>('opportunity-discovery', { connection });
+export const campaignQueue = new Queue<CampaignGenerationJob>('campaign-generation', { connection });
+export const personaQueue = new Queue<PersonaGenerationJob>('persona-generation', { connection });
+export const ingestionQueue = new Queue<IngestionJob>('ingestion', { connection });
 
 export async function enqueueOpportunityDiscovery(data: OpportunityDiscoveryJob): Promise<void> {
-  if (opportunityQueue) {
-    await opportunityQueue.add('discover', data, JOB_OPTIONS);
-  } else {
-    const { discoverOpportunities } = await import('../services/opportunity-discovery');
-    const { logAgentAction } = await import('../services/agent-logger');
-    const discovered = await discoverOpportunities(data.companyId, data.agentId, data.goal);
-    if (discovered.length > 0) {
-      const totalRevenue = discovered.reduce((s, o) => s + Number(o.potentialRevenue), 0);
-      await logAgentAction({
-        agentId: data.agentId,
-        actionType: 'discovered_opportunity',
-        description: `Discovered ${discovered.length} new opportunities worth ₹${totalRevenue.toLocaleString('en-IN')}`,
-        details: { opportunityIds: discovered.map((o: any) => o.id), count: discovered.length },
-      }).catch(() => {});
-    }
-  }
+  await opportunityQueue.add('discover', data, JOB_OPTIONS);
 }
 
 export async function enqueueCampaignGeneration(data: CampaignGenerationJob): Promise<void> {
-  if (campaignQueue) {
-    await campaignQueue.add('generate', data, JOB_OPTIONS);
-  } else {
-    const { createCampaignForOpportunity } = await import('../services/campaign-planner');
-    const { logAgentAction } = await import('../services/agent-logger');
-    const campaign = await createCampaignForOpportunity(
-      data.opportunityId,
-      data.companyId,
-      data.agentId,
-      data.guardrails as any,
-    );
-    await logAgentAction({
-      agentId: data.agentId,
-      actionType: 'created_campaign',
-      description: `Created campaign "${campaign.name}" targeting ${data.audienceSize ?? 0} customers`,
-      details: { campaignId: campaign.id, opportunityId: data.opportunityId },
-    }).catch(() => {});
-  }
+  await campaignQueue.add('generate', data, JOB_OPTIONS);
 }
 
 export async function enqueuePersonaGeneration(data: PersonaGenerationJob): Promise<void> {
-  if (personaQueue) {
-    await personaQueue.add('generate', data, JOB_OPTIONS);
-  } else {
-    const { supabase } = await import('./supabase');
-    const { generatePersonas } = await import('../services/personas');
-    await generatePersonas(supabase, { companyId: data.companyId, model: data.model });
-  }
+  await personaQueue.add('generate', data, JOB_OPTIONS);
 }
 
 export async function enqueueIngestion(data: IngestionJob): Promise<void> {
-  if (ingestionQueue) {
-    await ingestionQueue.add('process', data, JOB_OPTIONS);
-    return;
-  }
-  const { processIngestion } = await import('../services/ingestion');
-  // Inline fallback still returns immediately to the HTTP caller — the work is
-  // scheduled on the next tick so the route can respond with the session id.
-  setImmediate(() => {
-    processIngestion(data.sessionId).catch((err) => {
-      console.error('[Ingestion] inline run failed', err);
-    });
-  });
+  await ingestionQueue.add('process', data, JOB_OPTIONS);
 }
 
 // ── Workers ───────────────────────────────────────────────────────────────────
@@ -129,11 +67,6 @@ export async function enqueueIngestion(data: IngestionJob): Promise<void> {
 let workersStarted = false;
 
 export function startWorkers(): void {
-  if (!connection) {
-    console.log('[BullMQ] REDIS_URL not set — workers disabled, falling back to inline execution');
-    void resumeIncompleteIngestions();
-    return;
-  }
   if (workersStarted) return;
   workersStarted = true;
 
@@ -160,7 +93,7 @@ export function startWorkers(): void {
         });
 
         for (const opp of discovered) {
-          await campaignQueue!.add(
+          await campaignQueue.add(
             'generate',
             {
               opportunityId: opp.id,

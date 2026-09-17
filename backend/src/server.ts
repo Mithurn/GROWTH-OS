@@ -25,6 +25,7 @@ import { webhooksRouter } from './routes/webhooks';
 import { internalRouter } from './routes/internal';
 import { integrationsRouter } from './routes/integrations';
 import { attachAgentSteer } from './lib/agent-steer';
+import { assertRedisReachable } from './lib/redis';
 
 const app = express();
 
@@ -81,22 +82,30 @@ app.use(errorHandler);
 export { app };
 
 if (require.main === module) {
-  const PORT = process.env.PORT || 3001;
-  const server = http.createServer(app);
-  attachAgentSteer(server);
-  server.listen(Number(PORT), '0.0.0.0', () => {
-    logger.info({ port: PORT }, 'Backend server started');
-    startWorkers();
+  assertRedisReachable().then(
+    () => {
+      const PORT = process.env.PORT || 3001;
+      const server = http.createServer(app);
+      attachAgentSteer(server);
+      server.listen(Number(PORT), '0.0.0.0', () => {
+        logger.info({ port: PORT }, 'Backend server started');
+        startWorkers();
 
-    // Off by default so local behaviour matches production, where the agent loop is
-    // driven by cron hitting /api/internal/agents/run-scheduled.
-    if (process.env.ENABLE_AGENT_INTERVAL === 'true') {
-      const intervalMs = Number(process.env.AGENT_INTERVAL_MS) || 21_600_000; // 6h
-      agentOrchestrator.start(intervalMs);
-    } else {
-      logger.info(
-        'Agent interval disabled — expecting scheduled runs via /api/internal/agents/run-scheduled',
-      );
-    }
-  });
+        // Off by default so local behaviour matches production, where the agent loop is
+        // driven by cron hitting /api/internal/agents/run-scheduled.
+        if (process.env.ENABLE_AGENT_INTERVAL === 'true') {
+          const intervalMs = Number(process.env.AGENT_INTERVAL_MS) || 21_600_000; // 6h
+          agentOrchestrator.start(intervalMs);
+        } else {
+          logger.info(
+            'Agent interval disabled — expecting scheduled runs via /api/internal/agents/run-scheduled',
+          );
+        }
+      });
+    },
+    (err) => {
+      logger.fatal({ err }, 'Redis is unreachable. Check REDIS_URL.');
+      process.exit(1);
+    },
+  );
 }

@@ -199,6 +199,13 @@ and `SUPABASE_SERVICE_ROLE_KEY` in `backend/.env`; the URL and `ANON_KEY` go in
 locally), finish onboarding, then optionally reseed with
 `COMPANY_ID=<id> npx tsx scripts/seed-local-demo.ts`.
 
+`REDIS_URL` is also required — the server refuses to boot without a reachable Redis.
+Run one locally with Docker and set `REDIS_URL=redis://127.0.0.1:6379` in `backend/.env`:
+
+```bash
+docker run -d --rm -p 6379:6379 --name growthos-redis redis:7-alpine
+```
+
 ## Testing
 
 ```bash

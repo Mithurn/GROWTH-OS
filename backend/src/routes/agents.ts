@@ -220,11 +220,7 @@ agentsRouter.get(
   },
 );
 
-/**
- * Live agent activity as server-sent events. Redis Streams + Last-Event-ID
- * when REDIS_URL is set; in-process ring locally. Use fetch (not EventSource)
- * so the Authorization header can travel with the request.
- */
+/** Clients use fetch, not EventSource, so the Authorization header can travel with the request. */
 agentsRouter.get(
   '/sse/activity',
   requireAuth,

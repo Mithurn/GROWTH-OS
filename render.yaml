@@ -29,7 +29,7 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: REDIS_URL
-        sync: false  # Upstash free tier — without it, queues run inline and persona jobs are dropped
+        sync: false  # Required — the server refuses to boot without a reachable Redis. Upstash free tier.
       - key: CHANNEL_SERVICE_URL
         value: "https://xeno-channel-service.onrender.com"
       - key: WEBHOOK_SECRET
