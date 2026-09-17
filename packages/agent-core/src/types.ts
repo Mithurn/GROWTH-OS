@@ -65,4 +65,11 @@ export interface HarnessOptions {
   maxWallMs?: number;
   preToolUse?: PreToolUse;
   onStep?: (step: TraceStep, ctx: RunContext) => void | Promise<void>;
+  /**
+   * Defaults to an in-process `MemorySaver`, lost on restart. Pass a
+   * `PostgresSaver` (see `createPostgresCheckpointer`) for a run that must
+   * survive a process restart — required once a node actually calls
+   * LangGraph's `interrupt()` and waits on a human.
+   */
+  checkpointer?: import('@langchain/langgraph-checkpoint').BaseCheckpointSaver;
 }
