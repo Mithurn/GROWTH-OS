@@ -3,8 +3,6 @@ import { PrismaClient } from '../../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { tenantScopeExtension } from './tenant-scope';
-
-// Create connection pool
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Create adapter

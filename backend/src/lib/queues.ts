@@ -2,6 +2,7 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { tracer } from './tracing';
 import { getConfig } from './config';
+import { runWithTenant } from './tenant-context';
 
 /** One span per job execution, wrapping whatever the processor already does. */
 function withJobSpan<T, R>(queueName: string, handler: (job: Job<T>) => Promise<R>) {
@@ -16,7 +17,7 @@ function withJobSpan<T, R>(queueName: string, handler: (job: Job<T>) => Promise<
         span.setAttribute('langfuse.user.id', companyId);
       }
       try {
-        return await handler(job);
+        return companyId ? await runWithTenant(companyId, () => handler(job)) : await handler(job);
       } catch (err) {
         span.recordException(err as Error);
         span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });

@@ -80,7 +80,9 @@ const SCOPED_ROUTES = [
 describe('Cross-tenant access', () => {
   beforeEach(() => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user_caller' } }, error: null });
+    vi.mocked(prisma.profile.findUnique).mockResolvedValue({ companyId: CALLER_COMPANY } as never);
     const ownedRow = async () => ({ companyId: resourceCompanyId.value });
+    vi.mocked(prisma.campaign.findUnique).mockImplementation(ownedRow as never);
     vi.mocked(prisma.agent.findUnique).mockImplementation(ownedRow as never);
     vi.mocked(prisma.ingestionSession.findUnique).mockImplementation(ownedRow as never);
     vi.mocked(prisma.opportunity.findUnique).mockImplementation(ownedRow as never);
@@ -135,6 +137,8 @@ describe('SSE event routes', () => {
   it('return 404 when the campaign belongs to another company', async () => {
     resourceCompanyId.value = OTHER_COMPANY;
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user_caller' } }, error: null });
+    vi.mocked(prisma.profile.findUnique).mockResolvedValue({ companyId: CALLER_COMPANY } as never);
+    vi.mocked(prisma.campaign.findUnique).mockResolvedValue({ companyId: OTHER_COMPANY } as never);
     const res = await request(app)
       .get('/api/campaigns/camp_1/events')
       .set('Authorization', 'Bearer valid-token');
