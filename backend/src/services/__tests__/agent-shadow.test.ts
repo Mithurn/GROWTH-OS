@@ -2,11 +2,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import { runShadowObserve } from '../agent-shadow';
 import { calls, finish, scriptedPlanner } from '@growthos/agent-core';
-import type { ToolHandler } from '@growthos/agent-core';
+import type { Planner, ToolHandler } from '@growthos/agent-core';
 
 const handlers: Record<string, ToolHandler> = {
   growthos_query_metrics: async () => ({ totalCustomers: 10 }),
+  growthos_estimate_impact: async () => ({ range: [100, 200] }),
+  growthos_search_prior_campaigns: async () => ({ results: [] }),
+  growthos_read_campaign_performance: async () => ({ sent: 10 }),
   growthos_finish: async (args) => ({ summary: (args as { summary: string }).summary }),
+};
+
+const READ_ARGS_BY_TOOL: Record<string, unknown> = {
+  growthos_query_metrics: { response_format: 'concise' },
+  growthos_estimate_impact: { opportunity_type: 'Retention-Churn', audience_size: 10, avg_order_value: 100 },
+  growthos_search_prior_campaigns: { query: 'churn' },
+  growthos_read_campaign_performance: { campaign_id: 'camp_1', response_format: 'concise' },
+};
+
+/** Calls the first offered read tool this role has evidence handlers for, then finishes — proves each specialist actually runs a turn instead of finishing blind. */
+const perRoleTurnPlanner: Planner = {
+  plan: async ({ steps, tools }) => {
+    if (steps.length === 0) {
+      const readTool = tools.find((t) => t.name in READ_ARGS_BY_TOOL);
+      if (readTool) return calls([{ name: readTool.name, args: READ_ARGS_BY_TOOL[readTool.name] }]);
+    }
+    return finish('specialist done');
+  },
 };
 
 function observePlanner() {
@@ -78,6 +99,33 @@ describe('runShadowObserve', () => {
     } finally {
       if (previous === undefined) delete process.env.SHADOW_PLANNER;
       else process.env.SHADOW_PLANNER = previous;
+    }
+  });
+
+  it('SHADOW_SUPERVISOR=1 runs the role pipeline and prefixes steps with the role', async () => {
+    vi.mocked(prisma.agentRun.create).mockResolvedValue({ id: 'run_db' } as never);
+    vi.mocked(prisma.agentStep.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.agentRun.update).mockResolvedValue({} as never);
+
+    const previous = process.env.SHADOW_SUPERVISOR;
+    process.env.SHADOW_SUPERVISOR = '1';
+
+    try {
+      const out = await runShadowObserve(
+        { companyId: 'co_1', agentId: 'ag_1', goal: 'grow repeat' },
+        { planner: perRoleTurnPlanner, handlers },
+      );
+
+      expect(out.status).toBe('finished');
+      const nodes = vi
+        .mocked(prisma.agentStep.create)
+        .mock.calls.map((call) => (call[0] as { data: { node: string } }).data.node);
+      expect(nodes).toEqual(
+        expect.arrayContaining(['discovery.planner', 'strategy.planner', 'faithfulness.planner', 'guardrail.planner']),
+      );
+    } finally {
+      if (previous === undefined) delete process.env.SHADOW_SUPERVISOR;
+      else process.env.SHADOW_SUPERVISOR = previous;
     }
   });
 });
