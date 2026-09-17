@@ -36,6 +36,7 @@ import { integrationsRouter } from './routes/integrations';
 import { billingRouter } from './routes/billing';
 import { attachAgentSteer } from './lib/agent-steer';
 import { assertRedisReachable } from './lib/redis';
+import { assertConfigDefaultsSeeded, getConfig } from './lib/config';
 
 const app = express();
 
@@ -99,12 +100,14 @@ app.use(errorHandler);
 export { app };
 
 if (require.main === module) {
-  assertRedisReachable().then(
-    () => {
+  assertRedisReachable()
+    .then(() => assertConfigDefaultsSeeded())
+    .then(
+    async () => {
       const PORT = process.env.PORT || 3001;
       const server = http.createServer(app);
       attachAgentSteer(server);
-      server.listen(Number(PORT), '0.0.0.0', () => {
+      server.listen(Number(PORT), '0.0.0.0', async () => {
         logger.info({ port: PORT }, 'Backend server started');
 
         // BullMQ workers belong in their own process (npm run dev:worker locally, the
@@ -115,13 +118,15 @@ if (require.main === module) {
         // shared 750h/mo allowance), so jobs still run inline here by default — set
         // WORKERS_IN_API_PROCESS=false once the separate service is turned on.
         if (process.env.WORKERS_IN_API_PROCESS !== 'false') {
-          startWorkers();
+          await startWorkers();
         }
 
         // Off by default so local behaviour matches production, where the agent loop is
-        // driven by cron hitting /api/internal/agents/run-scheduled.
+        // driven by cron hitting /api/internal/agents/run-scheduled. AGENT_INTERVAL_MS
+        // stays an explicit env override for local dev; agent.interval_ms in config is
+        // the non-hardcoded default it falls back to.
         if (process.env.ENABLE_AGENT_INTERVAL === 'true') {
-          const intervalMs = Number(process.env.AGENT_INTERVAL_MS) || 21_600_000; // 6h
+          const intervalMs = Number(process.env.AGENT_INTERVAL_MS) || (await getConfig(null, 'agent.interval_ms'));
           agentOrchestrator.start(intervalMs);
         } else {
           logger.info(
@@ -154,7 +159,7 @@ if (require.main === module) {
       process.on('SIGINT', () => shutdown('SIGINT'));
     },
     (err) => {
-      logger.fatal({ err }, 'Redis is unreachable. Check REDIS_URL.');
+      logger.fatal({ err }, 'Startup check failed (Redis unreachable or config_defaults not seeded).');
       process.exit(1);
     },
   );

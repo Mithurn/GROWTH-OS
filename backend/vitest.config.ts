@@ -8,6 +8,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@growthos/domain': path.resolve(__dirname, '../packages/domain/src/index.ts'),
+      // Subpath import (backend/src/lib/config.ts, config/openrouter.ts) —
+      // resolved before the bare '@growthos/contracts' entry below, since Vite
+      // alias matching is first-match and the bare entry would otherwise shadow it.
+      '@growthos/contracts/config/registry': path.resolve(__dirname, '../packages/contracts/src/config/registry.ts'),
       '@growthos/contracts': path.resolve(__dirname, '../packages/contracts/src/index.ts'),
       '@growthos/agent-core': path.resolve(__dirname, '../packages/agent-core/src/index.ts'),
       '@growthos/ingest': path.resolve(__dirname, '../packages/ingest/src/index.ts'),

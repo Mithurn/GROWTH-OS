@@ -82,7 +82,7 @@ export function openRouterPlanner(deps: PlannerDeps = {}): Planner {
           model: openRouterConfig.defaultModel,
           tokensIn,
           tokensOut,
-          estimatedCost: estimateOpenRouterCost(tokensIn, tokensOut),
+          estimatedCost: await estimateOpenRouterCost(companyId, tokensIn, tokensOut),
           source,
         });
       }

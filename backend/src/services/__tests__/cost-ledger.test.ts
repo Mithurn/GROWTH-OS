@@ -33,8 +33,8 @@ describe('assertPlatformBudget', () => {
     expect(out.reason).toMatch(/capped at \$0/i);
   });
 
-  it('estimates USD from token counts without inventing a vendor invoice', () => {
-    expect(estimateOpenRouterCost(1_000_000, 0)).toBe(0.3);
-    expect(estimateOpenRouterCost(0, 1_000_000)).toBe(2.5);
+  it('estimates USD from token counts without inventing a vendor invoice', async () => {
+    expect(await estimateOpenRouterCost(null, 1_000_000, 0)).toBe(0.3);
+    expect(await estimateOpenRouterCost(null, 0, 1_000_000)).toBe(2.5);
   });
 });

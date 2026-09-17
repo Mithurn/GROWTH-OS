@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { getConfig } from '../lib/config';
 
 export interface CostEntry {
   companyId: string;
@@ -37,12 +38,18 @@ export async function recordCost(entry: CostEntry): Promise<void> {
 
 /**
  * USD estimate from OpenRouter token counts. Rates are conservative
- * published-ballpark figures, overridable per million tokens.
+ * published-ballpark figures (llm.pricing.* config, plan-overridable).
  * Tokens are the source of truth; this number is for the cap, not invoicing.
  */
-export function estimateOpenRouterCost(tokensIn: number, tokensOut: number): number {
-  const inRate = Number(process.env.OPENROUTER_USD_PER_MTOK_IN ?? '0.30');
-  const outRate = Number(process.env.OPENROUTER_USD_PER_MTOK_OUT ?? '2.50');
+export async function estimateOpenRouterCost(
+  companyId: string | null,
+  tokensIn: number,
+  tokensOut: number,
+): Promise<number> {
+  const [inRate, outRate] = await Promise.all([
+    getConfig(companyId, 'llm.pricing.usd_per_mtok_in'),
+    getConfig(companyId, 'llm.pricing.usd_per_mtok_out'),
+  ]);
   const usd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
   return Math.round(usd * 1_000_000) / 1_000_000;
 }

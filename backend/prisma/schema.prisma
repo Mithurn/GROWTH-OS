@@ -80,6 +80,11 @@ model Company {
   // 20260918020000 migration for why out-of-order dedup needs this instead.
   lastStripeEventAt    DateTime? @map("last_stripe_event_at")
 
+  // Formatting only — no monetary math depends on these. Was a hardcoded ₹/en-IN
+  // in queues.ts and campaign-embeddings.ts; see docs/V3_PLAN.md Phase 1.3.
+  currency     String   @default("INR")
+  locale       String   @default("en-IN")
+
   profiles     Profile[]
   customers    Customer[]
   products     Product[]
@@ -91,6 +96,7 @@ model Company {
   ingestionSessions IngestionSession[]
   integrations Integration[]
   costLedger   CostLedger[]
+  configOverrides CompanyConfig[]
 
   @@index([companyName])
   @@map("companies")
@@ -524,4 +530,50 @@ model CostLedger {
   @@index([runId])
   @@index([createdAt])
   @@map("cost_ledger")
+}
+
+// ============================================
+// CONFIGURATION LAYER (docs/V3_PLAN.md Phase 1)
+//
+// Every tunable value formerly hardcoded in application code resolves through
+// these three tables: company override -> plan override -> global default.
+// See backend/src/lib/config.ts for resolution and packages/contracts/src/config
+// for the Zod schema (and Zod-level default) each key must be registered under.
+// ============================================
+
+model ConfigDefault {
+  key         String   @id
+  value       Json
+  description String
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("config_defaults")
+}
+
+/** planId matches Company.plan today ("free" | "pro") — becomes a real FK to a
+    Plan table once Phase 3.1 (Stripe-synced plans) lands. */
+model PlanConfig {
+  id        String   @id @default(uuid())
+  planId    String   @map("plan_id")
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([planId, key])
+  @@index([planId])
+  @@map("plan_config")
+}
+
+model CompanyConfig {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, key])
+  @@index([companyId])
+  @@map("company_config")
 }
