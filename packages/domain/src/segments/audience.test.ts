@@ -156,10 +156,10 @@ describe('matchesSegment', () => {
 });
 
 describe('toPrismaWhere', () => {
-  it('scopes every opportunity type through the customer relation for tenancy', () => {
+  it('scopes every opportunity type by companyId for tenancy', () => {
     for (const type of OPPORTUNITY_TYPES) {
-      const where = toPrismaWhere(type, 'company-123') as { customer?: { companyId?: string } };
-      expect(where.customer?.companyId).toBe('company-123');
+      const where = toPrismaWhere(type, 'company-123') as { companyId?: string };
+      expect(where.companyId).toBe('company-123');
     }
   });
 

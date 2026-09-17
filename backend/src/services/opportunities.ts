@@ -1259,8 +1259,12 @@ export async function getOpportunityDashboard(
 export async function getOpportunityCustomers(
   _supabase: SupabaseClient,
   opportunityId: string,
+  companyId: string,
 ): Promise<{ opportunity: OpportunityDistributionRow | null; customers: OpportunityCustomerDetail[] }> {
-  const row = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
+  // companyId is scoped directly here too, not just relied on via the route's
+  // requireOwnedOpportunity check — defense in depth, and required by the
+  // tenant-scope guard on these findMany calls (lib/tenant-scope.ts).
+  const row = await prisma.opportunity.findUnique({ where: { id: opportunityId, companyId } });
   if (!row) return { opportunity: null, customers: [] };
 
   const links = await prisma.opportunityCustomer.findMany({
@@ -1272,17 +1276,17 @@ export async function getOpportunityCustomers(
   const [customerRows, metricRows, attributeRows, personaRows] = customerIds.length
     ? await Promise.all([
         prisma.customer.findMany({
-          where: { id: { in: customerIds } },
+          where: { id: { in: customerIds }, companyId },
           select: { id: true, firstName: true, lastName: true },
         }),
         prisma.customerMetrics.findMany({
-          where: { customerId: { in: customerIds } },
+          where: { customerId: { in: customerIds }, companyId },
         }),
         prisma.customerAttributes.findMany({
-          where: { customerId: { in: customerIds } },
+          where: { customerId: { in: customerIds }, companyId },
         }),
         prisma.persona.findMany({
-          where: { customerId: { in: customerIds } },
+          where: { customerId: { in: customerIds }, companyId },
         }),
       ])
     : [[], [], [], []];

@@ -60,7 +60,10 @@ async function resolveFromDb<K extends ConfigKey>(companyId: string | null, key:
     }
   }
 
-  const globalRow = await prisma.configDefault.findUnique({ where: { key } });
+  // The extended client's generated args type applies `Exact<>` narrowing that
+  // doesn't correlate with a generic K the way a literal key would — same class
+  // of limitation as schemaDefault's cast in registry.ts.
+  const globalRow = await prisma.configDefault.findUnique({ where: { key } as { key: string } });
   if (globalRow) {
     const parsed = schema.safeParse(globalRow.value);
     if (parsed.success) return parsed.data as ConfigValue<K>;

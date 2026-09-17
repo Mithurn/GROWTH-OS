@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma, prismaSystem } from '../lib/prisma';
 import { embed, toVectorLiteral } from '../lib/embeddings';
 import { logger } from '../lib/logger';
 
@@ -107,7 +107,10 @@ export async function backfillCampaignEmbeddings(companyId?: string): Promise<nu
   `;
   const done = new Set(alreadyEmbedded.map((r) => r.campaign_id));
 
-  const campaigns = await prisma.campaign.findMany({
+  // Manual/admin backfill utility, not reachable from a request — `companyId`
+  // omitted means "every tenant" by design, so this deliberately uses the
+  // unguarded client (lib/prisma.ts's prismaSystem).
+  const campaigns = await prismaSystem.campaign.findMany({
     where: companyId ? { companyId } : undefined,
     select: { id: true },
   });

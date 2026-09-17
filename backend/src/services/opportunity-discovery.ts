@@ -115,11 +115,12 @@ export async function discoverOpportunities(
 // ── Analytics snapshot for the AI prompt ──────────────────────────────────────
 async function getCustomerAnalytics(companyId: string) {
   try {
-    // customer_metrics and customer_attributes have no company_id of their own, so
-    // every count here is scoped through the customer relation. These were previously
-    // unscoped, which fed one tenant's totals into another tenant's agent prompt and
-    // audience sizing.
-    const ownedByCompany = { customer: { companyId } };
+    // customer_metrics and customer_attributes now carry their own company_id
+    // (docs/V3_PLAN.md Phase 2) — a direct filter instead of the join through
+    // customer this used to require. These were previously unscoped entirely,
+    // which fed one tenant's totals into another tenant's agent prompt and
+    // audience sizing (docs/breaks.md 2026-09-18).
+    const ownedByCompany = { companyId };
 
     const totalCustomers = await prisma.customer.count({ where: { companyId } });
 
@@ -452,7 +453,7 @@ const CODED_COPY: Record<
 /** Write one opportunity per coded type that has a real local audience. No LLM. */
 export async function materializeCodedOpportunities(companyId: string, agentId?: string) {
   const avg = await prisma.customerMetrics.aggregate({
-    where: { customer: { companyId } },
+    where: { companyId },
     _avg: { avgOrderValue: true },
   });
   const avgOrderValue = Number(avg._avg.avgOrderValue ?? 0);

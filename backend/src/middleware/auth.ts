@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { trace } from '@opentelemetry/api';
 import { supabase } from '../lib/supabase';
+import { verifySupabaseToken } from '../lib/verify-jwt';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -9,14 +10,19 @@ export interface AuthRequest extends Request {
   companyId?: string;
 }
 
+/**
+ * Verified locally (lib/verify-jwt.ts), not via `supabase.auth.getUser()` — that
+ * call was a network round-trip to Supabase on every single request. See
+ * docs/V3_PLAN.md Phase 2.
+ */
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) {
+  const user = await verifySupabaseToken(token);
+  if (!user) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
@@ -80,7 +86,7 @@ export function requireInternalSecret(req: Request, res: Response, next: NextFun
 export async function softAuth(req: AuthRequest, _res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (token) {
-    const { data: { user } } = await supabase.auth.getUser(token);
+    const user = await verifySupabaseToken(token);
     if (user) req.userId = user.id;
   }
   next();
