@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startTestDb, type TestDb } from './testDb';
 import { toPrismaWhere, matchesSegment, type OpportunityType } from '@growthos/domain';
+import { tenantScopeExtension, MissingTenantScopeError } from '../../lib/tenant-scope';
 
 /**
  * This is the test the mocked suite (src/__tests__/tenant-isolation.test.ts) cannot
@@ -43,6 +44,7 @@ describe('tenant isolation — real Postgres, two live tenants', () => {
     await Promise.all([
       db.prisma.customerMetrics.create({
         data: {
+          companyId: companyA,
           customerId: customerA.id,
           totalOrders: 10,
           totalSpent: 8000,
@@ -52,6 +54,7 @@ describe('tenant isolation — real Postgres, two live tenants', () => {
       }),
       db.prisma.customerMetrics.create({
         data: {
+          companyId: companyB,
           customerId: customerB.id,
           totalOrders: 12,
           totalSpent: 9000,
@@ -119,5 +122,26 @@ describe('tenant isolation — real Postgres, two live tenants', () => {
       });
       expect(matchesInMemory).toBe(true);
     }
+  });
+
+  it('the app-layer tenant-scope guard rejects the exact unscoped query above, against a real client', async () => {
+    // Same real Postgres, same real customerMetrics rows as the test above — this
+    // time through the guarded client (lib/prisma.ts's actual `prisma` export
+    // applies the same extension), proving the guard backstops this class of bug
+    // structurally rather than relying on every call site remembering to scope.
+    const guarded = db.prisma.$extends(tenantScopeExtension);
+
+    await expect(
+      guarded.customerMetrics.count({
+        where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
+      }),
+    ).rejects.toThrow(MissingTenantScopeError);
+
+    // The scoped equivalent still runs fine through the same guarded client.
+    await expect(
+      guarded.customerMetrics.count({
+        where: toPrismaWhere('Retention-VIP' as OpportunityType, companyA),
+      }),
+    ).resolves.toBe(1);
   });
 });

@@ -118,12 +118,14 @@ export async function importOrdersPrisma(
 
   const ordersToInsert: Array<{
     id: string;
+    companyId: string;
     customerId: string;
     orderDate: Date;
     totalAmount: number;
     channel: string | null;
   }> = [];
   const orderItemsToInsert: Array<{
+    companyId: string;
     orderId: string;
     productId: string;
     quantity: number;
@@ -144,6 +146,7 @@ export async function importOrdersPrisma(
     const totalAmount = items.reduce((sum: number, item: any) => sum + parseFloat(item.amount || '0'), 0);
     ordersToInsert.push({
       id: generatedOrderId,
+      companyId,
       customerId,
       orderDate: new Date(items[0].order_date),
       totalAmount,
@@ -158,6 +161,7 @@ export async function importOrdersPrisma(
       }
       const quantity = parseInt(item.quantity, 10) || 1;
       orderItemsToInsert.push({
+        companyId,
         orderId: generatedOrderId,
         productId,
         quantity,

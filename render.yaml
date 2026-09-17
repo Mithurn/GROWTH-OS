@@ -24,6 +24,10 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false  # Project Settings -> API -> JWT Secret. Needed only if this project still signs
+                     # tokens HS256 (the default until Supabase's asymmetric-signing-keys feature) —
+                     # see backend/src/lib/verify-jwt.ts. Unset + an HS256 token = that request 401s.
       - key: DATABASE_URL
         sync: false
       - key: OPENROUTER_API_KEY

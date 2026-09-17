@@ -17,7 +17,9 @@ async function estimatorParams(companyId: string) {
   return { globalPriorConversionRate, priorWeight, confidenceZ };
 }
 
-const owned = (companyId: string) => ({ customer: { companyId } });
+// customerMetrics now carries its own companyId (docs/V3_PLAN.md Phase 2) — a
+// direct filter instead of the join through customer this used to require.
+const owned = (companyId: string) => ({ companyId });
 
 async function queryMetrics(_args: unknown, ctx: RunContext) {
   const companyId = ctx.companyId;

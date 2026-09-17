@@ -62,9 +62,12 @@ vi.mock('../middleware/rate-limits', () => {
   };
 });
 
-// Prevent Prisma from connecting
-vi.mock('../lib/prisma', () => ({
-  prisma: {
+// Prevent Prisma from connecting. `prismaSystem` (lib/prisma.ts's unguarded
+// client for the few deliberate cross-tenant sweeps) shares the same mock —
+// nothing here applies the real tenant-scope guard either way, so there is
+// no behavioural difference to model in a unit test.
+vi.mock('../lib/prisma', () => {
+  const mockPrisma = {
     $queryRaw: vi.fn().mockResolvedValue([]),
     $executeRaw: vi.fn().mockResolvedValue(0),
     agent: {
@@ -156,8 +159,9 @@ vi.mock('../lib/prisma', () => ({
       create: vi.fn(),
     },
     $transaction: vi.fn().mockResolvedValue([]),
-  },
-}));
+  };
+  return { prisma: mockPrisma, prismaSystem: mockPrisma };
+});
 
 // Prevent AgentOrchestrator from starting
 vi.mock('../services/agent-orchestrator', () => ({

@@ -95,7 +95,7 @@ opportunitiesRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const opportunityId = req.params['opportunityId'] as string;
-      const result = await getOpportunityCustomers(supabase, opportunityId);
+      const result = await getOpportunityCustomers(supabase, opportunityId, req.companyId!);
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching opportunity details');

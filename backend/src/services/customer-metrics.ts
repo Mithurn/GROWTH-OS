@@ -148,7 +148,7 @@ export async function generateCustomerMetricsPrisma(companyId: string): Promise<
     orderBy: { createdAt: 'asc' },
   });
   const orders = await prisma.order.findMany({
-    where: { customer: { companyId } },
+    where: { companyId },
     select: { customerId: true, totalAmount: true, orderDate: true },
   });
 
@@ -173,6 +173,7 @@ export async function generateCustomerMetricsPrisma(companyId: string): Promise<
     await prisma.customerMetrics.upsert({
       where: { customerId: metric.customer_id },
       create: {
+        companyId,
         customerId: metric.customer_id,
         totalOrders: metric.total_orders,
         totalSpent: metric.total_spent,
