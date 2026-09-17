@@ -24,10 +24,25 @@ vi.mock('pino-http', () => ({
 // Prevent BullMQ / Redis connections in tests
 vi.mock('../lib/queues', () => ({
   startWorkers: vi.fn(),
+  closeWorkers: vi.fn().mockResolvedValue(undefined),
   enqueueIngestion: vi.fn().mockResolvedValue(undefined),
   enqueuePersonaGeneration: vi.fn().mockResolvedValue(undefined),
   ingestionQueue: { add: vi.fn() },
 }));
+
+// Rate limiting is backed by Redis (rate-limit-redis) so limits hold across
+// instances — see docs/V3_PLAN.md Phase 0.1. No route test exercises limiting
+// behaviour itself, so the limiters are replaced with pass-through middleware
+// rather than standing up a real Redis connection for every unit test.
+vi.mock('../middleware/rate-limits', () => {
+  const passthrough = (_req: unknown, _res: unknown, next: () => void) => next();
+  return {
+    generalLimiter: passthrough,
+    llmLimiter: passthrough,
+    uploadLimiter: passthrough,
+    webhookLimiter: passthrough,
+  };
+});
 
 // Prevent Prisma from connecting
 vi.mock('../lib/prisma', () => ({
