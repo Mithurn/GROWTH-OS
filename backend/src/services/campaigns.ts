@@ -8,6 +8,7 @@ import { parseWithRetry } from '../lib/ai';
 import { selectIn } from '../lib/scoped-query';
 import { getVerifiedCredentials, type IntegrationKind } from './integrations';
 import { isPaidAndActive } from './billing';
+import { injectTraceHeaders } from '../lib/trace-context';
 
 /**
  * Real credentials for this send, or `undefined` for the channel service's
@@ -541,7 +542,7 @@ export async function launchCampaign(
 
       const response = await fetch(`${CHANNEL_SERVICE_URL}/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: injectTraceHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           communicationId: comm.id,
           recipient,

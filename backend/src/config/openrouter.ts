@@ -1,4 +1,6 @@
 import OpenAI from 'openai';
+import { SpanStatusCode } from '@opentelemetry/api';
+import { tracer } from '../lib/tracing';
 
 /**
  * Production must have a key (Render). Local / test may boot without one —
@@ -39,3 +41,36 @@ export const openai = new OpenAI({
     'X-Title': openRouterConfig.appName,
   },
 });
+
+/**
+ * Every call site shares this one client, so wrapping `.create` here traces
+ * every LLM call in the app — personas, opportunities, campaigns, the agent
+ * planner — without touching each call site individually.
+ */
+const originalCreate = openai.chat.completions.create.bind(openai.chat.completions);
+openai.chat.completions.create = (async (...args: Parameters<typeof originalCreate>) => {
+  const [params] = args;
+  return tracer.startActiveSpan(`llm.chat.completions ${params.model}`, async (span) => {
+    span.setAttribute('llm.model', params.model);
+    span.setAttribute('llm.stream', Boolean(params.stream));
+    span.setAttribute('gen_ai.operation.name', 'chat');
+    span.setAttribute('gen_ai.request.model', params.model);
+    try {
+      const response = await originalCreate(...args);
+      const usage = (response as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
+      if (usage) {
+        span.setAttribute('llm.tokens.prompt', usage.prompt_tokens ?? 0);
+        span.setAttribute('llm.tokens.completion', usage.completion_tokens ?? 0);
+        span.setAttribute('gen_ai.usage.input_tokens', usage.prompt_tokens ?? 0);
+        span.setAttribute('gen_ai.usage.output_tokens', usage.completion_tokens ?? 0);
+      }
+      return response;
+    } catch (err) {
+      span.recordException(err as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+}) as typeof originalCreate;
