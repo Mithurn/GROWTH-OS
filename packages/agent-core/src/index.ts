@@ -1,6 +1,7 @@
 export { AgentState, type AgentStateType } from './state';
 export { buildShadowGraph } from './graph/shadow';
 export { buildGrowthAgent, runGrowthAgent } from './graph/run';
+export { createPostgresCheckpointer } from './checkpoint/postgres';
 export { TOOL_CATALOG, SHADOW_KINDS } from './tools/catalog';
 export { catalogFor, invokeTool, ToolDeniedError, stripCompanyIdFromArgs } from './tools/registry';
 export { scriptedPlanner, calls, finish } from './planner/scripted';

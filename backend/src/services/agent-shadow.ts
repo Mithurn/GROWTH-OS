@@ -13,6 +13,7 @@ import { buildToolHandlers } from './agent-tool-handlers';
 import { openRouterConfig } from '../config/openrouter';
 import { openRouterPlanner } from './agent-planner';
 import { emitActivity } from '../lib/activity-emitter';
+import { getAgentCheckpointer } from '../lib/agent-checkpointer';
 
 function resolvePlanner(override?: Planner): Planner {
   if (override) return override;
@@ -44,7 +45,11 @@ export interface ShadowObserveInput {
  */
 export async function runShadowObserve(
   input: ShadowObserveInput,
-  deps?: { planner?: Planner; handlers?: Record<string, ToolHandler> },
+  deps?: {
+    planner?: Planner;
+    handlers?: Record<string, ToolHandler>;
+    checkpointer?: import('@langchain/langgraph-checkpoint').BaseCheckpointSaver;
+  },
 ): Promise<{ runId: string; status: string; summary: string; stepCount: number }> {
   const runId = randomUUID();
   let persistedRunId: string | null = null;
@@ -104,6 +109,7 @@ export async function runShadowObserve(
     mode: 'shadow',
     maxSteps: 8,
     onStep,
+    checkpointer: deps?.checkpointer ?? (await getAgentCheckpointer()),
   });
 
   const out = await runGrowthAgent(graph, {
