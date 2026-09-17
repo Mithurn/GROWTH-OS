@@ -7,6 +7,8 @@ export interface SendRequest {
   recipient: string;
   channel: Channel;
   content: string;
+  /** Per-request credentials from the backend (BYOK or the platform's own paid-tier keys). Absent = simulator. */
+  credentials?: import('./providers/credentials').ProviderCredentials;
 }
 
 export interface QueuedMessage {

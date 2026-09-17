@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Save } from 'lucide-react';
-import { getCompany, getIntegrations, saveIntegration, saveOnboardingProfile, verifyIntegration, type IntegrationCard } from '@/lib/api';
+import {
+  getCompany,
+  getIntegrations,
+  saveIntegration,
+  saveOnboardingProfile,
+  verifyIntegration,
+  getBillingStatus,
+  createBillingCheckout,
+  type IntegrationCard,
+  type BillingStatus,
+} from '@/lib/api';
 
 type OnboardingSettings = {
   companyName: string;
@@ -294,6 +304,8 @@ export default function SettingsPage() {
             </div>
           </Section>
 
+          <BillingSection />
+
           <IntegrationsSection />
 
           {/* Budget */}
@@ -335,10 +347,25 @@ const INTEGRATION_COPY: Record<IntegrationCard['kind'], { title: string; hint: s
   whatsapp: { title: 'WhatsApp / SMS', hint: 'Twilio BYOK, or stay on the delivery simulator.' },
 };
 
+/** Real sends need more than one secret per provider — Twilio is an account SID, an
+ * auth token, and a number, not one API key. */
+const CREDENTIAL_FIELDS: Record<IntegrationCard['kind'], { key: string; label: string; secret?: boolean }[]> = {
+  llm: [{ key: 'apiKey', label: 'OpenRouter API key', secret: true }],
+  email: [
+    { key: 'apiKey', label: 'Resend API key', secret: true },
+    { key: 'fromEmail', label: 'From address (e.g. campaigns@yourbrand.com)' },
+  ],
+  whatsapp: [
+    { key: 'accountSid', label: 'Twilio Account SID' },
+    { key: 'authToken', label: 'Twilio Auth Token', secret: true },
+    { key: 'whatsappNumber', label: 'WhatsApp-enabled number (e.g. +14155238886)' },
+  ],
+};
+
 function IntegrationsSection() {
   const [cards, setCards] = useState<IntegrationCard[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
-  const [draftKeys, setDraftKeys] = useState<Record<string, string>>({});
+  const [draftFields, setDraftFields] = useState<Record<string, Record<string, string>>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -354,16 +381,25 @@ function IntegrationsSection() {
       });
   }, []);
 
+  function setField(kind: IntegrationCard['kind'], key: string, value: string) {
+    setDraftFields((prev) => ({ ...prev, [kind]: { ...prev[kind], [key]: value } }));
+  }
+
+  function hasAllFields(kind: IntegrationCard['kind']): boolean {
+    const values = draftFields[kind] ?? {};
+    return CREDENTIAL_FIELDS[kind].every((f) => (values[f.key] ?? '').trim().length > 0);
+  }
+
   async function save(kind: IntegrationCard['kind'], mode: 'simulator' | 'byok') {
     setBusy(`${kind}:${mode}`);
     setNote(null);
     try {
       const res = await saveIntegration(kind, {
         mode,
-        apiKey: mode === 'byok' ? draftKeys[kind] : undefined,
+        credentials: mode === 'byok' ? draftFields[kind] : undefined,
       });
       setCards((prev) => prev.map((c) => (c.kind === kind ? res.data : c)));
-      setNote(mode === 'simulator' ? 'Simulator is on. No tenant key is stored.' : 'Key stored encrypted.');
+      setNote(mode === 'simulator' ? 'Simulator is on. No tenant key is stored.' : 'Credentials stored encrypted — verify before launching a real campaign.');
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Failed to save integration');
     } finally {
@@ -377,7 +413,7 @@ function IntegrationsSection() {
     try {
       const res = await verifyIntegration(kind);
       setCards((prev) => prev.map((c) => (c.kind === kind ? res.data : c)));
-      setNote('Verified.');
+      setNote(res.data.status === 'ok' ? 'Verified against the real provider.' : 'The provider rejected these credentials.');
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Verify failed');
     } finally {
@@ -388,7 +424,9 @@ function IntegrationsSection() {
   return (
     <Section title="Integrations">
       <p className="mb-4 text-sm text-[#71717A]">
-        Simulator is the default. Real sends use your own keys (AES-256-GCM, never returned).
+        Simulator is the default and free. Real sends use your own account
+        (AES-256-GCM, keys never returned to the browser) — GrowthOS never
+        spends its own money sending on your behalf.
       </p>
       {available === false && (
         <p className="mb-4 text-sm text-[#71717A]">
@@ -416,13 +454,18 @@ function IntegrationsSection() {
               {card.maskedKey && (
                 <p className="mt-1 font-mono text-xs text-[#71717A]">{card.maskedKey}</p>
               )}
-              <input
-                type="password"
-                placeholder="Paste key only for BYOK"
-                value={draftKeys[card.kind] ?? ''}
-                onChange={(e) => setDraftKeys((prev) => ({ ...prev, [card.kind]: e.target.value }))}
-                className="mt-3 h-9 w-full rounded-md border border-[#E4E4E7] px-2 text-xs"
-              />
+              <div className="mt-3 space-y-2">
+                {CREDENTIAL_FIELDS[card.kind].map((field) => (
+                  <input
+                    key={field.key}
+                    type={field.secret ? 'password' : 'text'}
+                    placeholder={field.label}
+                    value={draftFields[card.kind]?.[field.key] ?? ''}
+                    onChange={(e) => setField(card.kind, field.key, e.target.value)}
+                    className="h-9 w-full rounded-md border border-[#E4E4E7] px-2 text-xs"
+                  />
+                ))}
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -434,11 +477,11 @@ function IntegrationsSection() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy !== null || !(draftKeys[card.kind] ?? '').trim()}
+                  disabled={busy !== null || !hasAllFields(card.kind)}
                   onClick={() => save(card.kind, 'byok')}
                   className="rounded-md bg-[#5B4FFF] px-2 py-1 text-xs text-white disabled:opacity-40"
                 >
-                  Save key
+                  Save credentials
                 </button>
                 <button
                   type="button"
@@ -452,6 +495,94 @@ function IntegrationsSection() {
             </div>
           );
         })}
+      </div>
+    </Section>
+  );
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+function BillingSection() {
+  const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    getBillingStatus()
+      .then((res) => setStatus(res.data))
+      .catch(() => setStatus(null));
+  }, []);
+
+  async function upgrade() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || !window.Razorpay) throw new Error('Could not load the payment form.');
+
+      const { data } = await createBillingCheckout();
+      const razorpay = new window.Razorpay({
+        subscription_id: data.subscriptionId,
+        key: data.keyId,
+        name: 'GrowthOS',
+        description: 'Real WhatsApp / Email sends on GrowthOS-managed keys',
+        theme: { color: '#5B4FFF' },
+        handler: () => {
+          setNote('Payment received — activation usually lands within a minute. Refresh to see it reflected.');
+        },
+      });
+      razorpay.open();
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Could not start checkout');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Plan">
+      <p className="mb-4 text-sm text-[#71717A]">
+        Everything is free and unlimited in simulator mode — dashboards, the
+        agent, personas, opportunities. Real WhatsApp/Email sends need either
+        your own connected key above, or the Pro plan, which sends on
+        GrowthOS&apos;s own keys, funded by the subscription.
+      </p>
+      {note && <p className="mb-4 text-sm text-[#5B4FFF]">{note}</p>}
+      <div className="rounded-lg border border-[#E4E4E7] p-4">
+        <p className="text-sm font-semibold text-[#1A1A1A]">
+          Current plan: {status?.plan === 'pro' ? 'Pro' : 'Free (simulator)'}
+        </p>
+        {status?.subscriptionStatus && (
+          <p className="mt-1 text-xs text-[#71717A]">Subscription: {status.subscriptionStatus}</p>
+        )}
+        {status && !status.configured && (
+          <p className="mt-2 text-xs text-[#71717A]">Billing is not configured on this deployment yet.</p>
+        )}
+        {status?.plan !== 'pro' && (
+          <button
+            type="button"
+            disabled={busy || !status?.configured}
+            onClick={upgrade}
+            className="mt-3 rounded-md bg-[#5B4FFF] px-3 py-1.5 text-xs text-white disabled:opacity-40"
+          >
+            Upgrade to Pro
+          </button>
+        )}
       </div>
     </Section>
   );
