@@ -76,6 +76,9 @@ model Company {
   stripeSubscriptionId String?   @map("stripe_subscription_id")
   subscriptionStatus   String?   @map("subscription_status")
   planUpdatedAt        DateTime? @map("plan_updated_at")
+  // Stripe event `created` timestamp, not our own write time — see the
+  // 20260918020000 migration for why out-of-order dedup needs this instead.
+  lastStripeEventAt    DateTime? @map("last_stripe_event_at")
 
   profiles     Profile[]
   customers    Customer[]

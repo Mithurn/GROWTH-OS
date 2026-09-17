@@ -4,6 +4,9 @@ import { initTracing } from './lib/tracing';
 // global tracer provider every `tracer.startActiveSpan()` call picks up.
 initTracing();
 
+import { initSentry } from './lib/sentry';
+initSentry();
+
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
@@ -12,7 +15,7 @@ import pinoHttp from 'pino-http';
 
 import { logger } from './lib/logger';
 import { tracingMiddleware } from './lib/tracing-middleware';
-import { startWorkers } from './lib/queues';
+import { startWorkers, closeWorkers } from './lib/queues';
 import { agentOrchestrator } from './services/agent-orchestrator';
 import { generalLimiter } from './middleware/rate-limits';
 import { errorHandler } from './middleware/errorHandler';
@@ -35,6 +38,12 @@ import { attachAgentSteer } from './lib/agent-steer';
 import { assertRedisReachable } from './lib/redis';
 
 const app = express();
+
+// Render puts exactly one reverse proxy in front of this service, so `req.ip` is
+// otherwise the proxy's own address for every request — every rate limiter would
+// key on one shared IP. `1` trusts exactly one hop, not `true` (every hop), which
+// would let a spoofed X-Forwarded-For bypass limiting entirely.
+app.set('trust proxy', 1);
 
 app.use(helmet());
 
@@ -97,7 +106,17 @@ if (require.main === module) {
       attachAgentSteer(server);
       server.listen(Number(PORT), '0.0.0.0', () => {
         logger.info({ port: PORT }, 'Backend server started');
-        startWorkers();
+
+        // BullMQ workers belong in their own process (npm run dev:worker locally, the
+        // "xeno-crm-worker" Render service once enabled) — see docs/V3_PLAN.md Phase
+        // 0.2: splitting them out means an API deploy can no longer kill a job
+        // mid-flight. That Render service is written but commented out in render.yaml
+        // pending a hosting-cost decision (a third always-on free service exceeds the
+        // shared 750h/mo allowance), so jobs still run inline here by default — set
+        // WORKERS_IN_API_PROCESS=false once the separate service is turned on.
+        if (process.env.WORKERS_IN_API_PROCESS !== 'false') {
+          startWorkers();
+        }
 
         // Off by default so local behaviour matches production, where the agent loop is
         // driven by cron hitting /api/internal/agents/run-scheduled.
@@ -110,6 +129,29 @@ if (require.main === module) {
           );
         }
       });
+
+      let shuttingDown = false;
+      const shutdown = (signal: string) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        logger.info({ signal }, 'API: draining connections before exit');
+        // Stops accepting new connections; existing requests finish naturally.
+        // initTracing()'s own SIGTERM handler flushes queued spans separately.
+        const closeJobs =
+          process.env.WORKERS_IN_API_PROCESS !== 'false' ? closeWorkers() : Promise.resolve();
+        Promise.all([
+          closeJobs,
+          new Promise<void>((resolve) => server.close(() => resolve())),
+        ]).then(() => {
+          logger.info('API: drained, exiting');
+          process.exit(0);
+        });
+        // Render sends SIGKILL well after this, but bound the wait anyway so a
+        // stuck connection can't hang the process past its deploy window.
+        setTimeout(() => process.exit(0), 10_000).unref();
+      };
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+      process.on('SIGINT', () => shutdown('SIGINT'));
     },
     (err) => {
       logger.fatal({ err }, 'Redis is unreachable. Check REDIS_URL.');
