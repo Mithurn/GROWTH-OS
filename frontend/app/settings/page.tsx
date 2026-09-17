@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Save } from 'lucide-react';
-import { getCompany, saveOnboardingProfile } from '@/lib/api';
+import { getCompany, getIntegrations, saveIntegration, saveOnboardingProfile, verifyIntegration, type IntegrationCard } from '@/lib/api';
 
 type OnboardingSettings = {
   companyName: string;
@@ -294,6 +294,8 @@ export default function SettingsPage() {
             </div>
           </Section>
 
+          <IntegrationsSection />
+
           {/* Budget */}
           <Section title="Monthly Marketing Budget">
             <div className="max-w-md">
@@ -324,6 +326,134 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+const INTEGRATION_COPY: Record<IntegrationCard['kind'], { title: string; hint: string }> = {
+  llm: { title: 'AI model', hint: 'OpenRouter for the planner. Simulator uses the scripted observe tape.' },
+  email: { title: 'Email', hint: 'Resend BYOK, or stay on the delivery simulator.' },
+  whatsapp: { title: 'WhatsApp / SMS', hint: 'Twilio BYOK, or stay on the delivery simulator.' },
+};
+
+function IntegrationsSection() {
+  const [cards, setCards] = useState<IntegrationCard[]>([]);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [draftKeys, setDraftKeys] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    getIntegrations()
+      .then((res) => {
+        setAvailable(res.available !== false);
+        setCards(res.data ?? []);
+      })
+      .catch(() => {
+        setAvailable(false);
+        setCards([]);
+      });
+  }, []);
+
+  async function save(kind: IntegrationCard['kind'], mode: 'simulator' | 'byok') {
+    setBusy(`${kind}:${mode}`);
+    setNote(null);
+    try {
+      const res = await saveIntegration(kind, {
+        mode,
+        apiKey: mode === 'byok' ? draftKeys[kind] : undefined,
+      });
+      setCards((prev) => prev.map((c) => (c.kind === kind ? res.data : c)));
+      setNote(mode === 'simulator' ? 'Simulator is on. No tenant key is stored.' : 'Key stored encrypted.');
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Failed to save integration');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function verify(kind: IntegrationCard['kind']) {
+    setBusy(`${kind}:verify`);
+    setNote(null);
+    try {
+      const res = await verifyIntegration(kind);
+      setCards((prev) => prev.map((c) => (c.kind === kind ? res.data : c)));
+      setNote('Verified.');
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : 'Verify failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Section title="Integrations">
+      <p className="mb-4 text-sm text-[#71717A]">
+        Simulator is the default. Real sends use your own keys (AES-256-GCM, never returned).
+      </p>
+      {available === false && (
+        <p className="mb-4 text-sm text-[#71717A]">
+          Integration tables are not applied yet. Cards still default to simulator.
+        </p>
+      )}
+      {note && <p className="mb-4 text-sm text-[#5B4FFF]">{note}</p>}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {(cards.length > 0 ? cards : (['llm', 'email', 'whatsapp'] as const).map((kind) => ({
+          kind,
+          provider: kind === 'llm' ? 'openrouter' : kind === 'email' ? 'resend' : 'twilio',
+          mode: 'simulator',
+          status: 'unconfigured',
+          maskedKey: null,
+          lastVerifiedAt: null,
+        }))).map((card) => {
+          const copy = INTEGRATION_COPY[card.kind];
+          return (
+            <div key={card.kind} className="rounded-lg border border-[#E4E4E7] p-4">
+              <h3 className="text-sm font-semibold text-[#1A1A1A]">{copy.title}</h3>
+              <p className="mt-1 text-xs text-[#71717A]">{copy.hint}</p>
+              <p className="mt-3 text-xs font-medium text-[#1A1A1A]">
+                Mode: {card.mode} · {card.status}
+              </p>
+              {card.maskedKey && (
+                <p className="mt-1 font-mono text-xs text-[#71717A]">{card.maskedKey}</p>
+              )}
+              <input
+                type="password"
+                placeholder="Paste key only for BYOK"
+                value={draftKeys[card.kind] ?? ''}
+                onChange={(e) => setDraftKeys((prev) => ({ ...prev, [card.kind]: e.target.value }))}
+                className="mt-3 h-9 w-full rounded-md border border-[#E4E4E7] px-2 text-xs"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => save(card.kind, 'simulator')}
+                  className="rounded-md border border-[#E4E4E7] px-2 py-1 text-xs"
+                >
+                  Try simulator
+                </button>
+                <button
+                  type="button"
+                  disabled={busy !== null || !(draftKeys[card.kind] ?? '').trim()}
+                  onClick={() => save(card.kind, 'byok')}
+                  className="rounded-md bg-[#5B4FFF] px-2 py-1 text-xs text-white disabled:opacity-40"
+                >
+                  Save key
+                </button>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => verify(card.kind)}
+                  className="rounded-md border border-[#E4E4E7] px-2 py-1 text-xs"
+                >
+                  Verify
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 

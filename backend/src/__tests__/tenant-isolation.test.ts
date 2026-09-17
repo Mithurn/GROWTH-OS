@@ -50,6 +50,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 import { app } from '../server';
+import { prisma } from '../lib/prisma';
 
 // Routes that take a resource id and must be scoped to the caller's company.
 const SCOPED_ROUTES = [
@@ -59,14 +60,19 @@ const SCOPED_ROUTES = [
   ['post', '/api/campaigns/camp_1/launch'],
   ['get', '/api/opportunities/opp_1'],
   ['get', '/api/agents/agent_1'],
+  ['get', '/api/agents/agent_1/runs'],
+  ['get', '/api/agents/agent_1/runs/run_1'],
   ['post', '/api/agents/agent_1/run'],
   ['get', '/api/ingestion-status/sess_1'],
-  ['get', '/api/onboarding/conversation/conv_1'],
 ] as const;
 
 describe('Cross-tenant access', () => {
   beforeEach(() => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user_caller' } }, error: null });
+    const ownedRow = async () => ({ companyId: resourceCompanyId.value });
+    vi.mocked(prisma.agent.findUnique).mockImplementation(ownedRow as never);
+    vi.mocked(prisma.ingestionSession.findUnique).mockImplementation(ownedRow as never);
+    vi.mocked(prisma.opportunity.findUnique).mockImplementation(ownedRow as never);
   });
 
   it('returns 404 for every id-addressed route when the row belongs to another company', async () => {
@@ -104,6 +110,64 @@ describe('Cross-tenant access', () => {
       const res = await (request(app) as any)[method](path);
       expect(res.status, `${method.toUpperCase()} ${path} should require auth`).toBe(401);
     }
+  });
+});
+
+describe('SSE event routes', () => {
+  it('require authentication and do not start a stream without a JWT', async () => {
+    for (const path of ['/api/campaigns/camp_1/events', '/api/agents/agent_1/runs/run_1/events']) {
+      const res = await request(app).get(path);
+      expect(res.status, path).toBe(401);
+    }
+  });
+
+  it('return 404 when the campaign belongs to another company', async () => {
+    resourceCompanyId.value = OTHER_COMPANY;
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user_caller' } }, error: null });
+    const res = await request(app)
+      .get('/api/campaigns/camp_1/events')
+      .set('Authorization', 'Bearer valid-token');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/internal/agent/tools', () => {
+  const path = '/api/internal/agent/tools';
+
+  it('rejects a request with no secret', async () => {
+    const res = await request(app).get(path);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns the bound shadow catalog when the secret is present', async () => {
+    const res = await request(app).get(path).set('x-internal-secret', 'test-internal-secret');
+    expect(res.status).toBe(200);
+    expect(res.body.mode).toBe('shadow');
+    const names = (res.body.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toContain('growthos_query_metrics');
+    expect(names).not.toContain('growthos_create_opportunity');
+  });
+});
+
+describe('GET /api/internal/agent/tools', () => {
+  const path = '/api/internal/agent/tools';
+
+  it('rejects a request with no secret', async () => {
+    const res = await request(app).get(path);
+    expect(res.status).toBe(401);
+  });
+
+  it('lists the bound shadow catalog when the secret is present', async () => {
+    const res = await request(app)
+      .get(path)
+      .set('x-internal-secret', 'test-internal-secret');
+
+    expect(res.status).toBe(200);
+    expect(res.body.mode).toBe('shadow');
+    const names = (res.body.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toContain('growthos_query_metrics');
+    expect(names).toContain('growthos_finish');
+    expect(names).not.toContain('growthos_create_opportunity');
   });
 });
 

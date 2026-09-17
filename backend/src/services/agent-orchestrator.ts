@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { enqueueOpportunityDiscovery, enqueueCampaignGeneration } from '../lib/queues';
 import { logger } from '../lib/logger';
 import { checkGuardrails, type Guardrails } from '@growthos/domain';
+import { runShadowObserve } from './agent-shadow';
 
 interface AgentExecutionContext {
   agentId: string;
@@ -22,6 +23,9 @@ export class AgentOrchestrator {
   private isRunning = false;
   private isProcessingAgents = false;
   private runInterval: NodeJS.Timeout | null = null;
+  // Bound on the instance so esbuild cannot treat the shadow path as unused
+  // (`void buildShadowGraph` was tree-shaken — see docs/breaks.md).
+  private readonly observeShadow = runShadowObserve;
 
   /**
    * Run agents on an in-process interval.
@@ -161,6 +165,16 @@ export class AgentOrchestrator {
         status: existingUncampaigned.length > 0 ? 'running' : 'discovering',
       },
     });
+
+    // Workflow (ledger) first. Operator observes beside it. A throw here
+    // must never fail the enqueue that already committed.
+    if (process.env.SHADOW_AGENT !== '0') {
+      try {
+        await this.observeShadow({ companyId, agentId, goal, guardrails });
+      } catch (error) {
+        logger.warn({ err: error, agentId }, 'shadow observe failed; enqueue path already committed');
+      }
+    }
   }
 
   /**

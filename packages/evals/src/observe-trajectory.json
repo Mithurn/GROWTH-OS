@@ -1,0 +1,16 @@
+{
+  "id": "observe-script-v1",
+  "suite": "agent-trajectory",
+  "planner": "observeScriptPlanner",
+  "mode": "shadow",
+  "tools": [
+    "growthos_query_metrics",
+    "growthos_think",
+    "growthos_segment_customers",
+    "growthos_estimate_impact",
+    "growthos_check_guardrails",
+    "growthos_finish"
+  ],
+  "must_cite_handler_numbers": true,
+  "must_not_invent_rupees": true
+}

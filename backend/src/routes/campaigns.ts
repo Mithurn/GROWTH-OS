@@ -19,6 +19,7 @@ import {
   refineCampaignMessage,
 } from '../services/campaigns';
 import { getCampaignAnalytics } from '../services/analytics';
+import { subscribeTenantStream } from '../lib/tenant-stream';
 import {
   GenerateCampaignSchema,
   SaveCampaignSchema,
@@ -109,7 +110,7 @@ campaignsRouter.get(
   },
 );
 
-/** Polled every 5s by the analytics page while a campaign is live. */
+/** Snapshot. Live updates go through GET /campaigns/:id/events (SSE). */
 campaignsRouter.get(
   '/campaigns/:id/analytics',
   requireAuth,
@@ -126,6 +127,23 @@ campaignsRouter.get(
         error: error instanceof Error ? error.message : 'Failed to fetch campaign analytics',
       });
     }
+  },
+);
+
+campaignsRouter.get(
+  '/campaigns/:id/events',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireCompanyOwnership('campaigns'),
+  async (req: AuthRequest, res) => {
+    const id = req.params['id'] as string;
+    const lastEventId = req.header('last-event-id') ?? undefined;
+    const unsubscribe = await subscribeTenantStream(res, req.companyId!, {
+      lastEventId,
+      filter: (event) =>
+        event.actionType === 'campaign_delivery' && event.payload['campaignId'] === id,
+    });
+    req.on('close', unsubscribe);
   },
 );
 

@@ -41,6 +41,11 @@ jobs:
       - name: Test
         run: npm test
 
+      # Real Postgres from a clean slate, running every migration. Catches migrations
+      # that only fail on a fresh database, which the mocked unit suite cannot see.
+      - name: Integration test
+        run: npm run test:integration
+
       # Same reasoning as the frontend's build step below. tsc resolves modules through
       # this package's tsconfig `paths`; esbuild resolves them through the tsconfig
       # nearest each imported file. A `packages/*` file importing an npm dependency can
