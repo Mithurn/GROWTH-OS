@@ -37,3 +37,6 @@ ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "external_order_id" TEXT;
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "company_id" TEXT;
 ALTER TABLE "customer_metrics" ADD COLUMN IF NOT EXISTS "company_id" TEXT;
 ALTER TABLE "customer_attributes" ADD COLUMN IF NOT EXISTS "company_id" TEXT;
+
+-- The chat onboarding that used this table was removed; production never had it.
+DROP TABLE IF EXISTS "onboarding_conversations";

@@ -84,7 +84,6 @@ const OWNED_TABLES = {
   opportunities: 'company_id',
   agents: 'company_id',
   ingestion_sessions: 'company_id',
-  onboarding_conversations: 'company_id',
 } as const;
 
 type OwnedTable = keyof typeof OWNED_TABLES;

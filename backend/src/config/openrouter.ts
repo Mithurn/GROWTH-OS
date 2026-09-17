@@ -27,15 +27,6 @@ export const openRouterConfig = {
  */
 const REQUEST_TIMEOUT_MS = 60_000;
 
-/**
- * Shared OpenRouter client.
- *
- * Previously each service built its own, and `onboarding-chat.ts` built one straight
- * from `process.env` with no fallbacks — so an unset `OPENROUTER_BASE_URL` left the
- * SDK pointed at its own default host, sending an OpenRouter key to OpenAI. It also
- * defaulted to a different model than the shared config. One client removes both
- * failure modes.
- */
 export const openai = new OpenAI({
   // SDK 6 refuses to construct with an empty key. Local/scripted observe
   // never calls this client; a placeholder keeps the process bootable.

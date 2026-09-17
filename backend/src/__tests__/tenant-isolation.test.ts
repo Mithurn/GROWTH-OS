@@ -64,7 +64,6 @@ const SCOPED_ROUTES = [
   ['get', '/api/agents/agent_1/runs/run_1'],
   ['post', '/api/agents/agent_1/run'],
   ['get', '/api/ingestion-status/sess_1'],
-  ['get', '/api/onboarding/conversation/conv_1'],
 ] as const;
 
 describe('Cross-tenant access', () => {

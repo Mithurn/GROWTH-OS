@@ -158,32 +158,6 @@ export async function saveOnboardingProfile(profile: Record<string, unknown>) {
   return response.json();
 }
 
-export async function startOnboardingConversation() {
-  const response = await apiFetch(`${API_BASE_URL}/onboarding/conversation/start`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to start conversation');
-  }
-
-  return response.json();
-}
-
-export async function sendConversationMessage(conversationId: string, message: string) {
-  const response = await apiFetch(`${API_BASE_URL}/onboarding/conversation/${conversationId}/message`, {
-    method: 'POST',
-    body: JSON.stringify({ message }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to send message');
-  }
-
-  return response.json();
-}
-
 export async function uploadCustomerCSV(file: File) {
   const formData = new FormData();
   formData.append('file', file);
