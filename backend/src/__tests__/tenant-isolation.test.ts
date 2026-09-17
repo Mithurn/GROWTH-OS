@@ -49,6 +49,17 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
+// requireAuth verifies locally now (lib/verify-jwt.ts), not via
+// supabase.auth.getUser — reuses the same mockGetUser so every existing
+// `mockGetUser.mockResolvedValue(...)` call in this file still drives it.
+vi.mock('../lib/verify-jwt', () => ({
+  verifySupabaseToken: vi.fn(async (token: string) => {
+    const { data, error } = await mockGetUser(token);
+    if (error || !data?.user) return null;
+    return { id: data.user.id, email: data.user.email };
+  }),
+}));
+
 import { app } from '../server';
 import { prisma } from '../lib/prisma';
 

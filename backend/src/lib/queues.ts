@@ -271,13 +271,16 @@ export async function closeWorkers(): Promise<void> {
  */
 async function resumeIncompleteIngestions(): Promise<void> {
   try {
-    const { prisma } = await import('./prisma');
+    // Deliberately cross-tenant: resumes every interrupted session across
+    // every company after a spin-down, not one tenant's (see lib/prisma.ts's
+    // prismaSystem doc).
+    const { prismaSystem } = await import('./prisma');
     const [cutoffHours, maxSessions] = await Promise.all([
       getConfig(null, 'ingestion.resume.cutoff_hours'),
       getConfig(null, 'ingestion.resume.max_sessions'),
     ]);
     const cutoff = new Date(Date.now() - cutoffHours * 60 * 60 * 1000);
-    const stuck = await prisma.ingestionSession.findMany({
+    const stuck = await prismaSystem.ingestionSession.findMany({
       where: {
         status: { in: ['pending', 'processing'] },
         customerCsv: { not: null },
