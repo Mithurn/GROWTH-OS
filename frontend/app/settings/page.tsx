@@ -500,23 +500,6 @@ function IntegrationsSection() {
   );
 }
 
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
-  }
-}
-
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
-
 function BillingSection() {
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -526,30 +509,23 @@ function BillingSection() {
     getBillingStatus()
       .then((res) => setStatus(res.data))
       .catch(() => setStatus(null));
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('billing') === 'success') {
+      setNote('Payment received — activation usually lands within a minute. Refresh to see it reflected.');
+    } else if (params.get('billing') === 'cancelled') {
+      setNote('Checkout cancelled — no changes made.');
+    }
   }, []);
 
   async function upgrade() {
     setBusy(true);
     setNote(null);
     try {
-      const scriptLoaded = await loadRazorpayScript();
-      if (!scriptLoaded || !window.Razorpay) throw new Error('Could not load the payment form.');
-
       const { data } = await createBillingCheckout();
-      const razorpay = new window.Razorpay({
-        subscription_id: data.subscriptionId,
-        key: data.keyId,
-        name: 'GrowthOS',
-        description: 'Real WhatsApp / Email sends on GrowthOS-managed keys',
-        theme: { color: '#5B4FFF' },
-        handler: () => {
-          setNote('Payment received — activation usually lands within a minute. Refresh to see it reflected.');
-        },
-      });
-      razorpay.open();
+      window.location.href = data.url;
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Could not start checkout');
-    } finally {
       setBusy(false);
     }
   }

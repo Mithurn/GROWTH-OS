@@ -539,7 +539,7 @@ export async function createBillingCheckout() {
     const body = await response.json().catch(() => null);
     throw new Error(body?.error ?? 'Failed to start checkout');
   }
-  return response.json() as Promise<{ success: boolean; data: { subscriptionId: string; keyId: string } }>;
+  return response.json() as Promise<{ success: boolean; data: { url: string } }>;
 }
 
 /**
