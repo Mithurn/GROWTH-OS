@@ -35,6 +35,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 import { app } from '../server';
+import { prisma } from '../lib/prisma';
 
 describe('GET /health', () => {
   it('returns 200 with status ok', async () => {
@@ -78,6 +79,7 @@ describe('Auth guard', () => {
 describe('Body validation', () => {
   beforeEach(() => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user_test' } }, error: null });
+    vi.mocked(prisma.agent.findUnique).mockResolvedValue({ companyId: 'co_test' } as never);
   });
 
   it('POST /api/campaigns rejects missing opportunityId with 400', async () => {
