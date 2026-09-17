@@ -25,7 +25,7 @@ export interface TestDb {
 }
 
 export async function startTestDb(): Promise<TestDb> {
-  const container = await new PostgreSqlContainer('postgres:16-alpine')
+  const container = await new PostgreSqlContainer('pgvector/pgvector:pg16')
     .withDatabase('growthos_test')
     .withUsername('test')
     .withPassword('test')

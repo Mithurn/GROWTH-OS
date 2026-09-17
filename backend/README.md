@@ -189,7 +189,7 @@ npm test               # unit tests — mocked Prisma/Redis/queues, no external 
 npm run test:integration   # real Postgres via Testcontainers — needs Docker running
 ```
 
-`test:integration` starts a real `postgres:16-alpine` container, runs the actual
+`test:integration` starts a real `pgvector/pgvector:pg16` container (Postgres 16 plus the `vector` extension Supabase ships), runs the actual
 `prisma migrate deploy` against it, and tests things the mocked suite can't — tenant
 isolation with two live tenants, real constraint enforcement, real concurrent writes.
 Needs a working Docker daemon. If you're on Colima rather than Docker Desktop, Ryuk
