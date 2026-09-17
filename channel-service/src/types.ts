@@ -21,6 +21,7 @@ export interface QueuedMessage {
   sequenceNumber: number;
   createdAt: Date;
   lastUpdatedAt: Date;
+  traceCarrier?: Record<string, string>;
 }
 
 export interface WebhookEvent {

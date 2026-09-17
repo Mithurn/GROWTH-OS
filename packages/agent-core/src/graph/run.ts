@@ -1,6 +1,28 @@
 import { END, MemorySaver, START, StateGraph, Annotation } from '@langchain/langgraph';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
 import type { HarnessOptions, Plan, RunContext, TraceStep, ToolSpec } from '../types';
 import { catalogFor, invokeTool } from '../tools/registry';
+
+const tracer = trace.getTracer('growthos-agent');
+
+async function withNodeSpan<T>(
+  name: string,
+  attrs: Record<string, string | number>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return tracer.startActiveSpan(name, async (span) => {
+    for (const [k, v] of Object.entries(attrs)) span.setAttribute(k, v);
+    try {
+      return await fn();
+    } catch (err) {
+      span.recordException(err as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+}
 
 const AgentState = Annotation.Root({
   companyId: Annotation<string>,
@@ -210,8 +232,25 @@ export function buildGrowthAgent(options: HarnessOptions) {
   };
 
   return new StateGraph(AgentState)
-    .addNode('planner', plannerNode)
-    .addNode('tools', toolsNode)
+    .addNode('planner', (state) =>
+      withNodeSpan(
+        'langgraph.planner',
+        { 'langgraph.run_id': state.runId, 'langgraph.company_id': state.companyId },
+        () => plannerNode(state),
+      ),
+    )
+    .addNode('tools', (state) =>
+      withNodeSpan(
+        'langgraph.tools',
+        {
+          'langgraph.run_id': state.runId,
+          'langgraph.company_id': state.companyId,
+          'langgraph.tools':
+            state.pending.type === 'calls' ? state.pending.calls.map((c) => c.name).join(',') : '',
+        },
+        () => toolsNode(state),
+      ),
+    )
     .addEdge(START, 'planner')
     .addConditionalEdges('planner', route, { tools: 'tools', planner: 'planner', [END]: END })
     .addConditionalEdges('tools', afterTools, { planner: 'planner', [END]: END })
@@ -251,15 +290,20 @@ export async function runGrowthAgent(
     guardrails?: RunContext['guardrails'];
   },
 ) {
-  return graph.invoke(
-    {
-      companyId: input.companyId,
-      goal: input.goal,
-      runId: input.runId,
-      agentId: input.agentId ?? '',
-      guardrailsJson: JSON.stringify(input.guardrails ?? {}),
-      startedAtMs: Date.now(),
-    },
-    { configurable: { thread_id: input.runId }, recursionLimit: 32 },
+  return withNodeSpan(
+    'langgraph.run',
+    { 'langgraph.run_id': input.runId, 'langgraph.company_id': input.companyId },
+    () =>
+      graph.invoke(
+        {
+          companyId: input.companyId,
+          goal: input.goal,
+          runId: input.runId,
+          agentId: input.agentId ?? '',
+          guardrailsJson: JSON.stringify(input.guardrails ?? {}),
+          startedAtMs: Date.now(),
+        },
+        { configurable: { thread_id: input.runId }, recursionLimit: 32 },
+      ),
   );
 }

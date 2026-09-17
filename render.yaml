@@ -56,6 +56,10 @@ services:
         sync: false
       - key: PLATFORM_TWILIO_WHATSAPP_NUMBER
         sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false  # Langfuse: https://cloud.langfuse.com/api/public/otel — unset = console only
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false  # Authorization=Basic <b64(pk:sk)>,x-langfuse-ingestion-version=4
 
   - type: web
     name: xeno-channel-service
@@ -65,7 +69,7 @@ services:
     branch: main
     autoDeployTrigger: checksPass
     healthCheckPath: /health
-    buildCommand: cd channel-service && npm install && npx esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js
+    buildCommand: cd channel-service && npm install && npm run build
     startCommand: cd channel-service && node dist/server.js
     envVars:
       - key: PORT
@@ -76,3 +80,7 @@ services:
         sync: false  # Must match backend WEBHOOK_SECRET exactly
       - key: FAILURE_RATE
         value: 10
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false

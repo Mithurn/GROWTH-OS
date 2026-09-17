@@ -1,11 +1,17 @@
+import 'dotenv/config';
+import { initTracing } from './lib/tracing';
+// Must run before any traced module does its first work — registers the
+// global tracer provider every `tracer.startActiveSpan()` call picks up.
+initTracing();
+
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
-import 'dotenv/config';
 
 import { logger } from './lib/logger';
+import { tracingMiddleware } from './lib/tracing-middleware';
 import { startWorkers } from './lib/queues';
 import { agentOrchestrator } from './services/agent-orchestrator';
 import { generalLimiter } from './middleware/rate-limits';
@@ -30,10 +36,6 @@ import { assertRedisReachable } from './lib/redis';
 
 const app = express();
 
-app.use((_req, res, next) => {
-  res.setHeader('x-request-id', `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-  next();
-});
 app.use(helmet());
 
 /**
@@ -58,6 +60,7 @@ app.use(
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
+app.use(tracingMiddleware);
 app.use('/api', generalLimiter);
 
 // Health checks sit outside /api so they are not rate limited — Render polls the

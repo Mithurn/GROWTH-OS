@@ -5,7 +5,8 @@
   "main": "src/server.ts",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "build": "npx esbuild src/server.ts --bundle --platform=node --target=node22 --alias:@opentelemetry/api=./node_modules/@opentelemetry/api/build/src/index.js --outfile=dist/server.js"
   },
   "type": "commonjs",
   "devDependencies": {
@@ -15,6 +16,11 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-trace-node": "^2.11.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "resend": "^6.16.0",
