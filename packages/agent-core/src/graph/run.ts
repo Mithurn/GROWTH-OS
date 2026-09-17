@@ -215,7 +215,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
     .addEdge(START, 'planner')
     .addConditionalEdges('planner', route, { tools: 'tools', planner: 'planner', [END]: END })
     .addConditionalEdges('tools', afterTools, { planner: 'planner', [END]: END })
-    .compile({ checkpointer: new MemorySaver() });
+    .compile({ checkpointer: options.checkpointer ?? new MemorySaver() });
 }
 
 function isInterrupt(result: unknown): boolean {
