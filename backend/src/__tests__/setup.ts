@@ -32,6 +32,8 @@ vi.mock('../lib/queues', () => ({
 // Prevent Prisma from connecting
 vi.mock('../lib/prisma', () => ({
   prisma: {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(0),
     agent: {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),
@@ -86,6 +88,7 @@ vi.mock('../lib/prisma', () => ({
     campaign: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
+      findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
     },
     integration: {

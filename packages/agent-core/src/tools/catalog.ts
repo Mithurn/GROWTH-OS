@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import {
+  CheckFaithfulnessArgs,
   CheckGuardrailsArgs,
   CreateOpportunityArgs,
   DraftCampaignArgs,
@@ -66,7 +67,7 @@ export const TOOL_CATALOG: ToolSpec[] = [
   spec(
     'growthos_search_prior_campaigns',
     'read',
-    'Semantic search over past campaign outcomes. Not implemented until Phase 7 (pgvector). Calling it returns an honest empty result and the reason — do not treat emptiness as "no history."',
+    'Semantic search over this tenant\'s past campaign outcomes (objective, message, measured result). Ground a new strategy in what actually happened before, not a guess. Empty results mean no embedded history yet, not "no campaigns ever sent."',
     SearchPriorCampaignsArgs,
   ),
   spec(
@@ -74,6 +75,12 @@ export const TOOL_CATALOG: ToolSpec[] = [
     'read',
     'Deterministic budget and channel-allowlist check. Pass potential_revenue from estimate_impact, not a number you invented. Returns { allowed, reason }.',
     CheckGuardrailsArgs,
+  ),
+  spec(
+    'growthos_check_faithfulness',
+    'read',
+    'Retrieves this tenant\'s real similar past campaigns and scores whether a drafted message is grounded in them — a claim the draft makes that no retrieved history supports is a hallucination, not a strategy. Pass the exact draft text. Returns { groundedness_score, unsupported_claims, grounded_in }.',
+    CheckFaithfulnessArgs,
   ),
   spec(
     'growthos_think',

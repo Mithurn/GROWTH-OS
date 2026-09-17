@@ -39,6 +39,11 @@ export const CheckGuardrailsArgs = z.object({
   channel: z.string().optional(),
 });
 
+/** The faithfulness specialist's own tool: score a draft against real retrieved history before it ships. */
+export const CheckFaithfulnessArgs = z.object({
+  draft: z.string().min(1).max(4000),
+});
+
 export const ThinkArgs = z.object({
   thought: z.string().min(1).max(2000),
 });
