@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { prisma } from '../../lib/prisma';
 import { buildToolHandlers } from '../agent-tool-handlers';
+import * as campaignEmbeddings from '../campaign-embeddings';
 import type { RunContext } from '@growthos/agent-core';
+
+const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+
+vi.mock('../campaign-embeddings', () => ({
+  searchSimilarCampaigns: vi.fn(),
+}));
+
+vi.mock('../../config/openrouter', () => ({
+  openai: { chat: { completions: { create: mockCreate } } },
+  openRouterConfig: { configured: true, defaultModel: 'test-model' },
+}));
 
 const ctx: RunContext = {
   companyId: 'co_real',
@@ -135,5 +147,76 @@ describe('live mutating handlers', () => {
     await expect(
       live.growthos_create_opportunity({ opportunity_type: 'Retention-Churn' }, ctx),
     ).rejects.toThrow(/not bound in shadow/i);
+  });
+});
+
+describe('growthos_check_faithfulness', () => {
+  beforeEach(() => {
+    vi.mocked(campaignEmbeddings.searchSimilarCampaigns).mockReset();
+    mockCreate.mockReset();
+  });
+
+  it('scores a draft against real retrieved history, not general knowledge', async () => {
+    vi.mocked(campaignEmbeddings.searchSimilarCampaigns).mockResolvedValue([
+      { campaignId: 'camp_1', content: 'VIP reward: 10% off, WhatsApp', distance: 0.2 },
+    ]);
+    mockCreate.mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            groundedness_score: 85,
+            unsupported_claims: ['free shipping'],
+            reasoning: 'Discount matches history; free shipping is not in any retrieved campaign.',
+          }),
+        },
+      }],
+    });
+
+    const result = (await handlers.growthos_check_faithfulness(
+      { draft: '10% off plus free shipping for our VIPs' },
+      ctx,
+    )) as Record<string, unknown>;
+
+    expect(result.groundedness_score).toBe(85);
+    expect(result.unsupported_claims).toEqual(['free shipping']);
+    expect(result.grounded_in).toEqual(['camp_1']);
+    expect(campaignEmbeddings.searchSimilarCampaigns).toHaveBeenCalledWith(
+      'co_real',
+      '10% off plus free shipping for our VIPs',
+      3,
+    );
+  });
+
+  it('reports unverifiable, not a fabricated pass, when there is no history to check against', async () => {
+    vi.mocked(campaignEmbeddings.searchSimilarCampaigns).mockResolvedValue([]);
+
+    const result = (await handlers.growthos_check_faithfulness({ draft: 'anything' }, ctx)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(result.groundedness_score).toBeNull();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('reports unverifiable, not a fabricated pass, when the judge call fails', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(campaignEmbeddings.searchSimilarCampaigns).mockResolvedValue([
+        { campaignId: 'camp_1', content: 'x', distance: 0.3 },
+      ]);
+      mockCreate.mockRejectedValue(new Error('upstream timeout'));
+
+      const pending = handlers.growthos_check_faithfulness({ draft: 'anything' }, ctx);
+      // parseWithRetry backs off 1s then 2s between its 3 attempts — fast-forward past both.
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = (await pending) as Record<string, unknown>;
+
+      expect(result.groundedness_score).toBeNull();
+      expect(result.reasoning).toMatch(/unverified/i);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

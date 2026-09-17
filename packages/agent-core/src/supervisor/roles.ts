@@ -20,6 +20,11 @@ export const ROLE_TOOLS: Record<SupervisorRole, string[]> = {
     'growthos_draft_campaign',
     ...SHARED_TOOLS,
   ],
+  faithfulness: [
+    'growthos_check_faithfulness',
+    'growthos_search_prior_campaigns',
+    ...SHARED_TOOLS,
+  ],
   guardrail: [
     'growthos_check_guardrails',
     'growthos_read_campaign_performance',
@@ -27,5 +32,10 @@ export const ROLE_TOOLS: Record<SupervisorRole, string[]> = {
   ],
 };
 
-/** Fixed pipeline order — see run.ts for why the routing itself is deterministic, not an LLM call. */
-export const ROLE_SEQUENCE: SupervisorRole[] = ['discovery', 'strategy', 'guardrail'];
+/**
+ * Fixed pipeline order — see run.ts for why the routing itself is
+ * deterministic, not an LLM call. Faithfulness runs right after Strategy,
+ * before Guardrail: check the draft is telling the truth before checking
+ * whether it's within budget, not the other way round.
+ */
+export const ROLE_SEQUENCE: SupervisorRole[] = ['discovery', 'strategy', 'faithfulness', 'guardrail'];
