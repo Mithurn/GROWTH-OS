@@ -11,10 +11,6 @@ export interface ActivityEvent {
   createdAt: Date | string;
 }
 
-/**
- * Publish a tenant-scoped activity event onto Redis Streams (with an
- * in-process ring as the zero-Redis local fallback).
- */
 export function emitActivity(action: ActivityEvent): void {
   void appendTenantEvent(action.companyId, action.actionType, {
     id: action.id,
