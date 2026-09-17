@@ -40,6 +40,8 @@ export interface ImpactEstimateInput {
    * Higher = more history needed before the tenant's own data dominates the estimate.
    */
   priorWeight?: number;
+  /** z-score for the revenue interval width. Default 1.645 = ~90%. */
+  confidenceZ?: number;
 }
 
 export interface ImpactEstimate {
@@ -65,6 +67,7 @@ export interface ImpactEstimate {
 
 export const DEFAULT_GLOBAL_PRIOR_CONVERSION_RATE = 0.05;
 export const DEFAULT_PRIOR_WEIGHT = 20;
+export const DEFAULT_CONFIDENCE_Z = 1.645;
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -86,9 +89,9 @@ export function estimateImpact(input: ImpactEstimateInput): ImpactEstimate {
   // for a UI-facing range (not a scientific confidence interval) — see the backtest
   // task in docs/PROGRESS.md Phase 1 for validating this against real outcomes.
   const standardError = Math.sqrt((shrunkRate * (1 - shrunkRate)) / Math.max(effectiveN, 1));
-  const Z_90 = 1.645;
-  const lowRate = Math.max(0, shrunkRate - Z_90 * standardError);
-  const highRate = Math.min(1, shrunkRate + Z_90 * standardError);
+  const confidenceZ = input.confidenceZ ?? DEFAULT_CONFIDENCE_Z;
+  const lowRate = Math.max(0, shrunkRate - confidenceZ * standardError);
+  const highRate = Math.min(1, shrunkRate + confidenceZ * standardError);
 
   const revenueAt = (rate: number) => round2(rate * input.audienceSize * input.avgOrderValue);
 

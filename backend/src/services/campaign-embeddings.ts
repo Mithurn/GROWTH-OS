@@ -17,10 +17,17 @@ function campaignOutcomeText(campaign: {
   messageContent: string;
   status: string;
   performance: unknown;
+  currency: string;
+  locale: string;
 }): string {
   const perf = campaign.performance as { sent?: number; converted?: number; revenue?: number } | null;
+  const formattedRevenue = new Intl.NumberFormat(campaign.locale, {
+    style: 'currency',
+    currency: campaign.currency,
+    maximumFractionDigits: 0,
+  }).format(perf?.revenue ?? 0);
   const outcome = perf?.sent
-    ? `Measured outcome: ${perf.sent} sent, ${perf.converted ?? 0} converted, ₹${perf.revenue ?? 0} revenue.`
+    ? `Measured outcome: ${perf.sent} sent, ${perf.converted ?? 0} converted, ${formattedRevenue} revenue.`
     : `Status: ${campaign.status} (no delivery outcome recorded yet).`;
   return [
     `Objective: ${campaign.objective}`,
@@ -46,10 +53,11 @@ export async function embedCampaignOutcome(campaignId: string): Promise<void> {
       messageContent: true,
       status: true,
       performance: true,
+      company: { select: { currency: true, locale: true } },
     },
   });
 
-  const content = campaignOutcomeText(campaign);
+  const content = campaignOutcomeText({ ...campaign, currency: campaign.company.currency, locale: campaign.company.locale });
   const vector = await embed(content);
   const literal = toVectorLiteral(vector);
 

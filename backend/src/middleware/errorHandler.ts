@@ -16,7 +16,9 @@ export function errorHandler(
   if (err instanceof MulterError) {
     const message =
       err.code === 'LIMIT_FILE_SIZE'
-        ? 'File is too large. The maximum upload size is 10 MB.'
+        // The exact limit lives in config (upload.max_bytes), not here — restating
+        // a number in this message would drift from it the next time it changes.
+        ? 'File is too large.'
         : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'
           ? 'Unexpected file upload.'
           : 'Upload rejected.';
