@@ -9,7 +9,7 @@ import type { AuthRequest } from './auth';
  */
 export function requireOwnedAgent(paramName = 'id') {
   return async function (req: AuthRequest, res: Response, next: NextFunction) {
-    const id = req.params[paramName];
+    const id = req.params[paramName] as string;
     if (!id) return res.status(400).json({ error: `Missing ${paramName}` });
 
     const agent = await prisma.agent.findUnique({
@@ -27,7 +27,7 @@ export function requireOwnedAgent(paramName = 'id') {
 
 export function requireOwnedOpportunity(paramName = 'id') {
   return async function (req: AuthRequest, res: Response, next: NextFunction) {
-    const id = req.params[paramName];
+    const id = req.params[paramName] as string;
     if (!id) return res.status(400).json({ error: `Missing ${paramName}` });
 
     const opportunity = await prisma.opportunity.findUnique({

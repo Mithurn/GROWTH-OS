@@ -27,7 +27,7 @@ const SEGMENTS = [
 ] as const;
 
 function pickOpportunityType(metrics?: Record<string, unknown>): (typeof SEGMENTS)[number]['type'] {
-  let best = SEGMENTS[0];
+  let best: (typeof SEGMENTS)[number] = SEGMENTS[0];
   let bestN = -1;
   for (const segment of SEGMENTS) {
     const n = num(metrics?.[segment.key]);
