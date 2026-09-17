@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import { SpanStatusCode } from '@opentelemetry/api';
 import type { WebhookEvent } from './types';
+import { injectTraceHeaders, tracer } from './tracing';
 
 const CRM_WEBHOOK_URL = process.env.CRM_WEBHOOK_URL || 'http://localhost:3001/api/webhooks/channel-status';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
@@ -26,10 +28,10 @@ async function sendWebhookWithRetry(event: WebhookEvent, retryCount = 0): Promis
 
     const response = await fetch(CRM_WEBHOOK_URL, {
       method: 'POST',
-      headers: {
+      headers: injectTraceHeaders({
         'Content-Type': 'application/json',
         'X-Signature': signature,
-      },
+      }),
       body: payload,
     });
 
@@ -57,8 +59,17 @@ async function sendWebhookWithRetry(event: WebhookEvent, retryCount = 0): Promis
 }
 
 export async function sendWebhook(event: WebhookEvent): Promise<void> {
-  // Fire and forget - don't block the queue processor
-  sendWebhookWithRetry(event).catch((error) => {
-    console.error('[Webhook] Unhandled error:', error);
+  return tracer.startActiveSpan(`channel.webhook ${event.status}`, async (span) => {
+    span.setAttribute('channel.communication_id', event.communicationId);
+    span.setAttribute('channel.status', event.status);
+    try {
+      await sendWebhookWithRetry(event);
+    } catch (err) {
+      span.recordException(err as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+      throw err;
+    } finally {
+      span.end();
+    }
   });
 }

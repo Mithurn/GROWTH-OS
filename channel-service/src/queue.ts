@@ -1,6 +1,7 @@
 import type { QueuedMessage, SendRequest, CommunicationStatus } from './types';
 import { SequenceNumbers } from './types';
 import { getProvider } from './providers';
+import { captureTraceCarrier } from './tracing';
 
 // providerMessageId → message entry
 // Real providers (Resend, Twilio) use this to look up communicationId when
@@ -21,6 +22,7 @@ export async function queueMessage(request: SendRequest): Promise<string> {
     sequenceNumber: SequenceNumbers.QUEUED,
     createdAt:    new Date(),
     lastUpdatedAt: new Date(),
+    traceCarrier: captureTraceCarrier(),
   });
 
   return providerMessageId;

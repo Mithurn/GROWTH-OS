@@ -1,10 +1,12 @@
+import { trace } from '@opentelemetry/api';
+
 /**
  * Optional Sentry reporting. No SDK dependency — posts the store endpoint when
  * `SENTRY_DSN` is set, and is a no-op otherwise so local/CI stay silent.
  *
  * DSN shape: https://<key>@<host>/<projectId>
  */
-export function captureException(err: unknown, context?: Record<string, unknown>): void {
+export function captureException(err: unknown, extra?: Record<string, unknown>): void {
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) return;
 
@@ -12,6 +14,7 @@ export function captureException(err: unknown, context?: Record<string, unknown>
   if (!parsed) return;
 
   const error = err instanceof Error ? err : new Error(String(err));
+  const sc = trace.getActiveSpan()?.spanContext();
   const payload = {
     message: error.message,
     exception: {
@@ -23,7 +26,8 @@ export function captureException(err: unknown, context?: Record<string, unknown>
         },
       ],
     },
-    extra: context,
+    extra: { ...extra, traceId: sc?.traceId },
+    contexts: sc ? { trace: { trace_id: sc.traceId, span_id: sc.spanId } } : undefined,
     timestamp: Date.now() / 1000,
     platform: 'node',
     server_name: process.env.RENDER_SERVICE_NAME ?? 'growthos-backend',
