@@ -1,5 +1,6 @@
 import { SHADOW_KINDS, TOOL_CATALOG } from './catalog';
-import type { PermissionMode, RunContext, ToolCall, ToolHandler, ToolSpec } from '../types';
+import { ROLE_TOOLS } from '../supervisor/roles';
+import type { PermissionMode, RunContext, SupervisorRole, ToolCall, ToolHandler, ToolSpec } from '../types';
 
 export class ToolDeniedError extends Error {
   readonly code = 'tool_denied';
@@ -12,11 +13,11 @@ export class ToolDeniedError extends Error {
   }
 }
 
-export function catalogFor(mode: PermissionMode): ToolSpec[] {
-  if (mode === 'shadow') {
-    return TOOL_CATALOG.filter((t) => SHADOW_KINDS.includes(t.kind));
-  }
-  return TOOL_CATALOG;
+export function catalogFor(mode: PermissionMode, role?: SupervisorRole): ToolSpec[] {
+  const byMode = mode === 'shadow' ? TOOL_CATALOG.filter((t) => SHADOW_KINDS.includes(t.kind)) : TOOL_CATALOG;
+  if (!role) return byMode;
+  const allowed = new Set(ROLE_TOOLS[role]);
+  return byMode.filter((t) => allowed.has(t.name));
 }
 
 /**
@@ -33,14 +34,15 @@ export async function invokeTool(
   ctx: RunContext,
   handlers: Record<string, ToolHandler>,
 ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
-  const spec = catalogFor(ctx.mode).find((t) => t.name === call.name);
+  const spec = catalogFor(ctx.mode, ctx.role).find((t) => t.name === call.name);
   if (!spec) {
-    const known = catalogFor(ctx.mode)
+    const known = catalogFor(ctx.mode, ctx.role)
       .map((t) => t.name)
       .join(', ');
+    const scope = ctx.role ? `In ${ctx.mode} mode, as the ${ctx.role} specialist,` : `In ${ctx.mode} mode`;
     return {
       ok: false,
-      error: `Unknown or unbound tool "${call.name}". In ${ctx.mode} mode you may call: ${known}. Mutating tools are not bound.`,
+      error: `Unknown or unbound tool "${call.name}". ${scope} you may call: ${known}. Mutating tools are not bound.`,
     };
   }
 

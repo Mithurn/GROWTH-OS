@@ -71,7 +71,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
   const mode = options.mode ?? 'shadow';
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const maxWallMs = options.maxWallMs ?? DEFAULT_MAX_WALL_MS;
-  const tools = catalogFor(mode);
+  const tools = catalogFor(mode, options.role);
 
   const stopForWall = async (state: HarnessState): Promise<Partial<HarnessState>> => {
     const step: TraceStep = {
@@ -79,7 +79,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
       error: `wall-clock slice (${maxWallMs}ms) exceeded`,
       latencyMs: 0,
     };
-    await options.onStep?.(step, ctxOf(state, mode));
+    await options.onStep?.(step, ctxOf(state, mode, options.role));
     return {
       status: 'stopped',
       summary: state.summary || 'Stopped: wall-clock slice exceeded.',
@@ -102,7 +102,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
 
     if (plan.type === 'finish') {
       const step: TraceStep = { node: 'planner', tool: 'growthos_finish', args: { summary: plan.summary }, latencyMs };
-      await options.onStep?.(step, ctxOf(state, mode));
+      await options.onStep?.(step, ctxOf(state, mode, options.role));
       return {
         pending: plan,
         status: 'finished',
@@ -120,7 +120,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
         error: stopped ? 'planner returned no tool calls twice — stopping rather than spinning' : 'planner returned no tool calls',
         latencyMs,
       };
-      await options.onStep?.(step, ctxOf(state, mode));
+      await options.onStep?.(step, ctxOf(state, mode, options.role));
       return {
         pending: { type: 'idle' } as Plan,
         idleStreak,
@@ -131,7 +131,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
     }
 
     const step: TraceStep = { node: 'planner', args: plan, latencyMs };
-    await options.onStep?.(step, ctxOf(state, mode));
+    await options.onStep?.(step, ctxOf(state, mode, options.role));
     return { pending: plan, steps: [step], idleStreak: 0 };
   };
 
@@ -140,7 +140,7 @@ export function buildGrowthAgent(options: HarnessOptions) {
     const plan = state.pending;
     if (plan.type !== 'calls') return {};
 
-    const ctx = ctxOf(state, mode);
+    const ctx = ctxOf(state, mode, options.role);
     const newSteps: TraceStep[] = [];
     let stepCount = state.stepCount;
     let summary = state.summary;
@@ -261,7 +261,7 @@ function isInterrupt(result: unknown): boolean {
   return Boolean(result && typeof result === 'object' && (result as { interrupt?: boolean }).interrupt);
 }
 
-function ctxOf(state: HarnessState, mode: HarnessOptions['mode']): RunContext {
+function ctxOf(state: HarnessState, mode: HarnessOptions['mode'], role: HarnessOptions['role']): RunContext {
   let guardrails: RunContext['guardrails'];
   if (state.guardrailsJson) {
     try {
@@ -277,6 +277,7 @@ function ctxOf(state: HarnessState, mode: HarnessOptions['mode']): RunContext {
     goal: state.goal,
     guardrails,
     mode: mode ?? 'shadow',
+    role,
   };
 }
 
