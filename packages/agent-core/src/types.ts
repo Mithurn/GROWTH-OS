@@ -4,6 +4,16 @@ export type ToolKind = 'read' | 'mutating' | 'external' | 'control';
 export type PermissionMode = 'shadow' | 'live';
 export type RunStatus = 'running' | 'finished' | 'stopped';
 
+/**
+ * A supervisor-orchestrated specialist. Discovery finds and sizes
+ * opportunities; Strategy drafts a campaign against one; Guardrail runs the
+ * deterministic budget/channel check before anything could launch.
+ * Faithfulness (grounding a draft against real retrieved campaign history
+ * before it ships) is deliberately not here yet — it needs the RAG pipeline
+ * (Phase 7) to have real data to ground against, not a hollow tool.
+ */
+export type SupervisorRole = 'discovery' | 'strategy' | 'guardrail';
+
 export interface RunContext {
   companyId: string;
   runId: string;
@@ -11,6 +21,14 @@ export interface RunContext {
   goal: string;
   guardrails?: { max_budget?: number; frequency_cap?: number; channels?: string[] };
   mode: PermissionMode;
+  /**
+   * Set only inside a supervisor-orchestrated run. When present, `invokeTool`
+   * enforces it as a second, narrower deny boundary on top of `mode` — a
+   * role cannot call a tool outside its own scope even if it hallucinates
+   * the name, the same deny-first guarantee `mode` already gives shadow vs
+   * live. Absent for the original single-planner graph, which is unchanged.
+   */
+  role?: SupervisorRole;
 }
 
 export interface ToolSpec<TArgs = unknown> {
@@ -72,4 +90,6 @@ export interface HarnessOptions {
    * LangGraph's `interrupt()` and waits on a human.
    */
   checkpointer?: import('@langchain/langgraph-checkpoint').BaseCheckpointSaver;
+  /** Set only by the supervisor. Narrows both the offered and the enforced tool set — see RunContext.role. */
+  role?: SupervisorRole;
 }
