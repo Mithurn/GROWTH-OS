@@ -147,8 +147,10 @@ export async function uploadCustomerCSV(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
+  const token = await getAuthToken();
   const response = await fetch(`${API_BASE_URL}/upload/customers`, {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
 
@@ -163,8 +165,10 @@ export async function uploadOrderCSV(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
+  const token = await getAuthToken();
   const response = await fetch(`${API_BASE_URL}/upload/orders`, {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
 
