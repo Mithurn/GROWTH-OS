@@ -6,13 +6,12 @@ export type RunStatus = 'running' | 'finished' | 'stopped';
 
 /**
  * A supervisor-orchestrated specialist. Discovery finds and sizes
- * opportunities; Strategy drafts a campaign against one; Guardrail runs the
- * deterministic budget/channel check before anything could launch.
- * Faithfulness (grounding a draft against real retrieved campaign history
- * before it ships) is deliberately not here yet — it needs the RAG pipeline
- * (Phase 7) to have real data to ground against, not a hollow tool.
+ * opportunities; Strategy drafts a campaign against one, grounded in real
+ * retrieved history; Guardrail runs the deterministic budget/channel check;
+ * Faithfulness scores the draft against real retrieved campaigns and flags
+ * any unsupported claim before anything could launch.
  */
-export type SupervisorRole = 'discovery' | 'strategy' | 'guardrail';
+export type SupervisorRole = 'discovery' | 'strategy' | 'guardrail' | 'faithfulness';
 
 export interface RunContext {
   companyId: string;

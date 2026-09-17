@@ -8,7 +8,9 @@ const handlers: Record<string, ToolHandler> = {
   growthos_query_metrics: async () => ({ totalCustomers: 500, avgOrderValue: 1200 }),
   growthos_list_opportunities: async () => ({ audience_size: 174, data: [{ id: 'opp_1' }] }),
   growthos_estimate_impact: async () => ({ expectedRevenue: 9000, lowRevenue: 4000, highRevenue: 14000 }),
+  growthos_search_prior_campaigns: async () => ({ results: [{ campaign_id: 'camp_0', content: 'past VIP win-back', similarity: 0.8 }] }),
   growthos_draft_campaign: async () => ({ campaignId: 'camp_1' }),
+  growthos_check_faithfulness: async () => ({ groundedness_score: 92, unsupported_claims: [], grounded_in: ['camp_0'] }),
   growthos_check_guardrails: async () => ({ allowed: true, reason: null }),
   growthos_think: async (args) => ({ noted: true, thought: (args as { thought: string }).thought }),
   growthos_finish: async (args) => ({ summary: (args as { summary: string }).summary }),
@@ -33,18 +35,32 @@ describe('role enforcement', () => {
     expect((await invokeTool({ name: 'growthos_think', args: { thought: 'x' } }, ctx, handlers)).ok).toBe(true);
     expect((await invokeTool({ name: 'growthos_finish', args: { summary: 'x' } }, ctx, handlers)).ok).toBe(true);
   });
+
+  it('denies a guardrail-role context calling the faithfulness judge', async () => {
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'guardrail' };
+    const outcome = await invokeTool({ name: 'growthos_check_faithfulness', args: { draft: 'x' } }, ctx, handlers);
+    expect(outcome.ok).toBe(false);
+  });
+
+  it('allows the faithfulness role to search prior campaigns', async () => {
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'faithfulness' };
+    const outcome = await invokeTool({ name: 'growthos_search_prior_campaigns', args: { query: 'x', limit: 3 } }, ctx, handlers);
+    expect(outcome.ok).toBe(true);
+  });
 });
 
 describe('runSupervisedAgent', () => {
-  it('runs discovery, strategy, guardrail in order when discovery finds an audience', async () => {
+  it('runs discovery, strategy, faithfulness, guardrail in order when discovery finds an audience', async () => {
     const seen: string[] = [];
     // scriptedPlanner is stateful across the whole run — each buildGrowthAgent call gets a fresh
-    // graph but shares this one planner instance, so turns advance sequentially across all three roles.
+    // graph but shares this one planner instance, so turns advance sequentially across all four roles.
     const planner = scriptedPlanner([
       calls([{ name: 'growthos_list_opportunities', args: {} }]),
       finish('found 174 in Retention-VIP'),
       calls([{ name: 'growthos_estimate_impact', args: { audience_size: 174, avg_order_value: 1200 } }]),
       finish('drafted a campaign at ₹9000 expected'),
+      calls([{ name: 'growthos_check_faithfulness', args: { draft: 'Win back VIP customers with 15% off' } }]),
+      finish('grounded at 92'),
       calls([{ name: 'growthos_check_guardrails', args: { potential_revenue: 9000 } }]),
       finish('guardrails pass'),
     ]);
@@ -60,12 +76,13 @@ describe('runSupervisedAgent', () => {
       },
     });
 
-    expect(result.roles.map((r) => r.role)).toEqual(['discovery', 'strategy', 'guardrail']);
+    expect(result.roles.map((r) => r.role)).toEqual(['discovery', 'strategy', 'faithfulness', 'guardrail']);
     expect(result.status).toBe('finished');
     expect(seen).toEqual([
       'start->discovery',
       'discovery->strategy',
-      'strategy->guardrail',
+      'strategy->faithfulness',
+      'faithfulness->guardrail',
       'guardrail->end',
     ]);
   });
@@ -98,6 +115,7 @@ describe('runSupervisedAgent', () => {
       finish('a'),
       finish('b'),
       finish('c'),
+      finish('d'),
     ]);
 
     await runSupervisedAgent({
@@ -112,7 +130,12 @@ describe('runSupervisedAgent', () => {
     });
 
     expect(new Set(threadIds)).toEqual(
-      new Set(['run_threads:discovery', 'run_threads:strategy', 'run_threads:guardrail']),
+      new Set([
+        'run_threads:discovery',
+        'run_threads:strategy',
+        'run_threads:faithfulness',
+        'run_threads:guardrail',
+      ]),
     );
   });
 });
