@@ -2,6 +2,8 @@ export { AgentState, type AgentStateType } from './state';
 export { buildShadowGraph } from './graph/shadow';
 export { buildGrowthAgent, runGrowthAgent } from './graph/run';
 export { createPostgresCheckpointer } from './checkpoint/postgres';
+export { runSupervisedAgent, type RoleResult, type SupervisorOptions } from './supervisor/run';
+export { ROLE_TOOLS, ROLE_SEQUENCE } from './supervisor/roles';
 export { TOOL_CATALOG, SHADOW_KINDS } from './tools/catalog';
 export { catalogFor, invokeTool, ToolDeniedError, stripCompanyIdFromArgs } from './tools/registry';
 export { scriptedPlanner, calls, finish } from './planner/scripted';
@@ -21,4 +23,5 @@ export type {
   ToolHandler,
   HarnessOptions,
   PreToolUse,
+  SupervisorRole,
 } from './types';
