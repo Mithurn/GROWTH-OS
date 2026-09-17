@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { getSegmentCache, setSegmentCache } from '../lib/redis';
+import { getConfig } from '../lib/config';
 import { parseWithRetry } from '../lib/ai';
 import {
   OPPORTUNITY_TYPES as OPPORTUNITY_TYPE_ENUM,
@@ -261,6 +262,12 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
 
     const createdOpportunities: DiscoveredOpportunity[] = [];
 
+    const [globalPriorConversionRate, priorWeight, confidenceZ] = await Promise.all([
+      getConfig(companyId, 'estimator.global_prior_conversion_rate'),
+      getConfig(companyId, 'estimator.prior_weight'),
+      getConfig(companyId, 'estimator.confidence_z'),
+    ]);
+
     for (const oppData of opportunitiesData) {
       try {
         const existing = await prisma.opportunity.findFirst({
@@ -286,6 +293,9 @@ Respond ONLY with a valid JSON array. No markdown, no explanation outside the JS
           audienceSize: finalAudienceSize,
           avgOrderValue: Number(analytics.avgOrderValue) || 0,
           historical,
+          globalPriorConversionRate,
+          priorWeight,
+          confidenceZ,
         });
 
         const opportunity = await prisma.opportunity.create({

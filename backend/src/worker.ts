@@ -10,6 +10,7 @@ initSentry();
 import { logger } from './lib/logger';
 import { startWorkers, closeWorkers } from './lib/queues';
 import { assertRedisReachable } from './lib/redis';
+import { assertConfigDefaultsSeeded } from './lib/config';
 import { prisma } from './lib/prisma';
 
 /**
@@ -21,7 +22,8 @@ import { prisma } from './lib/prisma';
  */
 async function main(): Promise<void> {
   await assertRedisReachable();
-  startWorkers();
+  await assertConfigDefaultsSeeded();
+  await startWorkers();
   logger.info('Worker process started');
 }
 

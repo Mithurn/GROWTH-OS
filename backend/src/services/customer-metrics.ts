@@ -3,7 +3,9 @@ import {
   toNumber,
   computeRfm,
   type CustomerAggregate,
+  type ComputeRfmParams,
 } from '@growthos/domain';
+import { getConfig } from '../lib/config';
 
 export interface CustomerMetricsRecord {
   customer_id: string;
@@ -88,8 +90,13 @@ function aggregateOrdersByCustomer(orders: OrderRow[]): Map<string, CustomerAggr
   return aggregates;
 }
 
-function buildMetrics(customer: CustomerRow, aggregate: CustomerAggregate | undefined, now: Date): CustomerMetricsRecord {
-  const rfm = computeRfm(aggregate, now);
+function buildMetrics(
+  customer: CustomerRow,
+  aggregate: CustomerAggregate | undefined,
+  now: Date,
+  rfmParams: ComputeRfmParams,
+): CustomerMetricsRecord {
+  const rfm = computeRfm(aggregate, now, rfmParams);
 
   return {
     customer_id: customer.id,
@@ -104,9 +111,37 @@ function buildMetrics(customer: CustomerRow, aggregate: CustomerAggregate | unde
   };
 }
 
+/** Resolves every rfm.* config key once per run — same values for every customer in this batch. */
+async function resolveRfmParams(companyId: string): Promise<ComputeRfmParams> {
+  const [
+    highMinOrders, highMaxDays, mediumMinOrders, mediumMaxDays,
+    recencyWindowDays, frequencyPointsPerOrder, monetaryLogDivisor,
+    weightRecency, weightFrequency, weightMonetary,
+  ] = await Promise.all([
+    getConfig(companyId, 'rfm.frequency.high_min_orders'),
+    getConfig(companyId, 'rfm.frequency.high_max_days'),
+    getConfig(companyId, 'rfm.frequency.medium_min_orders'),
+    getConfig(companyId, 'rfm.frequency.medium_max_days'),
+    getConfig(companyId, 'rfm.engagement.recency_window_days'),
+    getConfig(companyId, 'rfm.engagement.frequency_points_per_order'),
+    getConfig(companyId, 'rfm.engagement.monetary_log_divisor'),
+    getConfig(companyId, 'rfm.engagement.weight_recency'),
+    getConfig(companyId, 'rfm.engagement.weight_frequency'),
+    getConfig(companyId, 'rfm.engagement.weight_monetary'),
+  ]);
+  return {
+    frequencyThresholds: { highMinOrders, highMaxDays, mediumMinOrders, mediumMaxDays },
+    engagementScoreParams: {
+      recencyWindowDays, frequencyPointsPerOrder, monetaryLogDivisor,
+      weightRecency, weightFrequency, weightMonetary,
+    },
+  };
+}
+
 /** Same RFM math as the Supabase path, written to the Prisma DATABASE_URL. */
 export async function generateCustomerMetricsPrisma(companyId: string): Promise<CustomerMetricsReport> {
   const now = new Date();
+  const rfmParams = await resolveRfmParams(companyId);
   const customers = await prisma.customer.findMany({
     where: { companyId },
     select: { id: true, firstName: true, lastName: true },
@@ -130,6 +165,7 @@ export async function generateCustomerMetricsPrisma(companyId: string): Promise<
       { id: customer.id, first_name: customer.firstName, last_name: customer.lastName },
       aggregates.get(customer.id),
       now,
+      rfmParams,
     ),
   );
 

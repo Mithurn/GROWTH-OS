@@ -21,6 +21,24 @@ vi.mock('pino-http', () => ({
   default: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
+// Config resolution (lib/config.ts) reads Redis and Prisma — replaced with the
+// registry's own schema defaults so unit tests get the same values that used to
+// be hardcoded literals, without a real DB/Redis round-trip. Any test that wants
+// a specific override mocks this module locally.
+vi.mock('../lib/config', async () => {
+  const { schemaDefault } = await vi.importActual<typeof import('@growthos/contracts/config/registry')>(
+    '@growthos/contracts/config/registry',
+  );
+  return {
+    getConfig: vi.fn((_companyId: string | null, key: Parameters<typeof schemaDefault>[0]) =>
+      Promise.resolve(schemaDefault(key)),
+    ),
+    setCompanyConfig: vi.fn().mockResolvedValue(undefined),
+    setPlanConfig: vi.fn().mockResolvedValue(undefined),
+    assertConfigDefaultsSeeded: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 // Prevent BullMQ / Redis connections in tests
 vi.mock('../lib/queues', () => ({
   startWorkers: vi.fn(),

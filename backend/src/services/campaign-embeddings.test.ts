@@ -22,11 +22,12 @@ describe('embedCampaignOutcome', () => {
       messageContent: 'Come back for 15% off',
       status: 'Launched',
       performance: { sent: 100, converted: 12, revenue: 45000 },
+      company: { currency: 'INR', locale: 'en-IN' },
     } as never);
 
     await embedCampaignOutcome('camp_1');
 
-    expect(embeddings.embed).toHaveBeenCalledWith(expect.stringContaining('100 sent, 12 converted, ₹45000 revenue'));
+    expect(embeddings.embed).toHaveBeenCalledWith(expect.stringContaining('100 sent, 12 converted, ₹45,000 revenue'));
     expect(prisma.$executeRaw).toHaveBeenCalled();
   });
 
@@ -41,6 +42,7 @@ describe('embedCampaignOutcome', () => {
       messageContent: 'x',
       status: 'Draft',
       performance: null,
+      company: { currency: 'INR', locale: 'en-IN' },
     } as never);
 
     await embedCampaignOutcome('camp_2');
@@ -92,6 +94,7 @@ describe('backfillCampaignEmbeddings', () => {
       messageContent: 'x',
       status: 'Draft',
       performance: null,
+      company: { currency: 'INR', locale: 'en-IN' },
     } as never);
 
     const count = await backfillCampaignEmbeddings();
