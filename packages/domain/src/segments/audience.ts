@@ -65,7 +65,9 @@ export function matchesSegment(
 
 /** Prisma `where` shape for `customerMetrics.count` / `.findMany`, scoped to a company. */
 export function toPrismaWhere(opportunityType: OpportunityType, companyId: string) {
-  const owned = { customer: { companyId } };
+  // customer_metrics carries its own company_id (docs/V3_PLAN.md Phase 2) — a
+  // direct filter instead of the join through customer this used to require.
+  const owned = { companyId };
 
   switch (opportunityType) {
     case 'Retention-Churn':

@@ -16,6 +16,7 @@ import { openRouterConfig } from '../config/openrouter';
 import { openRouterPlanner } from './agent-planner';
 import { emitActivity } from '../lib/activity-emitter';
 import { getAgentCheckpointer } from '../lib/agent-checkpointer';
+import { getConfig } from '../lib/config';
 
 function resolvePlanner(override?: Planner): Planner {
   if (override) return override;
@@ -125,10 +126,18 @@ export async function runShadowObserve(
         planner,
         handlers,
         checkpointer,
+        maxStepsPerRole: await getConfig(input.companyId, 'agent.max_steps_per_role'),
         onStep,
       }).then((r) => ({ ...r, stepCount: r.roles.reduce((sum, role) => sum + role.stepCount, 0) }))
     : await runGrowthAgent(
-        buildGrowthAgent({ planner, handlers, mode: 'shadow', maxSteps: 8, onStep, checkpointer }),
+        buildGrowthAgent({
+          planner,
+          handlers,
+          mode: 'shadow',
+          maxSteps: await getConfig(input.companyId, 'agent.max_steps_single'),
+          onStep,
+          checkpointer,
+        }),
         { companyId: input.companyId, agentId: input.agentId, goal: input.goal, runId, guardrails: input.guardrails },
       );
 

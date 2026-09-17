@@ -6,8 +6,20 @@ import { z } from 'zod';
 import { searchSimilarCampaigns } from './campaign-embeddings';
 import { parseWithRetry } from '../lib/ai';
 import { openai, openRouterConfig } from '../config/openrouter';
+import { getConfig } from '../lib/config';
 
-const owned = (companyId: string) => ({ customer: { companyId } });
+async function estimatorParams(companyId: string) {
+  const [globalPriorConversionRate, priorWeight, confidenceZ] = await Promise.all([
+    getConfig(companyId, 'estimator.global_prior_conversion_rate'),
+    getConfig(companyId, 'estimator.prior_weight'),
+    getConfig(companyId, 'estimator.confidence_z'),
+  ]);
+  return { globalPriorConversionRate, priorWeight, confidenceZ };
+}
+
+// customerMetrics now carries its own companyId (docs/V3_PLAN.md Phase 2) — a
+// direct filter instead of the join through customer this used to require.
+const owned = (companyId: string) => ({ companyId });
 
 async function queryMetrics(_args: unknown, ctx: RunContext) {
   const companyId = ctx.companyId;
@@ -119,6 +131,7 @@ async function estimate(args: unknown, ctx: RunContext) {
     audienceSize: audience_size,
     avgOrderValue: avg_order_value,
     historical,
+    ...(await estimatorParams(ctx.companyId)),
   });
 }
 
@@ -292,6 +305,7 @@ async function createOpportunity(args: unknown, ctx: RunContext) {
     audienceSize,
     avgOrderValue: Number(averages._avg.avgOrderValue ?? 0),
     historical: await historicalOutcomes(ctx.companyId, opportunity_type),
+    ...(await estimatorParams(ctx.companyId)),
   });
   const label = title ?? `${opportunity_type} opportunity`;
   const created = await prisma.opportunity.create({

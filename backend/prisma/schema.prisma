@@ -76,6 +76,14 @@ model Company {
   stripeSubscriptionId String?   @map("stripe_subscription_id")
   subscriptionStatus   String?   @map("subscription_status")
   planUpdatedAt        DateTime? @map("plan_updated_at")
+  // Stripe event `created` timestamp, not our own write time — see the
+  // 20260918020000 migration for why out-of-order dedup needs this instead.
+  lastStripeEventAt    DateTime? @map("last_stripe_event_at")
+
+  // Formatting only — no monetary math depends on these. Was a hardcoded ₹/en-IN
+  // in queues.ts and campaign-embeddings.ts; see docs/V3_PLAN.md Phase 1.3.
+  currency     String   @default("INR")
+  locale       String   @default("en-IN")
 
   profiles     Profile[]
   customers    Customer[]
@@ -88,6 +96,11 @@ model Company {
   ingestionSessions IngestionSession[]
   integrations Integration[]
   costLedger   CostLedger[]
+  configOverrides CompanyConfig[]
+  orders       Order[]
+  orderItems   OrderItem[]
+  customerMetrics CustomerMetrics[]
+  customerAttributes CustomerAttributes[]
 
   @@index([companyName])
   @@map("companies")
@@ -133,6 +146,7 @@ model IngestionSession {
 
 model Order {
   id              String   @id @default(uuid())
+  companyId       String   @map("company_id")
   externalOrderId String?  @map("external_order_id")
   customerId      String   @map("customer_id")
   orderDate       DateTime @map("order_date")
@@ -140,31 +154,38 @@ model Order {
   channel         String?
   createdAt       DateTime @default(now()) @map("created_at")
 
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]
 
   @@index([customerId])
   @@index([orderDate])
+  @@index([companyId])
+  @@index([companyId, orderDate])
   @@map("orders")
 }
 
 model OrderItem {
   id         String  @id @default(uuid())
+  companyId  String  @map("company_id")
   orderId    String  @map("order_id")
   productId  String  @map("product_id")
   quantity   Int
   unitPrice  Decimal @map("unit_price") @db.Decimal(10, 2)
 
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
+  @@index([companyId])
   @@map("order_items")
 }
 
 model CustomerMetrics {
   id                  String   @id @default(uuid())
+  companyId           String   @map("company_id")
   customerId          String   @unique @map("customer_id")
   totalOrders         Int      @default(0) @map("total_orders")
   totalSpent          Decimal  @default(0) @map("total_spent") @db.Decimal(10, 2)
@@ -176,15 +197,19 @@ model CustomerMetrics {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer            Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([totalSpent])
   @@index([lastOrderDate])
+  @@index([companyId])
+  @@index([companyId, totalSpent])
   @@map("customer_metrics")
 }
 
 model CustomerAttributes {
   id                      String   @id @default(uuid())
+  companyId               String   @map("company_id")
   customerId              String   @unique @map("customer_id")
   favoriteCategory        String?  @map("favorite_category")
   secondFavoriteCategory  String?  @map("second_favorite_category")
@@ -196,12 +221,14 @@ model CustomerAttributes {
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
+  company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer                Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([favoriteCategory])
   @@index([preferredChannel])
   @@index([discountAffinity])
   @@index([dominantPriceBand])
+  @@index([companyId])
   @@map("customer_attributes")
 }
 
@@ -521,4 +548,50 @@ model CostLedger {
   @@index([runId])
   @@index([createdAt])
   @@map("cost_ledger")
+}
+
+// ============================================
+// CONFIGURATION LAYER (docs/V3_PLAN.md Phase 1)
+//
+// Every tunable value formerly hardcoded in application code resolves through
+// these three tables: company override -> plan override -> global default.
+// See backend/src/lib/config.ts for resolution and packages/contracts/src/config
+// for the Zod schema (and Zod-level default) each key must be registered under.
+// ============================================
+
+model ConfigDefault {
+  key         String   @id
+  value       Json
+  description String
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("config_defaults")
+}
+
+/** planId matches Company.plan today ("free" | "pro") — becomes a real FK to a
+    Plan table once Phase 3.1 (Stripe-synced plans) lands. */
+model PlanConfig {
+  id        String   @id @default(uuid())
+  planId    String   @map("plan_id")
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([planId, key])
+  @@index([planId])
+  @@map("plan_config")
+}
+
+model CompanyConfig {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, key])
+  @@index([companyId])
+  @@map("company_config")
 }

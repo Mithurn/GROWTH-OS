@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma, prismaSystem } from '../lib/prisma';
 import { embed, toVectorLiteral } from '../lib/embeddings';
 import { logger } from '../lib/logger';
 
@@ -17,10 +17,17 @@ function campaignOutcomeText(campaign: {
   messageContent: string;
   status: string;
   performance: unknown;
+  currency: string;
+  locale: string;
 }): string {
   const perf = campaign.performance as { sent?: number; converted?: number; revenue?: number } | null;
+  const formattedRevenue = new Intl.NumberFormat(campaign.locale, {
+    style: 'currency',
+    currency: campaign.currency,
+    maximumFractionDigits: 0,
+  }).format(perf?.revenue ?? 0);
   const outcome = perf?.sent
-    ? `Measured outcome: ${perf.sent} sent, ${perf.converted ?? 0} converted, ₹${perf.revenue ?? 0} revenue.`
+    ? `Measured outcome: ${perf.sent} sent, ${perf.converted ?? 0} converted, ${formattedRevenue} revenue.`
     : `Status: ${campaign.status} (no delivery outcome recorded yet).`;
   return [
     `Objective: ${campaign.objective}`,
@@ -46,10 +53,11 @@ export async function embedCampaignOutcome(campaignId: string): Promise<void> {
       messageContent: true,
       status: true,
       performance: true,
+      company: { select: { currency: true, locale: true } },
     },
   });
 
-  const content = campaignOutcomeText(campaign);
+  const content = campaignOutcomeText({ ...campaign, currency: campaign.company.currency, locale: campaign.company.locale });
   const vector = await embed(content);
   const literal = toVectorLiteral(vector);
 
@@ -99,7 +107,10 @@ export async function backfillCampaignEmbeddings(companyId?: string): Promise<nu
   `;
   const done = new Set(alreadyEmbedded.map((r) => r.campaign_id));
 
-  const campaigns = await prisma.campaign.findMany({
+  // Manual/admin backfill utility, not reachable from a request — `companyId`
+  // omitted means "every tenant" by design, so this deliberately uses the
+  // unguarded client (lib/prisma.ts's prismaSystem).
+  const campaigns = await prismaSystem.campaign.findMany({
     where: companyId ? { companyId } : undefined,
     select: { id: true },
   });

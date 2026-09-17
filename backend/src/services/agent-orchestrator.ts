@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma, prismaSystem } from '../lib/prisma';
 import { enqueueOpportunityDiscovery, enqueueCampaignGeneration } from '../lib/queues';
 import { logger } from '../lib/logger';
 import { checkGuardrails, type Guardrails } from '@growthos/domain';
@@ -81,8 +81,9 @@ export class AgentOrchestrator {
     this.isProcessingAgents = true;
     let agentsProcessed = 0;
     try {
-      // Get all agents that are in 'discovering' or 'running' status
-      const agents = await prisma.agent.findMany({
+      // Deliberately cross-tenant: this sweep is meant to span every company's
+      // active agents, not one tenant's (see lib/prisma.ts's prismaSystem doc).
+      const agents = await prismaSystem.agent.findMany({
         where: {
           status: {
             in: ['discovering', 'running']

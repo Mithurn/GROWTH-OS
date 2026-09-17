@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { Prisma } from '../../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
+
+const LIVE_STATUSES = ['Draft', 'Approved', 'Running', 'Launched'] as const;
 
 /** Shape the model must produce. Every field is written straight onto the campaign row. */
 const CampaignStrategySchema = z.object({
@@ -32,7 +35,7 @@ export async function createCampaignForOpportunity(
   companyId: string,
   agentId: string,
   guardrails: { channels?: string[] }
-) {
+): Promise<{ campaign: Awaited<ReturnType<typeof prisma.campaign.create>>; deduped: boolean }> {
   logger.info({ opportunityId }, 'Creating campaign');
 
   try {
@@ -61,35 +64,51 @@ export async function createCampaignForOpportunity(
     // Use AI to generate campaign strategy
     const campaignStrategy = await generateCampaignStrategy(opportunity, guardrails);
 
-    // Create campaign in database
-    const campaign = await prisma.campaign.create({
-      data: {
-        companyId,
-        agentId,
-        opportunityId,
-        name: campaignStrategy.name,
-        objective: campaignStrategy.objective,
-        channel: campaignStrategy.channel,
-        offer: campaignStrategy.offer,
-        messageAngle: campaignStrategy.messageAngle,
-        messageContent: campaignStrategy.messageContent,
-        messageVariants: campaignStrategy.messageVariants,
-        expectedOutcome: campaignStrategy.expectedOutcome,
-        reasoning: campaignStrategy.reasoning,
-        status: 'Draft', // Start as draft
-        performance: {
-          sent: 0,
-          delivered: 0,
-          clicked: 0,
-          converted: 0,
-          revenue: 0
+    // Create campaign in database. `campaigns_one_live_per_opportunity` (a partial
+    // unique index on opportunity_id where status is "live") is the real guard
+    // against a duplicate send — two concurrent workers can both pass any
+    // check-then-create race in application code, but only one insert can win here.
+    try {
+      const campaign = await prisma.campaign.create({
+        data: {
+          companyId,
+          agentId,
+          opportunityId,
+          name: campaignStrategy.name,
+          objective: campaignStrategy.objective,
+          channel: campaignStrategy.channel,
+          offer: campaignStrategy.offer,
+          messageAngle: campaignStrategy.messageAngle,
+          messageContent: campaignStrategy.messageContent,
+          messageVariants: campaignStrategy.messageVariants,
+          expectedOutcome: campaignStrategy.expectedOutcome,
+          reasoning: campaignStrategy.reasoning,
+          status: 'Draft', // Start as draft
+          performance: {
+            sent: 0,
+            delivered: 0,
+            clicked: 0,
+            converted: 0,
+            revenue: 0
+          }
         }
+      });
+
+      logger.info({ campaignName: campaign.name }, 'Campaign created');
+      return { campaign, deduped: false };
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const existing = await prisma.campaign.findFirstOrThrow({
+          where: { opportunityId, status: { in: [...LIVE_STATUSES] } },
+        });
+        logger.info(
+          { opportunityId, campaignId: existing.id },
+          'Campaign already exists for this opportunity, lost the create race — using the existing row',
+        );
+        return { campaign: existing, deduped: true };
       }
-    });
-
-    logger.info({ campaignName: campaign.name }, 'Campaign created');
-
-    return campaign;
+      throw err;
+    }
   } catch (error) {
     logger.error({ err: error }, 'Error creating campaign');
     throw error;

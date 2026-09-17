@@ -5,3 +5,4 @@ export * from './http/campaigns';
 export * from './http/agents';
 export * from './tools';
 export * from './ingest/mapping';
+export * from './config/registry';
