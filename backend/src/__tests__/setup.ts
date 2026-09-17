@@ -51,7 +51,10 @@ vi.mock('../lib/prisma', () => ({
     },
     company: {
       findUnique: vi.fn().mockResolvedValue(null),
+      findUniqueOrThrow: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn(),
+      update: vi.fn(),
     },
     customer: {
       count: vi.fn().mockResolvedValue(0),

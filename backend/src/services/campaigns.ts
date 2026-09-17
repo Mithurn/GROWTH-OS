@@ -6,6 +6,68 @@ import { checkAndIncrFrequencyCap } from '../lib/redis';
 import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
 import { selectIn } from '../lib/scoped-query';
+import { getVerifiedCredentials, type IntegrationKind } from './integrations';
+import { isPaidAndActive } from './billing';
+
+/**
+ * Real credentials for this send, or `undefined` for the channel service's
+ * own simulator. Two ways to get real credentials, checked in order:
+ *
+ * 1. The tenant's own verified BYOK integration — their account, their bill,
+ *    works on any plan.
+ * 2. The platform's own provider keys (`PLATFORM_*` env vars), but only for
+ *    a tenant with an active paid subscription — their subscription funds
+ *    it, not the founder. These are deliberately separate env var names from
+ *    what channel-service reads for its own ambient fallback, so a platform
+ *    key configured here can never leak into a free tenant's send by
+ *    accident; the backend is the only thing that decides to use them.
+ *
+ * Free tier with no BYOK key: undefined, every time — the channel service's
+ * simulator, unconditionally.
+ */
+async function resolveSendCredentials(
+  companyId: string,
+  channel: 'WhatsApp' | 'Email' | 'SMS',
+): Promise<Record<string, string> | undefined> {
+  const kind: IntegrationKind = channel === 'Email' ? 'email' : 'whatsapp';
+
+  const byok = await getVerifiedCredentials(companyId, kind);
+  if (byok) {
+    if (kind === 'email') {
+      return { resendApiKey: byok.apiKey, resendFromEmail: byok.fromEmail ?? '' };
+    }
+    return {
+      twilioAccountSid: byok.accountSid,
+      twilioAuthToken: byok.authToken,
+      twilioPhoneNumber: byok.whatsappNumber,
+      twilioWhatsappNumber: byok.whatsappNumber,
+    };
+  }
+
+  if (await isPaidAndActive(companyId)) {
+    if (kind === 'email' && process.env.PLATFORM_RESEND_API_KEY) {
+      return {
+        resendApiKey: process.env.PLATFORM_RESEND_API_KEY,
+        resendFromEmail: process.env.PLATFORM_RESEND_FROM_EMAIL ?? '',
+      };
+    }
+    if (
+      kind === 'whatsapp' &&
+      process.env.PLATFORM_TWILIO_ACCOUNT_SID &&
+      process.env.PLATFORM_TWILIO_AUTH_TOKEN &&
+      process.env.PLATFORM_TWILIO_WHATSAPP_NUMBER
+    ) {
+      return {
+        twilioAccountSid: process.env.PLATFORM_TWILIO_ACCOUNT_SID,
+        twilioAuthToken: process.env.PLATFORM_TWILIO_AUTH_TOKEN,
+        twilioPhoneNumber: process.env.PLATFORM_TWILIO_WHATSAPP_NUMBER,
+        twilioWhatsappNumber: process.env.PLATFORM_TWILIO_WHATSAPP_NUMBER,
+      };
+    }
+  }
+
+  return undefined;
+}
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -449,6 +511,12 @@ export async function launchCampaign(
   // whole audience fails together.
   await warmChannelService(CHANNEL_SERVICE_URL);
 
+  const sendCredentials = await resolveSendCredentials(campaign.company_id, campaign.channel);
+  logger.info(
+    { campaignId, mode: sendCredentials ? 'real' : 'simulator' },
+    'Launch: resolved send credentials',
+  );
+
   await Promise.allSettled(createdComms.map(async (comm) => {
     try {
       const customer = (comm as any).customers;
@@ -479,6 +547,7 @@ export async function launchCampaign(
           recipient,
           channel: campaign.channel,
           content: comm.message,
+          credentials: sendCredentials,
         }),
         signal: AbortSignal.timeout(CHANNEL_SEND_TIMEOUT_MS),
       });

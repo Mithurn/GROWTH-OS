@@ -50,6 +50,7 @@ backend/.mcp.json
 /docs/ARCHITECTURE_V2.md
 /docs/PROGRESS.md
 /docs/breaks.md
+/docs/GROWTHOS_FINAL_ARCHITECTURE.md
 /yes.md
 
 # Scratch assets not referenced by the app
@@ -58,3 +59,4 @@ backend/.mcp.json
 # Python eval venv and script outputs
 packages/evals/python/.venv/
 packages/evals/python/*.csv
+docs/bi-exports/

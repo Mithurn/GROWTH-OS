@@ -503,7 +503,7 @@ export async function getIntegrations() {
 
 export async function saveIntegration(
   kind: IntegrationCard['kind'],
-  body: { provider?: string; mode?: 'simulator' | 'byok'; apiKey?: string },
+  body: { provider?: string; mode?: 'simulator' | 'byok'; credentials?: Record<string, string> },
 ) {
   const response = await apiFetch(`${API_BASE_URL}/integrations/${kind}`, {
     method: 'PUT',
@@ -519,6 +519,27 @@ export async function verifyIntegration(kind: IntegrationCard['kind']) {
   });
   if (!response.ok) throw new Error('Failed to verify integration');
   return response.json();
+}
+
+export type BillingStatus = {
+  plan: 'free' | 'pro';
+  subscriptionStatus: string | null;
+  configured: boolean;
+};
+
+export async function getBillingStatus() {
+  const response = await apiFetch(`${API_BASE_URL}/billing/status`);
+  if (!response.ok) throw new Error('Failed to fetch billing status');
+  return response.json() as Promise<{ success: boolean; data: BillingStatus }>;
+}
+
+export async function createBillingCheckout() {
+  const response = await apiFetch(`${API_BASE_URL}/billing/checkout`, { method: 'POST' });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error ?? 'Failed to start checkout');
+  }
+  return response.json() as Promise<{ success: boolean; data: { subscriptionId: string; keyId: string } }>;
 }
 
 /**
