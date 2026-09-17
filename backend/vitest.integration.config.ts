@@ -12,6 +12,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@growthos/domain': path.resolve(__dirname, '../packages/domain/src/index.ts'),
+      '@growthos/contracts': path.resolve(__dirname, '../packages/contracts/src/index.ts'),
+      '@growthos/agent-core': path.resolve(__dirname, '../packages/agent-core/src/index.ts'),
     },
   },
   test: {

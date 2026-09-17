@@ -21,6 +21,8 @@
       "vitest": ["./node_modules/vitest"],
       "zod": ["./node_modules/zod"],
       "@langchain/langgraph": ["./node_modules/@langchain/langgraph"],
+      "@langchain/langgraph-checkpoint": ["./node_modules/@langchain/langgraph-checkpoint"],
+      "@langchain/langgraph-checkpoint-postgres": ["./node_modules/@langchain/langgraph-checkpoint-postgres"],
       "@langchain/core": ["./node_modules/@langchain/core"]
     }
   },
