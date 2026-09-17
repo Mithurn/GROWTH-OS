@@ -1,17 +1,13 @@
-import crypto from 'crypto';
-import Razorpay from 'razorpay';
+import Stripe from 'stripe';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
 export type Plan = 'free' | 'pro';
 
-function getClient(): Razorpay {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keyId || !keySecret) {
-    throw new Error('RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not configured.');
-  }
-  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+function getClient(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured.');
+  return new Stripe(key);
 }
 
 export interface BillingStatus {
@@ -28,7 +24,7 @@ export async function getBillingStatus(companyId: string): Promise<BillingStatus
   return {
     plan: (company?.plan as Plan) ?? 'free',
     subscriptionStatus: company?.subscriptionStatus ?? null,
-    configured: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_PLAN_ID),
+    configured: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
   };
 }
 
@@ -42,106 +38,91 @@ export async function isPaidAndActive(companyId: string): Promise<boolean> {
 }
 
 /**
- * Creates (or reuses) a Razorpay customer for this company, then creates a
- * subscription against RAZORPAY_PLAN_ID. The frontend opens Razorpay Checkout
- * with the returned subscription id; activation lands via the webhook, not
- * this response, since the actual charge happens asynchronously in Checkout.
+ * Stripe Checkout is a hosted page — the backend only needs to create the
+ * session and hand back its URL, the frontend just navigates there. No
+ * client-side Stripe.js or publishable key needed for this flow.
  */
-export async function createCheckoutSubscription(
+export async function createCheckoutSession(
   companyId: string,
   email: string,
-): Promise<{ subscriptionId: string; keyId: string }> {
-  const planId = process.env.RAZORPAY_PLAN_ID;
-  if (!planId) throw new Error('RAZORPAY_PLAN_ID is not configured.');
-  const razorpay = getClient();
+  returnUrl: string,
+): Promise<{ url: string }> {
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!priceId) throw new Error('STRIPE_PRICE_ID is not configured.');
+  const stripe = getClient();
 
   const company = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
 
-  let customerId = company.razorpayCustomerId ?? undefined;
+  let customerId = company.stripeCustomerId ?? undefined;
   if (!customerId) {
-    const customer = await razorpay.customers.create({
+    const customer = await stripe.customers.create({
       name: company.companyName,
-      email,
-      fail_existing: 0,
-    } as never);
+      email: email || undefined,
+      metadata: { companyId },
+    });
     customerId = customer.id;
-    await prisma.company.update({ where: { id: companyId }, data: { razorpayCustomerId: customerId } });
+    await prisma.company.update({ where: { id: companyId }, data: { stripeCustomerId: customerId } });
   }
 
-  const subscription = await razorpay.subscriptions.create({
-    plan_id: planId,
-    customer_notify: 1,
-    total_count: 120, // 10 years of monthly cycles — Razorpay requires a count, not "forever"
-    notes: { companyId },
-  } as never);
-
-  await prisma.company.update({
-    where: { id: companyId },
-    data: { razorpaySubscriptionId: subscription.id, subscriptionStatus: subscription.status },
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer: customerId,
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: `${returnUrl}?billing=success`,
+    cancel_url: `${returnUrl}?billing=cancelled`,
+    subscription_data: { metadata: { companyId } },
   });
 
-  return { subscriptionId: subscription.id, keyId: process.env.RAZORPAY_KEY_ID! };
-}
-
-export function verifyWebhookSignature(rawBody: Buffer, signature: string | undefined): boolean {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  if (!secret) throw new Error('RAZORPAY_WEBHOOK_SECRET is not configured.');
-  if (typeof signature !== 'string' || signature.length === 0) return false;
-
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  const provided = Buffer.from(signature, 'utf8');
-  const expectedBuf = Buffer.from(expected, 'utf8');
-
-  if (provided.length !== expectedBuf.length) return false;
-  return crypto.timingSafeEqual(provided, expectedBuf);
-}
-
-interface RazorpaySubscriptionEvent {
-  event: string;
-  payload?: {
-    subscription?: {
-      entity: {
-        id: string;
-        status: string;
-        notes?: { companyId?: string };
-      };
-    };
-  };
+  if (!session.url) throw new Error('Stripe did not return a checkout URL.');
+  return { url: session.url };
 }
 
 /**
- * Subscription status drives the plan directly — "pro" only while Razorpay
- * itself says the subscription is active. A halted or cancelled subscription
- * drops the tenant straight back to "free" (simulator), not a grace period.
+ * Subscription status drives the plan directly — "pro" only while Stripe
+ * itself says the subscription is active. A past-due or cancelled
+ * subscription drops the tenant straight back to "free" (simulator), not a
+ * grace period.
  */
-export async function processWebhookEvent(body: RazorpaySubscriptionEvent): Promise<void> {
-  const entity = body.payload?.subscription?.entity;
-  if (!entity) {
-    logger.warn({ event: body.event }, 'Razorpay webhook: no subscription entity, ignoring');
+export async function processWebhookEvent(event: Stripe.Event): Promise<void> {
+  if (event.type !== 'customer.subscription.created' &&
+      event.type !== 'customer.subscription.updated' &&
+      event.type !== 'customer.subscription.deleted') {
     return;
   }
 
-  const companyId = entity.notes?.companyId;
+  const subscription = event.data.object as Stripe.Subscription;
+  const companyId = subscription.metadata?.companyId;
+
   const company = companyId
     ? await prisma.company.findUnique({ where: { id: companyId } })
-    : await prisma.company.findFirst({ where: { razorpaySubscriptionId: entity.id } });
+    : await prisma.company.findFirst({ where: { stripeSubscriptionId: subscription.id } });
 
   if (!company) {
-    logger.warn({ subscriptionId: entity.id }, 'Razorpay webhook: no matching company');
+    logger.warn({ subscriptionId: subscription.id }, 'Stripe webhook: no matching company');
     return;
   }
 
-  const plan: Plan = entity.status === 'active' ? 'pro' : 'free';
+  const plan: Plan = subscription.status === 'active' ? 'pro' : 'free';
 
   await prisma.company.update({
     where: { id: company.id },
     data: {
       plan,
-      subscriptionStatus: entity.status,
-      razorpaySubscriptionId: entity.id,
+      subscriptionStatus: subscription.status,
+      stripeSubscriptionId: subscription.id,
       planUpdatedAt: new Date(),
     },
   });
 
-  logger.info({ companyId: company.id, event: body.event, status: entity.status, plan }, 'Razorpay subscription updated');
+  logger.info(
+    { companyId: company.id, event: event.type, status: subscription.status, plan },
+    'Stripe subscription updated',
+  );
+}
+
+export function constructWebhookEvent(rawBody: Buffer, signature: string | undefined): Stripe.Event {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not configured.');
+  if (!signature) throw new Error('Missing Stripe-Signature header.');
+  return getClient().webhooks.constructEvent(rawBody, signature, secret);
 }

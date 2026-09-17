@@ -53,9 +53,9 @@ app.use(
     credentials: true,
   }),
 );
-// Razorpay signs the raw request bytes, so its webhook must see the body before
+// Stripe signs the raw request bytes, so its webhook must see the body before
 // the global JSON parser rewrites it — mounted here, ahead of express.json().
-app.use('/api/webhooks/razorpay', express.raw({ type: 'application/json' }));
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 app.use('/api', generalLimiter);
