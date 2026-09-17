@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 5001;
 
 app.post('/send', async (req, res) => {
   try {
-    const { communicationId, recipient, channel, content } = req.body as SendRequest;
+    const { communicationId, recipient, channel, content, credentials } = req.body as SendRequest;
 
     if (!communicationId || !recipient || !channel || !content) {
       return res.status(400).json({
@@ -27,7 +27,7 @@ app.post('/send', async (req, res) => {
       return res.status(400).json({ error: 'Invalid channel. Must be WhatsApp, Email, or SMS' });
     }
 
-    const providerMessageId = await queueMessage({ communicationId, recipient, channel, content });
+    const providerMessageId = await queueMessage({ communicationId, recipient, channel, content, credentials });
 
     res.status(202).json({ accepted: true, providerMessageId, message: 'Communication accepted for delivery' });
   } catch (error) {

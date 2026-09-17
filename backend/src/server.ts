@@ -24,6 +24,7 @@ import { agentsRouter } from './routes/agents';
 import { webhooksRouter } from './routes/webhooks';
 import { internalRouter } from './routes/internal';
 import { integrationsRouter } from './routes/integrations';
+import { billingRouter } from './routes/billing';
 import { attachAgentSteer } from './lib/agent-steer';
 import { assertRedisReachable } from './lib/redis';
 
@@ -52,6 +53,9 @@ app.use(
     credentials: true,
   }),
 );
+// Razorpay signs the raw request bytes, so its webhook must see the body before
+// the global JSON parser rewrites it — mounted here, ahead of express.json().
+app.use('/api/webhooks/razorpay', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 app.use('/api', generalLimiter);
@@ -73,6 +77,7 @@ app.use('/api', campaignsRouter);
 app.use('/api', analyticsRouter);
 app.use('/api', agentsRouter);
 app.use('/api', integrationsRouter);
+app.use('/api', billingRouter);
 app.use('/api', webhooksRouter);
 app.use('/api', internalRouter);
 
