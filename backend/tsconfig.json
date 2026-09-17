@@ -14,10 +14,23 @@
       "@growthos/domain/*": ["../packages/domain/src/*"],
       "@growthos/contracts": ["../packages/contracts/src/index.ts"],
       "@growthos/contracts/*": ["../packages/contracts/src/*"],
+      "@growthos/agent-core": ["../packages/agent-core/src/index.ts"],
+      "@growthos/agent-core/*": ["../packages/agent-core/src/*"],
+      "@growthos/ingest": ["../packages/ingest/src/index.ts"],
+      "@growthos/ingest/*": ["../packages/ingest/src/*"],
       "vitest": ["./node_modules/vitest"],
-      "zod": ["./node_modules/zod"]
+      "zod": ["./node_modules/zod"],
+      "@langchain/langgraph": ["./node_modules/@langchain/langgraph"],
+      "@langchain/core": ["./node_modules/@langchain/core"]
     }
   },
-  "include": ["src/**/*", "../packages/domain/src/**/*", "../packages/contracts/src/**/*"],
+  "include": [
+    "src/**/*",
+    "../packages/domain/src/**/*",
+    "../packages/contracts/src/**/*",
+    "../packages/agent-core/src/**/*",
+    "../packages/ingest/src/**/*",
+    "../packages/evals/src/**/*"
+  ],
   "exclude": ["node_modules"]
 }

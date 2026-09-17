@@ -11,7 +11,7 @@ import {
   MessageSquare, MousePointerClick, Send, Smartphone,
   Sparkles, Target,  Users, Zap, Activity,
 } from 'lucide-react';
-import { getCampaignAnalytics } from '@/lib/api';
+import { getCampaignAnalytics, openAuthedSse } from '@/lib/api';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -507,7 +507,6 @@ function AnalyticsContent() {
   const [data,    setData]    = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
-  const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAnalytics = useCallback(async (id: string) => {
     try {
@@ -528,8 +527,18 @@ function AnalyticsContent() {
 
   useEffect(() => {
     if (!campaignId || data?.campaign.status !== 'Launched') return;
-    pollerRef.current = setInterval(() => fetchAnalytics(campaignId), 5000);
-    return () => { if (pollerRef.current) clearInterval(pollerRef.current); };
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    openAuthedSse(`/campaigns/${encodeURIComponent(campaignId)}/events`, () => {
+      void fetchAnalytics(campaignId);
+    }).then((close) => {
+      if (cancelled) close();
+      else stop = close;
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
   }, [campaignId, data?.campaign.status, fetchAnalytics]);
 
   if (loading) return (

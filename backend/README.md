@@ -182,6 +182,23 @@ CHANNEL_SERVICE_URL=http://localhost:5001
 WEBHOOK_SECRET=your_shared_secret
 ```
 
+### Local database
+
+Local runs one Supabase stack, so Auth and the app tables live in the same Postgres, the
+same as production. Only the env files differ.
+
+```bash
+supabase start                                   # from the repo root, needs Docker
+supabase status -o env                           # API_URL, ANON_KEY, SERVICE_ROLE_KEY, DB_URL
+cd backend && DIRECT_URL=<DB_URL> npx prisma migrate deploy
+```
+
+Set `DATABASE_URL` and `DIRECT_URL` to `DB_URL`, `NEXT_PUBLIC_SUPABASE_URL` to `API_URL`,
+and `SUPABASE_SERVICE_ROLE_KEY` in `backend/.env`; the URL and `ANON_KEY` go in
+`frontend/.env.local`. Sign up with email and password (Google sign-in is not configured
+locally), finish onboarding, then optionally reseed with
+`COMPANY_ID=<id> npx tsx scripts/seed-local-demo.ts`.
+
 ## Testing
 
 ```bash
@@ -189,7 +206,7 @@ npm test               # unit tests — mocked Prisma/Redis/queues, no external 
 npm run test:integration   # real Postgres via Testcontainers — needs Docker running
 ```
 
-`test:integration` starts a real `postgres:16-alpine` container, runs the actual
+`test:integration` starts a real `pgvector/pgvector:pg16` container (Postgres 16 plus the `vector` extension Supabase ships), runs the actual
 `prisma migrate deploy` against it, and tests things the mocked suite can't — tenant
 isolation with two live tenants, real constraint enforcement, real concurrent writes.
 Needs a working Docker daemon. If you're on Colima rather than Docker Desktop, Ryuk

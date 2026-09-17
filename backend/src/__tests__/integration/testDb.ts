@@ -25,7 +25,7 @@ export interface TestDb {
 }
 
 export async function startTestDb(): Promise<TestDb> {
-  const container = await new PostgreSqlContainer('postgres:16-alpine')
+  const container = await new PostgreSqlContainer('pgvector/pgvector:pg16')
     .withDatabase('growthos_test')
     .withUsername('test')
     .withPassword('test')
@@ -37,11 +37,16 @@ export async function startTestDb(): Promise<TestDb> {
   // migration API — this is the same command render.yaml's preDeployCommand runs in
   // production, so the integration suite is exercising the actual deploy path, not a
   // parallel one that could drift from it.
-  execSync('npx prisma migrate deploy --schema=prisma/schema.prisma', {
-    cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL: connectionUri, DIRECT_URL: connectionUri },
-    stdio: 'pipe',
-  });
+  try {
+    execSync('npx prisma migrate deploy --schema=prisma/schema.prisma', {
+      cwd: process.cwd(),
+      env: { ...process.env, DATABASE_URL: connectionUri, DIRECT_URL: connectionUri },
+      stdio: 'pipe',
+    });
+  } catch (err) {
+    await container.stop();
+    throw err;
+  }
 
   const pool = new Pool({ connectionString: connectionUri });
   const adapter = new PrismaPg(pool);

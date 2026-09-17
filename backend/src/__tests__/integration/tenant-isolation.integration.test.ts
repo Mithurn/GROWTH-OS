@@ -63,7 +63,7 @@ describe('tenant isolation — real Postgres, two live tenants', () => {
   }, 60_000);
 
   afterAll(async () => {
-    await db.stop();
+    await db?.stop();
   });
 
   it('a Retention-VIP query scoped to company A never returns company B\'s customer', async () => {

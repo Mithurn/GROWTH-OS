@@ -13,15 +13,43 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backen
 // Origin without the /api suffix — for unauthenticated infra routes like /health.
 export const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
-// ─── In-memory SWR cache ──────────────────────────────────────────────────────
-// Module-level singleton — persists across SPA navigation within a session.
-// On a cache hit, returns the stale value immediately and refreshes in background.
+// ─── SWR cache ────────────────────────────────────────────────────────────────
+// In-memory for SPA navigation, mirrored to localStorage so a full reload (OAuth
+// callback, refresh, new tab) still paints the last dashboard instead of spinning.
 //
 // Entries are namespaced by user id. Without that, signing out and into a second
 // account in the same tab serves the previous account's data until the TTL expires,
 // because the module singleton outlives the session.
 interface CacheEntry { data: unknown; at: number }
+const PERSIST_KEY = 'growthos.swr.v1';
 const _cache = new Map<string, CacheEntry>();
+
+function hydrateCache() {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(PERSIST_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, CacheEntry>;
+    for (const [k, v] of Object.entries(parsed)) {
+      if (v && typeof v.at === 'number') _cache.set(k, v);
+    }
+  } catch {
+    // Corrupt or private-mode storage — start empty.
+  }
+}
+
+function persistCache() {
+  if (typeof window === 'undefined') return;
+  try {
+    const obj: Record<string, CacheEntry> = {};
+    for (const [k, v] of _cache) obj[k] = v;
+    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(obj));
+  } catch {
+    // Quota or private mode — in-memory cache still works this session.
+  }
+}
+
+hydrateCache();
 
 async function scopedKey(key: string): Promise<string> {
   return `${(await getUserId()) ?? 'anon'}:${key}`;
@@ -31,13 +59,22 @@ async function swr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Pr
   const k = await scopedKey(key);
   const entry = _cache.get(k);
 
-  if (entry && Date.now() - entry.at < ttlMs) {
-    fetcher().then(data => _cache.set(k, { data, at: Date.now() })).catch(() => {});
+  if (entry) {
+    const stale = Date.now() - entry.at >= ttlMs;
+    if (stale) {
+      fetcher()
+        .then((data) => {
+          _cache.set(k, { data, at: Date.now() });
+          persistCache();
+        })
+        .catch(() => {});
+    }
     return entry.data as T;
   }
 
   const data = await fetcher();
   _cache.set(k, { data, at: Date.now() });
+  persistCache();
   return data;
 }
 
@@ -47,11 +84,15 @@ async function bust(keyPrefix: string) {
   for (const k of _cache.keys()) {
     if (k.startsWith(prefix)) _cache.delete(k);
   }
+  persistCache();
 }
 
 /** Call on sign-out so a subsequent session in the same tab starts clean. */
 export function clearApiCache() {
   _cache.clear();
+  if (typeof window !== 'undefined') {
+    try { window.localStorage.removeItem(PERSIST_KEY); } catch { /* ignore */ }
+  }
 }
 
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
@@ -112,32 +153,6 @@ export async function saveOnboardingProfile(profile: Record<string, unknown>) {
 
   if (!response.ok) {
     throw new Error('Failed to save onboarding profile');
-  }
-
-  return response.json();
-}
-
-export async function startOnboardingConversation() {
-  const response = await apiFetch(`${API_BASE_URL}/onboarding/conversation/start`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to start conversation');
-  }
-
-  return response.json();
-}
-
-export async function sendConversationMessage(conversationId: string, message: string) {
-  const response = await apiFetch(`${API_BASE_URL}/onboarding/conversation/${conversationId}/message`, {
-    method: 'POST',
-    body: JSON.stringify({ message }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to send message');
   }
 
   return response.json();
@@ -272,6 +287,8 @@ export function getOpportunityDashboard() {
     apiJson<ApiResponse<OpportunityReport>>(
       `${API_BASE_URL}/opportunities`,
       'Failed to fetch opportunities',
+      {},
+      45_000,
     ),
   );
 }
@@ -408,6 +425,26 @@ export async function getAgent(agentId: string) {
   return response.json();
 }
 
+export async function getAgentRuns(agentId: string, opts?: { page?: number; limit?: number }) {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set('page', String(opts.page));
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  const response = await apiFetch(
+    `${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/runs${qs ? `?${qs}` : ''}`,
+  );
+  if (!response.ok) throw new Error('Failed to fetch agent runs');
+  return response.json();
+}
+
+export async function getAgentRun(agentId: string, runId: string) {
+  const response = await apiFetch(
+    `${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/runs/${encodeURIComponent(runId)}`,
+  );
+  if (!response.ok) throw new Error('Failed to fetch agent run');
+  return response.json();
+}
+
 export async function runAgent(agentId: string) {
   const response = await apiFetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}/run`, {
     method: 'POST',
@@ -447,6 +484,97 @@ export async function refineOpportunity(opportunityId: string, modifier: string)
   }
 
   return response.json();
+}
+
+export type IntegrationCard = {
+  kind: 'llm' | 'email' | 'whatsapp';
+  provider: string;
+  mode: string;
+  status: string;
+  maskedKey: string | null;
+  lastVerifiedAt: string | null;
+};
+
+export async function getIntegrations() {
+  const response = await apiFetch(`${API_BASE_URL}/integrations`);
+  if (!response.ok) throw new Error('Failed to fetch integrations');
+  return response.json() as Promise<{ success: boolean; available?: boolean; data: IntegrationCard[] }>;
+}
+
+export async function saveIntegration(
+  kind: IntegrationCard['kind'],
+  body: { provider?: string; mode?: 'simulator' | 'byok'; apiKey?: string },
+) {
+  const response = await apiFetch(`${API_BASE_URL}/integrations/${kind}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error('Failed to save integration');
+  return response.json();
+}
+
+export async function verifyIntegration(kind: IntegrationCard['kind']) {
+  const response = await apiFetch(`${API_BASE_URL}/integrations/${kind}/verify`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to verify integration');
+  return response.json();
+}
+
+/**
+ * Authenticated SSE. EventSource cannot send Authorization; fetch can.
+ * Replays via Last-Event-ID when the connection drops.
+ */
+export async function openAuthedSse(
+  path: string,
+  onEvent: (event: string, data: unknown) => void,
+): Promise<() => void> {
+  const controller = new AbortController();
+  let lastId = '';
+
+  const consume = async () => {
+    while (!controller.signal.aborted) {
+      const headers = await authHeaders(lastId ? { 'Last-Event-ID': lastId } : {});
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        headers,
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const block of parts) {
+          let id = '';
+          let event = 'message';
+          let data = '';
+          for (const line of block.split('\n')) {
+            if (line.startsWith('id:')) id = line.slice(3).trim();
+            else if (line.startsWith('event:')) event = line.slice(6).trim();
+            else if (line.startsWith('data:')) data += line.slice(5).trim();
+          }
+          if (id) lastId = id;
+          if (!data) continue;
+          try {
+            onEvent(event, JSON.parse(data));
+          } catch {
+            onEvent(event, data);
+          }
+        }
+      }
+    }
+  };
+
+  consume().catch(() => undefined);
+  return () => controller.abort();
 }
 
 export async function refineCampaign(campaignId: string, modifier: string, channel?: string) {

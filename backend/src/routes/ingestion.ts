@@ -6,7 +6,6 @@ import { logger } from '../lib/logger';
 import {
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership,
   type AuthRequest,
 } from '../middleware/auth';
 import { uploadLimiter } from '../middleware/rate-limits';
@@ -149,12 +148,13 @@ ingestionRouter.get(
   '/ingestion-status/:sessionId',
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership('ingestion_sessions', 'sessionId'),
   async (req: AuthRequest, res) => {
     try {
       const sessionId = req.params['sessionId'] as string;
       const session = await prisma.ingestionSession.findUnique({ where: { id: sessionId } });
-      if (!session) return res.json({ step: 'not_found', progress: 0 });
+      if (!session || session.companyId !== req.companyId) {
+        return res.status(404).json({ error: 'Not found' });
+      }
       res.json({
         step: session.step,
         progress: session.progress,

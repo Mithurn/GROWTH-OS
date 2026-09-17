@@ -3,6 +3,7 @@ import type { Prisma } from '../../generated/prisma';
 import { prisma } from '../lib/prisma';
 import { isDuplicateWebhook } from '../lib/redis';
 import { logger } from '../lib/logger';
+import { emitActivity } from '../lib/activity-emitter';
 
 const WEBHOOK_SECRET: string = (() => {
   if (!process.env.WEBHOOK_SECRET) throw new Error('WEBHOOK_SECRET env var is required');
@@ -94,7 +95,13 @@ export async function processWebhook(
 
   const comm = await prisma.communication.findUnique({
     where: { id: event.communicationId },
-    select: { id: true, status: true, providerMessageId: true },
+    select: {
+      id: true,
+      status: true,
+      providerMessageId: true,
+      campaignId: true,
+      campaign: { select: { companyId: true, agentId: true } },
+    },
   });
 
   if (!comm) {
@@ -161,6 +168,22 @@ export async function processWebhook(
     { status: event.status, communicationId: event.communicationId, seq: event.sequenceNumber },
     'Webhook processed',
   );
+
+  if (comm.campaign?.companyId) {
+    emitActivity({
+      id: `delivery:${event.eventId}`,
+      companyId: comm.campaign.companyId,
+      agentId: comm.campaign.agentId ?? '',
+      actionType: 'campaign_delivery',
+      description: event.status,
+      details: {
+        campaignId: comm.campaignId,
+        communicationId: comm.id,
+        status: event.status,
+      },
+      createdAt: new Date(),
+    });
+  }
 
   return {
     success: true,

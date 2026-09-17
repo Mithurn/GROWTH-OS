@@ -2,15 +2,17 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { subscribeToActivity } from '../lib/activity-emitter';
+import { subscribeTenantStream } from '../lib/tenant-stream';
 import {
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership,
   type AuthRequest,
 } from '../middleware/auth';
+import { requireOwnedAgent } from '../middleware/prisma-ownership';
 import { validateBody } from '../middleware/validate';
 import { agentOrchestrator } from '../services/agent-orchestrator';
 import { getRecentActions } from '../services/agent-logger';
+import { getAgentRun, listAgentRuns } from '../services/agent-runs';
 import { CreateAgentSchema, PatchAgentSchema } from '@growthos/contracts';
 
 export const agentsRouter = Router();
@@ -90,7 +92,7 @@ agentsRouter.get(
   '/agents/:id',
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership('agents'),
+  requireOwnedAgent(),
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
@@ -112,11 +114,60 @@ agentsRouter.get(
   },
 );
 
+agentsRouter.get(
+  '/agents/:id/runs',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireOwnedAgent(),
+  async (req: AuthRequest, res) => {
+    try {
+      const id = req.params['id'] as string;
+      const page = Math.max(1, parseInt(req.query['page'] as string) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query['limit'] as string) || 20));
+      const result = await listAgentRuns({
+        companyId: req.companyId!,
+        agentId: id,
+        page,
+        limit,
+      });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      logger.error({ err: error }, 'Error listing agent runs');
+      res.status(500).json({ error: 'Failed to list agent runs' });
+    }
+  },
+);
+
+agentsRouter.get(
+  '/agents/:id/runs/:runId',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireOwnedAgent(),
+  async (req: AuthRequest, res) => {
+    try {
+      const id = req.params['id'] as string;
+      const runId = req.params['runId'] as string;
+      const result = await getAgentRun({
+        companyId: req.companyId!,
+        agentId: id,
+        runId,
+      });
+      if (result.available && !result.data) {
+        return res.status(404).json({ error: 'Run not found' });
+      }
+      res.json({ success: true, ...result });
+    } catch (error) {
+      logger.error({ err: error }, 'Error fetching agent run');
+      res.status(500).json({ error: 'Failed to fetch agent run' });
+    }
+  },
+);
+
 agentsRouter.post(
   '/agents/:id/run',
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership('agents'),
+  requireOwnedAgent(),
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
@@ -133,7 +184,7 @@ agentsRouter.patch(
   '/agents/:id',
   requireAuth,
   resolveCompanyMiddleware,
-  requireCompanyOwnership('agents'),
+  requireOwnedAgent(),
   validateBody(PatchAgentSchema),
   async (req: AuthRequest, res) => {
     try {
@@ -170,16 +221,34 @@ agentsRouter.get(
 );
 
 /**
- * Live agent activity as server-sent events. Events go through Redis pub/sub when
- * `REDIS_URL` is set, so a reconnect after spin-down still sees activity produced
- * before the instance died. Falls back to the in-process emitter locally.
+ * Live agent activity as server-sent events. Redis Streams + Last-Event-ID
+ * when REDIS_URL is set; in-process ring locally. Use fetch (not EventSource)
+ * so the Authorization header can travel with the request.
  */
 agentsRouter.get(
   '/sse/activity',
   requireAuth,
   resolveCompanyMiddleware,
   async (req: AuthRequest, res) => {
-    const unsubscribe = await subscribeToActivity(res, req.companyId!);
+    const lastEventId = req.header('last-event-id') ?? undefined;
+    const unsubscribe = await subscribeToActivity(res, req.companyId!, lastEventId);
+    req.on('close', unsubscribe);
+  },
+);
+
+agentsRouter.get(
+  '/agents/:id/runs/:runId/events',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireOwnedAgent(),
+  async (req: AuthRequest, res) => {
+    const runId = req.params['runId'] as string;
+    const lastEventId = req.header('last-event-id') ?? undefined;
+    const unsubscribe = await subscribeTenantStream(res, req.companyId!, {
+      lastEventId,
+      filter: (event) =>
+        event.actionType === 'agent_step' && event.payload['runId'] === runId,
+    });
     req.on('close', unsubscribe);
   },
 );

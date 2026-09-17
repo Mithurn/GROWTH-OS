@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       '@growthos/domain': path.resolve(__dirname, '../packages/domain/src/index.ts'),
       '@growthos/contracts': path.resolve(__dirname, '../packages/contracts/src/index.ts'),
+      '@growthos/agent-core': path.resolve(__dirname, '../packages/agent-core/src/index.ts'),
+      '@growthos/ingest': path.resolve(__dirname, '../packages/ingest/src/index.ts'),
     },
   },
   test: {
@@ -25,6 +27,9 @@ export default defineConfig({
       'src/**/*.test.ts',
       '../packages/domain/src/**/*.test.ts',
       '../packages/contracts/src/**/*.test.ts',
+      '../packages/agent-core/src/**/*.test.ts',
+      '../packages/ingest/src/**/*.test.ts',
+      '../packages/evals/src/**/*.test.ts',
     ],
     exclude: ['src/__tests__/integration/**', 'node_modules/**'],
     env: {
