@@ -37,6 +37,7 @@ import { billingRouter } from './routes/billing';
 import { attachAgentSteer } from './lib/agent-steer';
 import { assertRedisReachable } from './lib/redis';
 import { assertConfigDefaultsSeeded, getConfig } from './lib/config';
+import { closeAgentCheckpointer } from './lib/agent-checkpointer';
 
 const app = express();
 
@@ -146,6 +147,7 @@ if (require.main === module) {
           process.env.WORKERS_IN_API_PROCESS !== 'false' ? closeWorkers() : Promise.resolve();
         Promise.all([
           closeJobs,
+          closeAgentCheckpointer(),
           new Promise<void>((resolve) => server.close(() => resolve())),
         ]).then(() => {
           logger.info('API: drained, exiting');

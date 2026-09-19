@@ -73,7 +73,20 @@ export async function decideCampaignTransaction(
 }
 
 export async function decideCampaign(input: CampaignDecisionInput) {
+  const { ensureCampaignApprovalWorkflow, resumeCampaignApprovalWorkflow } = await import(
+    './campaign-approval-workflow'
+  );
+  await ensureCampaignApprovalWorkflow({
+    campaignId: input.campaignId,
+    companyId: input.companyId,
+  });
   const { prisma } = await import('../lib/prisma');
-  return prisma.$transaction((tx) =>
+  const campaign = await prisma.$transaction((tx) =>
     decideCampaignTransaction(tx as unknown as Prisma.TransactionClient, input));
+  await resumeCampaignApprovalWorkflow(input.campaignId, {
+    decision: input.decision,
+    actorId: input.actorId,
+    reason: input.reason,
+  });
+  return campaign;
 }

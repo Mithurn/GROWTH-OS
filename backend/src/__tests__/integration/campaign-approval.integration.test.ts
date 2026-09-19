@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { decideCampaignTransaction } from '../../services/campaign-approval';
+import { decideCampaign, decideCampaignTransaction } from '../../services/campaign-approval';
 import { runWithTenant } from '../../lib/tenant-context';
+import { closeAgentCheckpointer } from '../../lib/agent-checkpointer';
+import { ensureCampaignApprovalWorkflow } from '../../services/campaign-approval-workflow';
 import { startTestDb, type TestDb } from './testDb';
 
 describe('campaign approval — real Postgres transactions and RLS', () => {
@@ -8,9 +10,12 @@ describe('campaign approval — real Postgres transactions and RLS', () => {
   let companyId: string;
   let agentId: string;
   let sequence = 0;
+  let previousDatabaseUrl: string | undefined;
 
   beforeAll(async () => {
     db = await startTestDb();
+    previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = db.connectionUri;
     const company = await db.prisma.company.create({
       data: { companyName: `Campaign Approval ${Date.now()}` },
     });
@@ -28,6 +33,11 @@ describe('campaign approval — real Postgres transactions and RLS', () => {
   }, 60_000);
 
   afterAll(async () => {
+    await closeAgentCheckpointer();
+    const { prisma } = await import('../../lib/prisma');
+    await prisma.$disconnect();
+    if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousDatabaseUrl;
     await db?.stop();
   });
 
@@ -82,7 +92,18 @@ describe('campaign approval — real Postgres transactions and RLS', () => {
 
   it('atomically records the human actor and exact policy snapshot', async () => {
     const campaign = await createCampaign();
-    await expect(decide(campaign.id, 'approved')).resolves.toMatchObject({ status: 'Approved' });
+    await expect(
+      runWithTenant(companyId, () => decideCampaign({
+        campaignId: campaign.id,
+        companyId,
+        actorId: 'user_1',
+        decision: 'approved',
+      })),
+    ).resolves.toMatchObject({ status: 'Approved' });
+
+    await expect(
+      ensureCampaignApprovalWorkflow({ campaignId: campaign.id, companyId }),
+    ).resolves.toMatchObject({ decision: 'approved', actorId: 'user_1' });
 
     const approval = await db.prisma.campaignApproval.findUniqueOrThrow({
       where: { campaignId: campaign.id },

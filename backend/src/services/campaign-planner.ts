@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
+import { ensureCampaignApprovalWorkflow } from './campaign-approval-workflow';
 
 const LIVE_STATUSES = ['Draft', 'Approved', 'Running', 'Launched'] as const;
 
@@ -94,6 +95,7 @@ export async function createCampaignForOpportunity(
         }
       });
 
+      await ensureCampaignApprovalWorkflow({ campaignId: campaign.id, companyId });
       logger.info({ campaignName: campaign.name }, 'Campaign created');
       return { campaign, deduped: false };
     } catch (err) {
@@ -101,6 +103,9 @@ export async function createCampaignForOpportunity(
         const existing = await prisma.campaign.findFirstOrThrow({
           where: { opportunityId, status: { in: [...LIVE_STATUSES] } },
         });
+        if (existing.status === 'Draft') {
+          await ensureCampaignApprovalWorkflow({ campaignId: existing.id, companyId });
+        }
         logger.info(
           { opportunityId, campaignId: existing.id },
           'Campaign already exists for this opportunity, lost the create race — using the existing row',

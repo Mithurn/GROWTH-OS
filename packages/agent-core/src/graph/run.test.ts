@@ -165,34 +165,6 @@ describe('harness loop', () => {
     expect(seen).toEqual({ max_budget: 5000, channels: ['whatsapp'] });
   });
 
-  it('stops the thread when request_approval returns interrupt', async () => {
-    const graph = buildGrowthAgent({
-      planner: scriptedPlanner([
-        calls([{ name: 'growthos_request_approval', args: { campaign_id: 'camp_1' } }]),
-        finish('should not run after interrupt'),
-      ]),
-      handlers: {
-        ...handlers,
-        growthos_request_approval: async () => ({
-          interrupt: true,
-          campaign_id: 'camp_1',
-          note: 'Human approval is required.',
-        }),
-      },
-      mode: 'live',
-    });
-
-    const out = await runGrowthAgent(graph, {
-      companyId: 'co_real',
-      goal: 'g',
-      runId: 'run_interrupt',
-    });
-
-    expect(out.status).toBe('stopped');
-    expect(out.summary).toMatch(/Human approval/);
-    expect(out.summary).not.toMatch(/should not run/);
-  });
-
   it('stops when the wall-clock slice is exceeded', async () => {
     const graph = buildGrowthAgent({
       planner: {

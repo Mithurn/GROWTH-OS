@@ -8,7 +8,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 installTenantRls(pool);
 
 // Create adapter
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg(pool, { disposeExternalPool: true });
 
 function buildBaseClient(): PrismaClient {
   return new PrismaClient({

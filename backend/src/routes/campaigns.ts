@@ -27,6 +27,7 @@ import {
   RejectCampaignSchema,
 } from '@growthos/contracts';
 import { CampaignTransitionError, decideCampaign } from '../services/campaign-approval';
+import { ensureCampaignApprovalWorkflow } from '../services/campaign-approval-workflow';
 
 export const campaignsRouter = Router();
 
@@ -64,6 +65,9 @@ campaignsRouter.post(
       const { opportunityId, campaign } = req.body ?? {};
 
       const result = await saveCampaign(supabase, opportunityId, campaign, req.companyId!);
+      if (result.status === 'Draft') {
+        await ensureCampaignApprovalWorkflow({ campaignId: result.id, companyId: req.companyId! });
+      }
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error saving campaign');

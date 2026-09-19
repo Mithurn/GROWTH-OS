@@ -184,11 +184,6 @@ export function buildGrowthAgent(options: HarnessOptions) {
         status = 'finished';
         summary = finished;
       }
-      if (outcome.ok && isInterrupt(outcome.result)) {
-        status = 'stopped';
-        const note = (outcome.result as { note?: string }).note;
-        summary = note || 'Waiting for human approval.';
-      }
       if (call.name === 'growthos_think' && outcome.ok) {
         // think does not count against the interesting-work budget the same
         // way — still increments stepCount so a think-loop cannot run forever.
@@ -255,10 +250,6 @@ export function buildGrowthAgent(options: HarnessOptions) {
     .addConditionalEdges('planner', route, { tools: 'tools', planner: 'planner', [END]: END })
     .addConditionalEdges('tools', afterTools, { planner: 'planner', [END]: END })
     .compile({ checkpointer: options.checkpointer ?? new MemorySaver() });
-}
-
-function isInterrupt(result: unknown): boolean {
-  return Boolean(result && typeof result === 'object' && (result as { interrupt?: boolean }).interrupt);
 }
 
 function ctxOf(state: HarnessState, mode: HarnessOptions['mode'], role: HarnessOptions['role']): RunContext {

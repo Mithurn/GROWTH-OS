@@ -21,6 +21,7 @@ import { installTenantRls } from '../../lib/tenant-context';
 
 export interface TestDb {
   container: StartedPostgreSqlContainer;
+  connectionUri: string;
   prisma: PrismaClient;
   rlsPrisma: PrismaClient;
   stop: () => Promise<void>;
@@ -59,6 +60,7 @@ export async function startTestDb(): Promise<TestDb> {
 
   return {
     container,
+    connectionUri,
     prisma,
     rlsPrisma,
     stop: async () => {
