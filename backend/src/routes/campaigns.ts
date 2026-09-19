@@ -12,7 +12,6 @@ import { validateBody } from '../middleware/validate';
 import {
   generateCampaign,
   saveCampaign,
-  approveCampaign,
   launchCampaign,
   getCampaigns,
   getCampaignById,
@@ -24,7 +23,10 @@ import {
   GenerateCampaignSchema,
   SaveCampaignSchema,
   RefineCampaignSchema,
+  ApproveCampaignSchema,
+  RejectCampaignSchema,
 } from '@growthos/contracts';
+import { CampaignTransitionError, decideCampaign } from '../services/campaign-approval';
 
 export const campaignsRouter = Router();
 
@@ -175,14 +177,49 @@ campaignsRouter.post(
   requireAuth,
   resolveCompanyMiddleware,
   requireCompanyOwnership('campaigns'),
+  validateBody(ApproveCampaignSchema),
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const campaign = await approveCampaign(supabase, id);
+      const campaign = await decideCampaign({
+        campaignId: id,
+        companyId: req.companyId!,
+        actorId: req.userId!,
+        decision: 'approved',
+        reason: req.body.reason,
+      });
       res.json({ success: true, data: campaign });
     } catch (error) {
       logger.error({ err: error }, 'Error approving campaign');
-      res.status(500).json({ error: 'Failed to approve campaign' });
+      res.status(error instanceof CampaignTransitionError ? 409 : 500).json({
+        error: error instanceof Error ? error.message : 'Failed to approve campaign',
+      });
+    }
+  },
+);
+
+campaignsRouter.post(
+  '/campaigns/:id/reject',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireCompanyOwnership('campaigns'),
+  validateBody(RejectCampaignSchema),
+  async (req: AuthRequest, res) => {
+    try {
+      const id = req.params['id'] as string;
+      const campaign = await decideCampaign({
+        campaignId: id,
+        companyId: req.companyId!,
+        actorId: req.userId!,
+        decision: 'rejected',
+        reason: req.body.reason,
+      });
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      logger.error({ err: error }, 'Error rejecting campaign');
+      res.status(error instanceof CampaignTransitionError ? 409 : 500).json({
+        error: error instanceof Error ? error.message : 'Failed to reject campaign',
+      });
     }
   },
 );

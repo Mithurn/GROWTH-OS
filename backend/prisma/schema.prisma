@@ -91,6 +91,7 @@ model Company {
   personas     Persona[]
   opportunities Opportunity[]
   campaigns    Campaign[]
+  campaignApprovals CampaignApproval[]
   agents       Agent[]
   agentRuns    AgentRun[]
   ingestionSessions IngestionSession[]
@@ -340,6 +341,7 @@ model Campaign {
   agent            Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
   opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   communications   Communication[]
+  approvals        CampaignApproval[]
 
   @@index([companyId])
   @@index([agentId])
@@ -347,6 +349,26 @@ model Campaign {
   @@index([status])
   @@index([createdAt])
   @@map("campaigns")
+}
+
+model CampaignApproval {
+  id             String   @id @default(uuid())
+  companyId      String   @map("company_id")
+  campaignId     String   @unique @map("campaign_id")
+  actorId        String   @map("actor_id")
+  decision       String
+  reason         String?
+  policyVersion  Int      @default(1) @map("policy_version")
+  policySnapshot Json     @map("policy_snapshot")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("campaign_approvals")
 }
 
 model Communication {

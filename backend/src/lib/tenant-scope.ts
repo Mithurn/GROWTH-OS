@@ -15,6 +15,7 @@ const TENANT_SCOPED_MODELS = new Set([
   'Persona',
   'Opportunity',
   'Campaign',
+  'CampaignApproval',
   'Agent',
   'AgentRun',
   'IngestionSession',

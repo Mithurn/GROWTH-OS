@@ -360,37 +360,6 @@ export async function saveCampaign(
   return data as CampaignRow;
 }
 
-export async function approveCampaign(
-  supabase: SupabaseClient,
-  campaignId: string,
-): Promise<CampaignRow> {
-  const { data: existing } = await supabase
-    .from('campaigns')
-    .select('status')
-    .eq('id', campaignId)
-    .single();
-
-  if (existing?.status === 'Launched') {
-    throw new Error('Campaign has already been launched and cannot be re-approved');
-  }
-
-  const { data, error } = await supabase
-    .from('campaigns')
-    .update({
-      status: 'Approved',
-      approved_at: new Date().toISOString(),
-    })
-    .eq('id', campaignId)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to approve campaign: ${error.message}`);
-  }
-
-  return data as CampaignRow;
-}
-
 const CHANNEL_WAKE_TIMEOUT_MS = 90_000;
 const CHANNEL_SEND_TIMEOUT_MS = 60_000;
 
