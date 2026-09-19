@@ -3,8 +3,8 @@ import type { Pool, PoolClient } from 'pg';
 
 export const tenantAls = new AsyncLocalStorage<string>();
 
-export function runWithTenant<T>(companyId: string, fn: () => T): T {
-  return tenantAls.run(companyId, fn);
+export function runWithTenant<T>(companyId: string, fn: () => T | PromiseLike<T>): Promise<T> {
+  return tenantAls.run(companyId, async () => await fn());
 }
 
 const SET_TENANT = "SELECT set_config('app.company_id', $1, true)";

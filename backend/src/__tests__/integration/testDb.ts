@@ -3,6 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import { PrismaClient } from '../../../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import { installTenantRls } from '../../lib/tenant-context';
 
 /**
  * Real Postgres in a real container, real migrations applied via `prisma migrate
@@ -21,6 +22,7 @@ import { Pool } from 'pg';
 export interface TestDb {
   container: StartedPostgreSqlContainer;
   prisma: PrismaClient;
+  rlsPrisma: PrismaClient;
   stop: () => Promise<void>;
 }
 
@@ -51,12 +53,18 @@ export async function startTestDb(): Promise<TestDb> {
   const pool = new Pool({ connectionString: connectionUri });
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
+  const rlsPool = new Pool({ connectionString: connectionUri });
+  installTenantRls(rlsPool);
+  const rlsPrisma = new PrismaClient({ adapter: new PrismaPg(rlsPool) });
 
   return {
     container,
     prisma,
+    rlsPrisma,
     stop: async () => {
+      await rlsPrisma.$disconnect();
       await prisma.$disconnect();
+      await rlsPool.end();
       await pool.end();
       await container.stop();
     },

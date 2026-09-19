@@ -90,11 +90,11 @@ DROP POLICY IF EXISTS tenant_isolation ON agent_steps;
 CREATE POLICY tenant_isolation ON agent_steps
   USING (EXISTS (
     SELECT 1 FROM agent_runs r
-    WHERE r.id = agent_steps.agent_run_id AND r.company_id = app_company_id()
+    WHERE r.id = agent_steps.run_id AND r.company_id = app_company_id()
   ))
   WITH CHECK (EXISTS (
     SELECT 1 FROM agent_runs r
-    WHERE r.id = agent_steps.agent_run_id AND r.company_id = app_company_id()
+    WHERE r.id = agent_steps.run_id AND r.company_id = app_company_id()
   ));
 
 ALTER TABLE agent_actions ENABLE ROW LEVEL SECURITY;
