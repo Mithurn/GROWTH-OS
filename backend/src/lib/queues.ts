@@ -53,7 +53,6 @@ export interface OpportunityDiscoveryJob {
   agentId: string;
   goal: string;
   guardrails: Record<string, unknown>;
-  involvement: string;
 }
 
 export interface CampaignGenerationJob {
@@ -61,7 +60,6 @@ export interface CampaignGenerationJob {
   companyId: string;
   agentId: string;
   guardrails: Record<string, unknown>;
-  involvement: string;
   audienceSize?: number;
   potentialRevenue?: number;
 }
@@ -120,7 +118,7 @@ export async function startWorkers(): Promise<void> {
   activeWorkers.push(new Worker<OpportunityDiscoveryJob>(
     'opportunity-discovery',
     withJobSpan('opportunity-discovery', async (job) => {
-      const { companyId, agentId, goal, guardrails, involvement } = job.data;
+      const { companyId, agentId, goal, guardrails } = job.data;
 
       const { discoverOpportunities } = await import('../services/opportunity-discovery');
       const { logAgentAction } = await import('../services/agent-logger');
@@ -151,7 +149,6 @@ export async function startWorkers(): Promise<void> {
               companyId,
               agentId,
               guardrails,
-              involvement,
               audienceSize: opp.audienceSize,
               potentialRevenue: opp.potentialRevenue,
             },
@@ -166,14 +163,12 @@ export async function startWorkers(): Promise<void> {
   ));
 
   // Campaign generation worker
-  // Creates the campaign in DB, logs it, and auto-launches based on involvement.
   // Includes an idempotency check so duplicate jobs are safe to retry.
   activeWorkers.push(new Worker<CampaignGenerationJob>(
     'campaign-generation',
     withJobSpan('campaign-generation', async (job) => {
-      const { opportunityId, companyId, agentId, guardrails, involvement, audienceSize, potentialRevenue } = job.data;
+      const { opportunityId, companyId, agentId, guardrails, audienceSize, potentialRevenue } = job.data;
 
-      const { prisma } = await import('../lib/prisma');
       const { createCampaignForOpportunity } = await import('../services/campaign-planner');
       const { logAgentAction } = await import('../services/agent-logger');
 
@@ -191,34 +186,7 @@ export async function startWorkers(): Promise<void> {
         details: { campaignId: campaign.id, opportunityId, audienceSize, potentialRevenue },
       });
 
-      // ponytail: still a substring match on free text, not a real involvement enum
-      // or a human approval gate (Phase 0.6 / Phase 5.4 in docs/V3_PLAN.md) — the
-      // threshold itself is at least no longer a bare literal.
-      const autoLaunchMaxValue = await getConfig(companyId, 'approval.auto_launch_max_value');
-      const involvementLower = involvement.toLowerCase();
-      const shouldAutoLaunch =
-        involvementLower.includes('autopilot') ||
-        involvementLower.includes('auto') ||
-        (involvementLower.includes('major') && Number(potentialRevenue ?? 0) < autoLaunchMaxValue);
-
-      if (shouldAutoLaunch) {
-        const { supabase } = await import('./supabase');
-        await prisma.campaign.update({
-          where: { id: campaign.id },
-          data: { status: 'Approved', approvedAt: new Date() },
-        });
-        const { launchCampaign } = await import('../services/campaigns');
-        await launchCampaign(supabase, campaign.id);
-
-        await logAgentAction({
-          agentId,
-          actionType: 'launched_campaign',
-          description: `Auto-launched campaign "${campaign.name}"`,
-          details: { campaignId: campaign.id, mode: involvement },
-        });
-      }
-
-      return { campaignId: campaign.id, autoLaunched: shouldAutoLaunch };
+      return { campaignId: campaign.id, autoLaunched: false };
     }),
     { connection, concurrency: campaignConcurrency },
   ));

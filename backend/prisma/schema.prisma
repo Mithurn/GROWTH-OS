@@ -421,12 +421,19 @@ model ProcessedWebhookEvent {
 // AI-NATIVE SYSTEM: Autonomous Agents
 // ============================================
 
+enum InvolvementMode {
+  manual
+  approve_above_threshold
+  autonomous_within_policy
+}
+
 model Agent {
   id              String    @id @default(uuid())
   companyId       String    @map("company_id")
   name            String    // Auto-generated: "Repeat Purchase Agent"
   goal            String    // User input: "Increase repeat purchases by 20%"
   status          String    @default("discovering") // 'discovering', 'running', 'paused', 'completed'
+  involvementMode InvolvementMode @default(manual) @map("involvement_mode")
   guardrails      Json      // {max_budget: 50000, frequency_cap: 3, channels: ['whatsapp', 'email']}
   performance     Json?     // {revenue: 125000, conversion_rate: 0.38, customers_reached: 1248}
   createdAt       DateTime  @default(now()) @map("created_at")

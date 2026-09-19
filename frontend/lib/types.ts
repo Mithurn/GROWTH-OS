@@ -130,3 +130,8 @@ export interface AgentGuardrails {
   channels?: string[];
   [key: string]: unknown;
 }
+
+export type InvolvementMode =
+  | 'manual'
+  | 'approve_above_threshold'
+  | 'autonomous_within_policy';

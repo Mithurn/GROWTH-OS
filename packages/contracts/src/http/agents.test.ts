@@ -13,6 +13,11 @@ describe('CreateAgentSchema', () => {
     expect(parsed.guardrails).toEqual({ max_budget: 0 });
     expect(CreateAgentSchema.parse({ goal: 'g' }).guardrails).toBeUndefined();
   });
+
+  it('defaults to manual involvement and rejects free text', () => {
+    expect(CreateAgentSchema.parse({ goal: 'g' }).involvementMode).toBe('manual');
+    expect(CreateAgentSchema.safeParse({ goal: 'g', involvementMode: 'autopilot' }).success).toBe(false);
+  });
 });
 
 describe('PatchAgentSchema', () => {
@@ -24,5 +29,6 @@ describe('PatchAgentSchema', () => {
     expect(PatchAgentSchema.safeParse({ status: 'paused' }).success).toBe(true);
     expect(PatchAgentSchema.safeParse({ goal: 'new goal' }).success).toBe(true);
     expect(PatchAgentSchema.safeParse({ guardrails: {} }).success).toBe(true);
+    expect(PatchAgentSchema.safeParse({ involvementMode: 'autonomous_within_policy' }).success).toBe(true);
   });
 });
