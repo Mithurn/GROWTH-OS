@@ -363,6 +363,13 @@ export async function launchCampaign(
     if (campaign.status !== 'Approved') {
       throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
     }
+    if (campaign.approvedAt && Date.now() - campaign.approvedAt.getTime() > 24 * 60 * 60 * 1000) {
+      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'Draft', approvedAt: null } });
+      await tx.campaignAuditEvent.create({
+        data: { companyId: campaign.companyId, campaignId, eventType: 'EXPIRED', metadata: { approvalTtlHours: 24 } },
+      });
+      throw new Error('Campaign approval expired; review and approve it again');
+    }
 
     const audience = campaign.opportunity.audience.slice(0, campaign.opportunity.audienceSize);
     const quietHours = await getConfig(campaign.companyId, 'campaign.quiet_hours');
@@ -496,6 +503,7 @@ export async function refineCampaignMessage(
 ): Promise<{ message_content: string; channel: string }> {
   const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  if (campaign.status !== 'Draft') throw new Error('Only draft campaigns can be edited');
 
   const targetChannel = newChannel ?? campaign.channel;
   const isChannelSwitch = newChannel && newChannel !== campaign.channel;

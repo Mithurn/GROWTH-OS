@@ -28,6 +28,7 @@ import {
 } from '@growthos/contracts';
 import { CampaignTransitionError, decideCampaign } from '../services/campaign-approval';
 import { ensureCampaignApprovalWorkflow } from '../services/campaign-approval-workflow';
+import { prisma } from '../lib/prisma';
 
 export const campaignsRouter = Router();
 
@@ -247,6 +248,33 @@ campaignsRouter.post(
       res
         .status(500)
         .json({ error: error instanceof Error ? error.message : 'Failed to launch campaign' });
+    }
+  },
+);
+
+campaignsRouter.post(
+  '/campaigns/:id/cancel',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireCompanyOwnership('campaigns'),
+  requireOwner,
+  async (req: AuthRequest, res) => {
+    try {
+      const id = req.params['id'] as string;
+      const campaign = await prisma.campaign.findFirst({ where: { id, companyId: req.companyId! } });
+      if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+      if (['Completed', 'Cancelled'].includes(campaign.status)) return res.status(409).json({ error: `Campaign cannot be cancelled from ${campaign.status}` });
+      const updated = await prisma.$transaction(async (tx) => {
+        const row = await tx.campaign.update({ where: { id }, data: { status: 'Cancelled' } });
+        await tx.campaignAuditEvent.create({
+          data: { companyId: req.companyId!, campaignId: id, eventType: 'CANCELLED', actorId: req.userId!, metadata: { reason: req.body?.reason ?? null } },
+        });
+        return row;
+      });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      logger.error({ err: error }, 'Error cancelling campaign');
+      res.status(500).json({ error: 'Failed to cancel campaign' });
     }
   },
 );

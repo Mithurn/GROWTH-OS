@@ -97,5 +97,14 @@ export async function decideCampaign(input: CampaignDecisionInput) {
     actorId: input.actorId,
     reason: input.reason,
   });
+  await prisma.campaignAuditEvent.create({
+    data: {
+      companyId: input.companyId,
+      campaignId: input.campaignId,
+      eventType: 'RESUMED',
+      actorId: input.actorId,
+      metadata: { decision: input.decision, reason: input.reason ?? null },
+    },
+  });
   return campaign;
 }

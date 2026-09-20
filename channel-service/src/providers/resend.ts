@@ -21,6 +21,10 @@ export class ResendProvider implements ChannelProvider {
         to: request.recipient,
         subject: 'A message for you',
         text: request.content,
+        headers: request.unsubscribeUrl ? {
+          'List-Unsubscribe': `<${request.unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        } : undefined,
       },
       { idempotencyKey: request.communicationId },
     );

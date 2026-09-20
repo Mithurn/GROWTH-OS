@@ -24,6 +24,7 @@ import {
   saveCampaign,
   getCampaigns,
   approveCampaign,
+  rejectCampaign,
   launchCampaign,
   getOpportunityDashboard,
   refineCampaign,
@@ -669,6 +670,19 @@ function CampaignsContent() {
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all"
                       >
                         <Check className="h-4 w-4" /> Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const reason = window.prompt('Why are you rejecting this campaign?') ?? '';
+                          try {
+                            await rejectCampaign(selectedCampaign.id, reason);
+                            setSelectedCampaign(null);
+                            loadCampaigns();
+                          } catch {}
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-sm font-bold rounded-xl transition-all"
+                      >
+                        <X className="h-4 w-4" /> Reject
                       </button>
                     </div>
                   )}
