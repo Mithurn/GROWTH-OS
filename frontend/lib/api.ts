@@ -376,6 +376,16 @@ export async function approveCampaign(campaignId: string) {
   return response.json();
 }
 
+export async function rejectCampaign(campaignId: string, reason?: string) {
+  const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  if (!response.ok) throw new Error('Failed to reject campaign');
+  await bust('campaigns-');
+  return response.json();
+}
+
 export async function launchCampaign(campaignId: string) {
   const response = await apiFetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId)}/launch`, {
     method: 'POST',

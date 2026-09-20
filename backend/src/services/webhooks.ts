@@ -156,6 +156,14 @@ export async function processWebhook(
           providerEventId: event.eventId,
         },
       }),
+      prisma.campaignAuditEvent.create({
+        data: {
+          companyId: comm.campaign.companyId,
+          campaignId: comm.campaignId,
+          eventType: 'PROVIDER_CALLBACK',
+          metadata: { communicationId: comm.id, status: event.status, providerEventId: event.eventId },
+        },
+      }),
     ]);
   } catch (error) {
     if (isUniqueViolation(error)) {

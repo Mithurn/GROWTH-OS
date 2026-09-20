@@ -38,6 +38,7 @@ import { attachAgentSteer } from './lib/agent-steer';
 import { assertRedisReachable } from './lib/redis';
 import { assertConfigDefaultsSeeded, getConfig } from './lib/config';
 import { closeAgentCheckpointer } from './lib/agent-checkpointer';
+import { unsubscribeRouter } from './routes/unsubscribe';
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 app.use(tracingMiddleware);
 app.use('/api', generalLimiter);
+app.use('/api', unsubscribeRouter);
 
 // Health checks sit outside /api so they are not rate limited — Render polls the
 // liveness endpoint and an external cron polls readiness every few minutes.

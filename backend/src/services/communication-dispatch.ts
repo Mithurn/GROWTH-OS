@@ -3,8 +3,17 @@ import { checkAndIncrFrequencyCap } from '../lib/redis';
 import { injectTraceHeaders } from '../lib/trace-context';
 import { getVerifiedCredentials, type IntegrationKind } from './integrations';
 import { isPaidAndActive } from './billing';
+import { createHmac } from 'node:crypto';
 
 type Channel = 'WhatsApp' | 'Email' | 'SMS';
+
+function unsubscribeUrl(communicationId: string): string | undefined {
+  const baseUrl = process.env.PUBLIC_API_URL;
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!baseUrl || !secret) return undefined;
+  const signature = createHmac('sha256', secret).update(communicationId).digest('hex');
+  return `${baseUrl.replace(/\/$/, '')}/api/unsubscribe/${communicationId}/${signature}`;
+}
 
 async function resolveSendCredentials(
   companyId: string,
@@ -119,6 +128,7 @@ export async function dispatchCommunication(communicationId: string): Promise<vo
       channel,
       content: communication.message,
       credentials,
+      unsubscribeUrl: channel === 'Email' ? unsubscribeUrl(communication.id) : undefined,
     }),
     signal: AbortSignal.timeout(90_000),
   });
@@ -129,6 +139,14 @@ export async function dispatchCommunication(communicationId: string): Promise<vo
   await prisma.communication.update({
     where: { id: communication.id },
     data: { providerMessageId: result.providerMessageId },
+  });
+  await prisma.campaignAuditEvent.create({
+    data: {
+      companyId: communication.campaign.companyId,
+      campaignId: communication.campaignId,
+      eventType: 'PROVIDER_REQUESTED',
+      metadata: { communicationId: communication.id, providerMessageId: result.providerMessageId },
+    },
   });
   await finishCampaignIfDispatched(communication.campaignId, communication.campaign.companyId);
 }
