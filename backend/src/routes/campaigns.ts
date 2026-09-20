@@ -41,7 +41,7 @@ campaignsRouter.post(
   async (req: AuthRequest, res) => {
     try {
       const { opportunityId, model } = req.body;
-      const result = await generateCampaign(supabase, {
+      const result = await generateCampaign({
         opportunityId,
         companyId: req.companyId!,
         model,
@@ -64,7 +64,7 @@ campaignsRouter.post(
     try {
       const { opportunityId, campaign } = req.body ?? {};
 
-      const result = await saveCampaign(supabase, opportunityId, campaign, req.companyId!);
+      const result = await saveCampaign(opportunityId, campaign, req.companyId!);
       if (result.status === 'Draft') {
         await ensureCampaignApprovalWorkflow({ campaignId: result.id, companyId: req.companyId! });
       }
@@ -86,7 +86,7 @@ campaignsRouter.get(
     try {
       const page = Math.max(1, parseInt(req.query['page'] as string) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(req.query['limit'] as string) || 20));
-      const { data, total } = await getCampaigns(supabase, req.companyId!, { page, limit });
+      const { data, total } = await getCampaigns(req.companyId!, { page, limit });
       res.json({
         success: true,
         data,
@@ -107,7 +107,7 @@ campaignsRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const campaign = await getCampaignById(supabase, id);
+      const campaign = await getCampaignById(id);
       res.json({ success: true, data: campaign });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching campaign');
@@ -164,7 +164,7 @@ campaignsRouter.post(
       const id = req.params['id'] as string;
       const { modifier, channel } = req.body;
 
-      const result = await refineCampaignMessage(supabase, id, modifier, channel ?? undefined);
+      const result = await refineCampaignMessage(id, modifier, channel ?? undefined);
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error refining campaign message');
@@ -237,7 +237,7 @@ campaignsRouter.post(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const result = await launchCampaign(supabase, id);
+      const result = await launchCampaign(id);
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error launching campaign');

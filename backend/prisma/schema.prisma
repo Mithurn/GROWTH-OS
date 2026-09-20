@@ -380,6 +380,7 @@ model Communication {
   messageVariant      String?   @map("message_variant") // Which variant was used (A, B, C)
   status              String    @default("QUEUED")
   providerMessageId   String?   @map("provider_message_id")
+  idempotencyKey      String?   @unique @map("idempotency_key")
   failureReason       String?   @map("failure_reason")
   retryCount          Int       @default(0) @map("retry_count")
   converted           Boolean   @default(false) // Did customer make a purchase?

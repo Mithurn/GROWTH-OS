@@ -45,6 +45,7 @@ export const CONFIG_REGISTRY = {
   'queue.campaign_generation.concurrency': z.number().int().positive().default(3),
   'queue.persona_generation.concurrency': z.number().int().positive().default(1),
   'queue.ingestion.concurrency': z.number().int().positive().default(1),
+  'queue.communication_dispatch.concurrency': z.number().int().positive().default(10),
   'ingestion.resume.cutoff_hours': z.number().int().positive().default(24),
   'ingestion.resume.max_sessions': z.number().int().positive().default(20),
 

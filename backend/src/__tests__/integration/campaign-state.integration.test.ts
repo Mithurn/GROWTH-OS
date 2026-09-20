@@ -68,7 +68,7 @@ describe('campaign state machine — real Postgres', () => {
     });
   }
 
-  it('allows approval before launch', async () => {
+  it('requires approval and dispatch before launch', async () => {
     const campaign = await db.prisma.campaign.create({
       data: {
         companyId,
@@ -81,6 +81,7 @@ describe('campaign state machine — real Postgres', () => {
     });
 
     await db.prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'Approved' } });
+    await db.prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'Dispatching' } });
     const launched = await db.prisma.campaign.update({
       where: { id: campaign.id },
       data: { status: 'Launched' },

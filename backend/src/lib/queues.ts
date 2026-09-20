@@ -73,12 +73,18 @@ export interface IngestionJob {
   sessionId: string;
 }
 
+export interface CommunicationDispatchJob {
+  companyId: string;
+  communicationId: string;
+}
+
 // ── Queues ────────────────────────────────────────────────────────────────────
 
 export const opportunityQueue = new Queue<OpportunityDiscoveryJob>('opportunity-discovery', { connection });
 export const campaignQueue = new Queue<CampaignGenerationJob>('campaign-generation', { connection });
 export const personaQueue = new Queue<PersonaGenerationJob>('persona-generation', { connection });
 export const ingestionQueue = new Queue<IngestionJob>('ingestion', { connection });
+export const communicationDispatchQueue = new Queue<CommunicationDispatchJob>('communication-dispatch', { connection });
 
 export async function enqueueOpportunityDiscovery(data: OpportunityDiscoveryJob): Promise<void> {
   await opportunityQueue.add('discover', data, await jobOptions());
@@ -96,6 +102,16 @@ export async function enqueueIngestion(data: IngestionJob): Promise<void> {
   await ingestionQueue.add('process', data, await jobOptions());
 }
 
+export async function enqueueCommunicationDispatchBatch(data: CommunicationDispatchJob[]): Promise<void> {
+  if (!data.length) return;
+  const options = await jobOptions();
+  await communicationDispatchQueue.addBulk(data.map((job) => ({
+    name: 'send',
+    data: job,
+    opts: { ...options, jobId: job.communicationId },
+  })));
+}
+
 // ── Workers ───────────────────────────────────────────────────────────────────
 
 let workersStarted = false;
@@ -105,11 +121,12 @@ export async function startWorkers(): Promise<void> {
   if (workersStarted) return;
   workersStarted = true;
 
-  const [discoveryConcurrency, campaignConcurrency, personaConcurrency, ingestionConcurrency] = await Promise.all([
+  const [discoveryConcurrency, campaignConcurrency, personaConcurrency, ingestionConcurrency, communicationConcurrency] = await Promise.all([
     getConfig(null, 'queue.opportunity_discovery.concurrency'),
     getConfig(null, 'queue.campaign_generation.concurrency'),
     getConfig(null, 'queue.persona_generation.concurrency'),
     getConfig(null, 'queue.ingestion.concurrency'),
+    getConfig(null, 'queue.communication_dispatch.concurrency'),
   ]);
 
   // Opportunity discovery worker
@@ -212,9 +229,33 @@ export async function startWorkers(): Promise<void> {
     { connection, concurrency: ingestionConcurrency },
   ));
 
-  console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation, ingestion');
+  activeWorkers.push(new Worker<CommunicationDispatchJob>(
+    'communication-dispatch',
+    withJobSpan('communication-dispatch', async (job) => {
+      const { dispatchCommunication, markCommunicationDispatchFailed } = await import('../services/communication-dispatch');
+      try {
+        await dispatchCommunication(job.data.communicationId);
+      } catch (error) {
+        const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+        if (finalAttempt) {
+          await markCommunicationDispatchFailed(
+            job.data.communicationId,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+        throw error;
+      }
+      return { communicationId: job.data.communicationId };
+    }),
+    { connection, concurrency: communicationConcurrency },
+  ));
+
+  console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation, ingestion, communication-dispatch');
 
   void resumeIncompleteIngestions();
+  void resumeQueuedCommunications();
+  dispatchSweep = setInterval(() => void resumeQueuedCommunications(), 60_000);
+  dispatchSweep.unref();
 }
 
 /**
@@ -224,13 +265,35 @@ export async function startWorkers(): Promise<void> {
  * to them.
  */
 export async function closeWorkers(): Promise<void> {
+  if (dispatchSweep) clearInterval(dispatchSweep);
   await Promise.all(activeWorkers.map((w) => w.close()));
   await Promise.all([
     opportunityQueue.close(),
     campaignQueue.close(),
     personaQueue.close(),
     ingestionQueue.close(),
+    communicationDispatchQueue.close(),
   ]);
+}
+
+let dispatchSweep: NodeJS.Timeout | undefined;
+
+async function resumeQueuedCommunications(): Promise<void> {
+  try {
+    const { prismaSystem } = await import('./prisma');
+    const rows = await prismaSystem.communication.findMany({
+      where: { status: 'QUEUED', providerMessageId: null },
+      select: { id: true, campaign: { select: { companyId: true } } },
+      take: 1_000,
+    });
+    await enqueueCommunicationDispatchBatch(rows.map((row) => ({
+      communicationId: row.id,
+      companyId: row.campaign.companyId,
+    })));
+  } catch (error) {
+    const { logger } = await import('./logger');
+    logger.error({ err: error }, 'Failed to sweep queued communications');
+  }
 }
 
 /**
