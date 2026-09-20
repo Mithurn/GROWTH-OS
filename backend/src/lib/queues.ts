@@ -196,9 +196,8 @@ export async function startWorkers(): Promise<void> {
     'persona-generation',
     withJobSpan('persona-generation', async (job) => {
       const { companyId, model } = job.data;
-      const { supabase } = await import('./supabase');
       const { generatePersonas } = await import('../services/personas');
-      return generatePersonas(supabase, { companyId, model });
+      return generatePersonas({ companyId, model });
     }),
     { connection, concurrency: personaConcurrency },
   ));

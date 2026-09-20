@@ -157,7 +157,7 @@ export async function processIngestion(sessionId: string) {
     });
 
     // Personas take another LLM round-trip, so they run after the user is already in.
-    generatePersonas(supabase, {
+    generatePersonas({
       companyId,
       logger: {
         info: (msg) => logger.info(msg),
