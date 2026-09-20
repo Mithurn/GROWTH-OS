@@ -13,6 +13,10 @@ export interface OrderImportSummary {
 const CUSTOMER_BATCH_SIZE = 100;
 const INSERT_CHUNK_SIZE = 1000;
 
+export function isConsentGranted(value: unknown): boolean {
+  return value === true || ['true', '1', 'yes'].includes(String(value).trim().toLowerCase());
+}
+
 export async function seedProductsPrisma(companyId: string, orders: any[]) {
   const seen = new Set<string>();
   const toInsert: Array<{
@@ -76,6 +80,8 @@ export async function importCustomersPrisma(customers: any[], companyId: string)
           lastName: row.last_name || null,
           email: row.email || null,
           phone: row.phone || null,
+          emailMarketingConsent: isConsentGranted(row.email_marketing_consent),
+          smsMarketingConsent: isConsentGranted(row.sms_marketing_consent),
           gender: row.gender || null,
           city: row.city || null,
           state: row.state || null,
@@ -86,6 +92,8 @@ export async function importCustomersPrisma(customers: any[], companyId: string)
           lastName: row.last_name || null,
           email: row.email || null,
           phone: row.phone || null,
+          emailMarketingConsent: isConsentGranted(row.email_marketing_consent),
+          smsMarketingConsent: isConsentGranted(row.sms_marketing_consent),
         },
       });
       customerMap.set(externalCustomerId, created.id);

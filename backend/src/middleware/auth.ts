@@ -9,6 +9,7 @@ export interface AuthRequest extends Request {
   userId?: string;
   userEmail?: string;
   companyId?: string;
+  role?: string;
 }
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -30,7 +31,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
 export async function resolveCompanyMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const profile = await prisma.profile.findUnique({
     where: { id: req.userId! },
-    select: { companyId: true },
+    select: { companyId: true, role: true },
   });
 
   if (!profile?.companyId) {
@@ -40,12 +41,18 @@ export async function resolveCompanyMiddleware(req: AuthRequest, res: Response, 
   }
 
   req.companyId = profile.companyId;
+  req.role = profile.role;
   const span = trace.getActiveSpan();
   if (span) {
     span.setAttribute('company.id', profile.companyId);
     span.setAttribute('langfuse.user.id', profile.companyId);
   }
   runWithTenant(profile.companyId, () => next());
+}
+
+export function requireOwner(req: AuthRequest, res: Response, next: NextFunction) {
+  if (req.role !== 'owner') return res.status(403).json({ error: 'Owner access required' });
+  next();
 }
 
 export function requireInternalSecret(req: Request, res: Response, next: NextFunction) {

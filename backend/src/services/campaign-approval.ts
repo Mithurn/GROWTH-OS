@@ -66,6 +66,15 @@ export async function decideCampaignTransaction(
         },
       },
     });
+    await tx.campaignAuditEvent.create({
+      data: {
+        companyId: input.companyId,
+        campaignId: input.campaignId,
+        eventType: input.decision === 'approved' ? 'APPROVED' : 'REJECTED',
+        actorId: input.actorId,
+        metadata: { reason: input.reason ?? null },
+      },
+    });
 
     return tx.campaign.findFirstOrThrow({
       where: { id: input.campaignId, companyId: input.companyId },
