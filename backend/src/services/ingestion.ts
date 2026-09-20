@@ -1,6 +1,5 @@
 import { Readable } from 'stream';
 import csvParser from 'csv-parser';
-import { supabase } from '../lib/supabase';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { generateCustomerAttributes } from './customer-attributes';
@@ -185,12 +184,12 @@ async function generateCustomerMetricsWithVerification(companyId: string) {
 }
 
 async function generateCustomerAttributesWithVerification(companyId: string) {
-  const firstPass = await generateCustomerAttributes(supabase, { companyId });
+  const firstPass = await generateCustomerAttributes({ companyId });
   if (firstPass.totalAttributesRecords >= firstPass.totalCustomers) return firstPass;
 
   logger.warn('customer_attributes incomplete after first pass, retrying...');
   await sleep(1000);
-  const secondPass = await generateCustomerAttributes(supabase, { companyId });
+  const secondPass = await generateCustomerAttributes({ companyId });
   if (secondPass.totalAttributesRecords < secondPass.totalCustomers) {
     throw new Error(
       `Customer attributes incomplete after retry: ${secondPass.totalAttributesRecords}/${secondPass.totalCustomers}`,
