@@ -6,13 +6,13 @@
   <br>
 </h1>
 
-<p align="center"><strong>An autonomous AI growth agent for small businesses — not a dashboard you fill in, but an agent that finds your revenue gaps, writes the campaign, and tracks what converted.</strong></p>
+<p align="center"><strong>A human-approved AI growth system that finds revenue gaps, drafts campaigns, delivers approved messages, and measures conversion.</strong></p>
 
 <p align="center">
   <a href="https://growos-ai.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-growos--ai.vercel.app-5B4FFF?style=flat-square" alt="Live Demo"></a>
   <img src="https://img.shields.io/badge/Next.js-App_Router-black?style=flat-square&logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Supabase-RLS_on_19_tables-3ECF8E?style=flat-square&logo=supabase" alt="Supabase">
+  <img src="https://img.shields.io/badge/PostgreSQL-RLS_enforced-3ECF8E?style=flat-square&logo=postgresql" alt="PostgreSQL RLS">
   <img src="https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=flat-square&logo=github-actions" alt="CI">
   <img src="https://img.shields.io/badge/Deployed-Vercel_+_Render-000000?style=flat-square&logo=vercel" alt="Deployed">
 </p>
@@ -33,14 +33,14 @@
 
 Traditional CRMs make the marketer do all the thinking: build a segment, write a message, pick a channel, schedule a send. GrowthOS inverts this.
 
-An **autonomous AI agent** runs every 6 hours and does the work:
+A scheduled growth agent prepares the work while the marketer keeps execution control:
 
 1. Ingests your customer + order history (CSV upload)
 2. Computes RFM behavioural segments, purchase patterns, and category preferences
 3. Assigns AI-generated personas to each customer cluster
 4. Surfaces revenue opportunities: *"76 dormant VIPs haven't bought in 90 days — ₹1.1L recoverable"*
-5. Auto-generates campaign copy, audience definition, recommended channel, and predicted revenue
-6. Marketer reviews, refines in natural language ("make it more urgent"), approves, and launches
+5. Generates campaign copy, audience definition, recommended channel, and predicted revenue
+6. Pauses durably for a marketer to review, refine, approve, and launch
 
 **The marketer's job shifts from building to steering.**
 
@@ -58,18 +58,16 @@ Three independently deployable services:
                          │ REST + Auth JWT
 ┌────────────────────────▼────────────────────────────────────┐
 │  Backend API — Express.js (Render)                          │
-│  Ingestion · RFM Engine · AI Orchestrator · Campaign Launcher│
+│  Ingestion · RFM Engine · AI Orchestrator · Campaign API     │
 │  requireAuth + resolveCompanyMiddleware on every route       │
 └──────────┬──────────────────────────────┬───────────────────┘
-           │ POST /send                   │ HMAC-signed webhooks
+           │                              │ PostgreSQL + RLS
 ┌──────────▼──────────┐     ┌─────────────▼───────────────────┐
-│  Channel Service    │     │  Supabase — PostgreSQL           │
-│  Node.js (Render)   │     │  RLS enforced on 19 tables       │
-│  Twilio / Resend /  │     │  companies · customers · orders  │
-│  Simulator fallback │     │  personas · opportunities        │
-└─────────────────────┘     │  campaigns · communications      │
-                            │  communication_events            │
-                            └─────────────────────────────────┘
+│ BullMQ Worker       │────▶│  Channel Service                 │
+│ Recipient outbox    │     │  Twilio / Resend / Simulator    │
+└──────────┬──────────┘     └─────────────┬───────────────────┘
+           │ Redis                         │ HMAC callbacks
+           └───────────────────────────────┘
 ```
 
 ```mermaid
@@ -115,7 +113,7 @@ graph TD
     CAM_SVC --> T3
     CAM -->|launch| LAUNCH
     LAUNCH --> T3
-    LAUNCH -->|POST /send| QUEUE
+    LAUNCH -->|transactional recipient outbox| QUEUE
     QUEUE --> PROV
     PROV --> CB
     CB -->|POST /webhooks/channel-status| WH
@@ -131,19 +129,19 @@ graph TD
 - **Supabase Auth** — email/password with JWT-based sessions
 - **`requireAuth` middleware** on every Express route — rejects requests without a valid JWT
 - **`resolveCompanyMiddleware`** resolves `companyId` exclusively from the authenticated user's DB profile — never trusted from the client request
-- **Row-Level Security** enabled on all 19 Supabase tables — enforced at the database layer regardless of application code
+- **Row-Level Security** enforced by PostgreSQL for tenant-owned tables, backed by real cross-tenant integration tests
 - **Full multi-tenancy** — multiple companies can sign up; all data is completely isolated
 
 ### Data Ingestion Pipeline
-- CSV upload (customers + orders) via multipart form, streamed to Supabase
-- Chunked `.in()` queries (batches of 200) to stay within Supabase URL length limits at scale
+- CSV upload (customers + orders) via bounded multipart requests, persisted as resumable ingestion sessions
+- Idempotent Prisma upserts and batched PostgreSQL inserts for customers, products, orders, and line items
 - RFM score computation: recency, frequency, monetary value per customer
 - Customer attribute enrichment: average order value, category preferences, purchase intervals
 - Persona assignment: LLM clusters customers into 4–6 behavioural archetypes per company
 - Background processing — persona + agent setup is fire-and-forget; dashboard unlocks as soon as first opportunity is ready
 
 ### AI Orchestration
-Every AI step uses a strict **prompt → JSON parse → Zod validate → DB write** contract. The LLM never outputs free-form text that touches the UI directly.
+Persisted AI generation uses a **prompt → JSON parse → schema validate → DB write** contract. Analytics uses deterministic aggregation and a safe fallback when an optional narrative call fails.
 
 | Step | Schema enforced | Fallback |
 |---|---|---|
@@ -151,15 +149,16 @@ Every AI step uses a strict **prompt → JSON parse → Zod validate → DB writ
 | Opportunity Engine | Full typed opportunity object with numeric revenue fields | Discard, continue |
 | Campaign Generator | `{ name, message_content, channel, objective, offer }` | Return error to frontend |
 
-### Autonomous Agent
-- Agent orchestrator runs every **6 hours** via `setInterval` on backend startup
-- Discovers new opportunities, enqueues BullMQ jobs for campaign generation
-- Falls back to inline execution when Redis is unavailable (no silent failures)
-- Logs every action to `agent_actions` table — surfaced as a live activity feed on the dashboard
+### Agent Orchestration
+- An authenticated scheduler endpoint starts agent runs; overlapping ticks are rejected
+- LangGraph persists campaign approval checkpoints in PostgreSQL and resumes after a human decision
+- Involvement modes are typed and fail closed; no campaign sends without an approved state transition
+- Agent runs and steps are persisted and surfaced in the activity feed
 
 ### Campaign Delivery
 - Channel Service is a **separate process** — mirrors how real CRMs integrate with providers like Twilio/Resend
 - Provider selection per channel: Twilio (WhatsApp/SMS), Resend (Email), Simulator fallback when no API keys set
+- Transactional launch creates one durable recipient job per communication; BullMQ retries with backoff
 - Frequency cap: max 2 messages/customer/day — suppressed with reason logged
 - **Delivery state machine**: `QUEUED → SENT → DELIVERED → READ → CLICKED / FAILED`
 - **HMAC-SHA256 webhook verification** — backend rejects any unsigned or tampered callback
@@ -169,7 +168,7 @@ Every AI step uses a strict **prompt → JSON parse → Zod validate → DB writ
 ### Frontend Performance
 - **SWR cache** — module-level in-memory cache with per-endpoint TTLs; repeat page visits return data in <16ms while a background refresh runs silently
 - Parallel data fetching — opportunities + campaigns fetched with `Promise.all`, not sequentially
-- Cold-start mitigation — health ping warms both Render services on dashboard load
+- Cold-start mitigation — health checks warm the API; durable jobs survive slow provider startup
 
 ### CI / CD
 - **GitHub Actions CI** — on every push and PR to `main`: backend typecheck + tests, frontend typecheck + lint + production build, channel-service typecheck
@@ -184,11 +183,11 @@ Every AI step uses a strict **prompt → JSON parse → Zod validate → DB writ
 | Concern | What I did | What I'd do at scale |
 |---|---|---|
 | **Message delivery** | Simulator fallback when no provider keys set; Twilio/Resend wired and ready | Add provider keys; no code changes needed |
-| **Job queue** | BullMQ + inline fallback when Redis unavailable | Dedicated Redis instance; workers on separate processes |
+| **Job queue** | BullMQ backed by required Redis; API and worker are separate processes | Partition queues when sustained throughput requires it |
 | **Analytics realtime** | 5s polling on campaign analytics page | Supabase Realtime subscriptions |
-| **Webhook ingestion** | Inline Supabase upsert per event | SQS/Kafka + worker pool for batched writes |
-| **Cold starts** | Health ping pre-warms Render free tier | Paid always-on instances |
-| **Campaign launch rate** | `Promise.allSettled` — all sends in parallel | Chunked batching with per-chunk rate limiting |
+| **Webhook ingestion** | Transactional Prisma write with deduplication | Stream events when measured volume requires it |
+| **Cold starts** | Health ping pre-warms the Render API | Paid always-on API and worker instances |
+| **Delivery guarantee** | Durable at-least-once jobs; Resend receives a provider idempotency key | Add a provider-side dedup key for Twilio if its API supports one |
 
 ---
 
@@ -231,9 +230,11 @@ xeno-grow/
 │   │   └── supabase/            # Auth client + token helpers
 │   └── components/
 │
-├── backend/                     # Express.js · Supabase · Prisma · OpenRouter
+├── backend/                     # Express.js · Prisma · PostgreSQL · BullMQ · LangGraph
 │   ├── src/
-│   │   ├── server.ts            # All routes — requireAuth + resolveCompany on every endpoint
+│   │   ├── server.ts            # API process
+│   │   ├── worker.ts            # BullMQ worker process
+│   │   ├── routes/              # Authenticated HTTP boundaries
 │   │   ├── middleware/auth.ts   # JWT verification + company resolution
 │   │   ├── services/
 │   │   │   ├── customer-attributes.ts   # RFM + attribute engine
@@ -241,9 +242,8 @@ xeno-grow/
 │   │   │   ├── opportunity-discovery.ts # AI opportunity engine
 │   │   │   ├── campaigns.ts             # Campaign CRUD + launch + state machine
 │   │   │   ├── agent-logger.ts          # Activity feed writes
-│   │   │   └── agent-orchestrator.ts    # 6h autonomous run loop
-│   │   └── __tests__/
-│   │       └── api.test.ts      # 12 integration tests (Vitest)
+│   │   │   └── agent-orchestrator.ts    # Scheduled, overlap-safe agent runs
+│   │   └── __tests__/           # Unit and real PostgreSQL integration suites
 │   └── prisma/schema.prisma
 │
 ├── channel-service/             # Standalone delivery service · Node.js
@@ -265,7 +265,7 @@ xeno-grow/
 
 ## Getting Started Locally
 
-**Prerequisites:** Node.js 18+, a Supabase project, an OpenRouter API key (free at openrouter.ai)
+**Prerequisites:** Node.js 22+, PostgreSQL with pgvector, Redis, Supabase Auth, and an OpenRouter API key
 
 ```bash
 git clone https://github.com/Mithurn/xeno-grow
@@ -284,7 +284,7 @@ chmod +x scripts/start-all.sh && ./scripts/start-all.sh
 **`backend/.env`**
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_ANON_KEY=
 DATABASE_URL=
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1

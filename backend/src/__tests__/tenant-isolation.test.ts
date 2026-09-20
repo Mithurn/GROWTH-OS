@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 
-// Every backend query runs with the Supabase service role, which bypasses RLS, so
-// cross-tenant access can only be blocked in Express. These tests pin that behaviour:
-// knowing another company's row id must not grant access to it.
-
 const { mockGetUser, resourceCompanyId } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   resourceCompanyId: { value: 'co_caller' },

@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import {
   requireAuth,
@@ -125,7 +124,7 @@ campaignsRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const analytics = await getCampaignAnalytics(supabase, id);
+      const analytics = await getCampaignAnalytics(id);
       res.json({ success: true, data: analytics });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching campaign analytics');

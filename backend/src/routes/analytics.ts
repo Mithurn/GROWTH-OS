@@ -1,5 +1,4 @@
 import { Router, type Response } from 'express';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { getCached, setCached } from '../lib/cache';
 import { requireAuth, resolveCompanyMiddleware, type AuthRequest } from '../middleware/auth';
@@ -55,32 +54,32 @@ analyticsRouter.get(
   '/analytics/intelligence-brief',
   ...authed,
   llmLimiter,
-  cachedRoute('intelligence-brief', (companyId) => generateIntelligenceBrief(supabase, companyId)),
+  cachedRoute('intelligence-brief', (companyId) => generateIntelligenceBrief(companyId)),
 );
 
 analyticsRouter.get(
   '/analytics/campaign-funnel',
   ...authed,
-  cachedRoute('campaign-funnel', (companyId) => getCampaignFunnel(supabase, companyId)),
+  cachedRoute('campaign-funnel', (companyId) => getCampaignFunnel(companyId)),
 );
 
 analyticsRouter.get(
   '/analytics/opportunity-pipeline',
   ...authed,
-  cachedRoute('opportunity-pipeline', (companyId) => getOpportunityPipeline(supabase, companyId)),
+  cachedRoute('opportunity-pipeline', (companyId) => getOpportunityPipeline(companyId)),
 );
 
 analyticsRouter.get(
   '/analytics/channel-performance',
   ...authed,
-  cachedRoute('channel-performance', (companyId) => getChannelPerformance(supabase, companyId)),
+  cachedRoute('channel-performance', (companyId) => getChannelPerformance(companyId)),
 );
 
 analyticsRouter.get(
   '/analytics/opportunity-distribution',
   ...authed,
   cachedRoute('opportunity-distribution', (companyId) =>
-    getOpportunityDistribution(supabase, companyId),
+    getOpportunityDistribution(companyId),
   ),
 );
 
@@ -89,7 +88,7 @@ analyticsRouter.get(
   ...authed,
   cachedRoute(
     'opportunity-trend',
-    (companyId, req) => getOpportunityTrend(supabase, trendDays(req), companyId),
+    (companyId, req) => getOpportunityTrend(trendDays(req), companyId),
     (req) => [String(trendDays(req))],
   ),
 );
@@ -99,7 +98,7 @@ analyticsRouter.get(
   ...authed,
   cachedRoute(
     'activity-feed',
-    (companyId, req) => getActivityFeed(supabase, feedLimit(req), companyId),
+    (companyId, req) => getActivityFeed(feedLimit(req), companyId),
     (req) => [String(feedLimit(req))],
   ),
 );
@@ -107,13 +106,15 @@ analyticsRouter.get(
 analyticsRouter.get(
   '/analytics/recommended-actions',
   ...authed,
-  cachedRoute('recommended-actions', (companyId) => getRecommendedActions(supabase, companyId)),
+  cachedRoute('recommended-actions', (companyId) => getRecommendedActions(companyId)),
 );
 
 function trendDays(req: AuthRequest): number {
-  return req.query.days ? parseInt(req.query.days as string) : 30;
+  const value = Number.parseInt(String(req.query.days ?? ''), 10);
+  return Number.isFinite(value) ? Math.min(365, Math.max(1, value)) : 30;
 }
 
 function feedLimit(req: AuthRequest): number {
-  return req.query.limit ? parseInt(req.query.limit as string) : 20;
+  const value = Number.parseInt(String(req.query.limit ?? ''), 10);
+  return Number.isFinite(value) ? Math.min(100, Math.max(1, value)) : 20;
 }

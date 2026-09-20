@@ -22,7 +22,7 @@ services:
         value: 3001
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_JWT_SECRET
         sync: false  # Project Settings -> API -> JWT Secret. Needed only if this project still signs
