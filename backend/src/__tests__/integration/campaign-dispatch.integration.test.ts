@@ -8,14 +8,17 @@ describe('campaign dispatch outbox — real Postgres and Redis', () => {
   let redis: StartedTestContainer;
   let previousDatabaseUrl: string | undefined;
   let previousRedisUrl: string | undefined;
+  let previousWebhookSecret: string | undefined;
 
   beforeAll(async () => {
     db = await startTestDb();
     redis = await new GenericContainer('redis:7-alpine').withExposedPorts(6379).start();
     previousDatabaseUrl = process.env.DATABASE_URL;
     previousRedisUrl = process.env.REDIS_URL;
+    previousWebhookSecret = process.env.WEBHOOK_SECRET;
     process.env.DATABASE_URL = db.connectionUri;
     process.env.REDIS_URL = `redis://${redis.getHost()}:${redis.getMappedPort(6379)}`;
+    process.env.WEBHOOK_SECRET = 'test-webhook-secret';
     vi.resetModules();
   }, 60_000);
 
@@ -28,6 +31,8 @@ describe('campaign dispatch outbox — real Postgres and Redis', () => {
     else process.env.DATABASE_URL = previousDatabaseUrl;
     if (previousRedisUrl === undefined) delete process.env.REDIS_URL;
     else process.env.REDIS_URL = previousRedisUrl;
+    if (previousWebhookSecret === undefined) delete process.env.WEBHOOK_SECRET;
+    else process.env.WEBHOOK_SECRET = previousWebhookSecret;
     await redis?.stop();
     await db?.stop();
   });
