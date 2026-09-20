@@ -202,7 +202,7 @@ export async function getCampaignAnalytics(campaignId: string) {
   const timeline = [...hourBuckets.entries()].sort(([a], [b]) => a - b).map(([hour, data]) => ({ hour, ...data }));
   if (timeline[0]?.hour === 0) timeline.unshift({ hour: -1, sent: 0, delivered: 0, read: 0, clicked: 0 });
 
-  let insights = { learnings: [] as string[], nextAction: { title: '', description: '', potentialRevenue: 0, confidence: 0 } };
+  let insights: { learnings: string[]; nextAction: { title: string; description: string; potentialRevenue: number; confidence: number } };
   try {
     const response = await openai.chat.completions.create({
       model: openRouterConfig.defaultModel,

@@ -170,9 +170,9 @@ function generateOrders(customers: Customer[]): Order[] {
 
   for (const customer of customers) {
     const { customer_id, persona } = customer;
-    let numOrders = 0;
+    let numOrders: number;
     let preferredCategory: string | null = null;
-    let orderDates: Date[] = [];
+    let orderDates: Date[];
 
     // Generate orders based on persona
     switch (persona) {
@@ -194,7 +194,7 @@ function generateOrders(customers: Customer[]): Order[] {
         orderDates = Array.from({ length: numOrders }, () => randomDate(12, 0));
         break;
 
-      case 'CHURN_RISK':
+      case 'CHURN_RISK': {
         // Was active, now slowing down (retention opportunity)
         numOrders = faker.number.int({ min: 5, max: 10 });
         const oldOrders = Math.floor(numOrders * 0.7);
@@ -203,6 +203,7 @@ function generateOrders(customers: Customer[]): Order[] {
           ...Array.from({ length: numOrders - oldOrders }, () => randomDate(3, 0))
         ];
         break;
+      }
 
       case 'CROSS_SELL':
         // Buys only from one category (cross-sell opportunity)
@@ -247,7 +248,6 @@ function generateOrders(customers: Customer[]): Order[] {
       } else if (persona === 'PREMIUM_LOYALIST') {
         // Buy premium items (70% high-value) - upsell to ultra-premium
         const premiumSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] > 2500);
-        const ultraPremiumSKUs = Object.keys(PRODUCT_PRICES).filter(sku => PRODUCT_PRICES[sku] > 5000);
         selectedSKUs = Math.random() > 0.7
           ? [faker.helpers.arrayElement(premiumSKUs)]
           : [faker.helpers.arrayElement(Object.keys(PRODUCT_PRICES))];

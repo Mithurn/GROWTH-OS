@@ -171,8 +171,8 @@ Persisted AI generation uses a **prompt → JSON parse → schema validate → D
 - Cold-start mitigation — health checks warm the API; durable jobs survive slow provider startup
 
 ### CI / CD
-- **GitHub Actions CI** — on every push and PR to `main`: backend typecheck + tests, frontend typecheck + lint + production build, channel-service typecheck
-- **GitHub Actions Deploy** — after CI passes on `main`, promotes the frontend on Vercel and hits Render deploy hooks when those secrets are set
+- **GitHub Actions CI** — backend lint/typecheck/unit/real-PostgreSQL tests/builds, frontend lint/typecheck/build, and channel-service typecheck/build
+- **Security gates** — full-history Gitleaks scan, critical runtime dependency audit, and rejection of committed build artifacts
 - **Vercel** — Git integration on `main` (root directory: `frontend`) plus the Actions backup
 - **Render** — `render.yaml` links both services to `Mithurn/GROWTH-OS` `main`, deploys only after CI checks pass, and runs `prisma migrate deploy` before the backend starts
 
@@ -183,7 +183,7 @@ Persisted AI generation uses a **prompt → JSON parse → schema validate → D
 | Concern | What I did | What I'd do at scale |
 |---|---|---|
 | **Message delivery** | Simulator fallback when no provider keys set; Twilio/Resend wired and ready | Add provider keys; no code changes needed |
-| **Job queue** | BullMQ backed by required Redis; API and worker are separate processes | Partition queues when sustained throughput requires it |
+| **Job queue** | BullMQ backed by required Redis; a separate worker entrypoint is ready, while the free-tier manifest runs workers in the API process | Enable the dedicated worker service before production traffic |
 | **Analytics realtime** | 5s polling on campaign analytics page | Supabase Realtime subscriptions |
 | **Webhook ingestion** | Transactional Prisma write with deduplication | Stream events when measured volume requires it |
 | **Cold starts** | Health ping pre-warms the Render API | Paid always-on API and worker instances |

@@ -23,9 +23,9 @@ export class GrowthRootSampler implements Sampler {
     context: Context,
     traceId: string,
     spanName: string,
-    spanKind: SpanKind,
-    attributes: Attributes,
-    links: Link[],
+    _spanKind: SpanKind,
+    _attributes: Attributes,
+    _links: Link[],
   ): SamplingResult {
     if (
       spanName.startsWith('bullmq.') ||

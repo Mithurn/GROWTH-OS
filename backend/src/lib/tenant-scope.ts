@@ -104,7 +104,6 @@ export const tenantScopeExtension = {
   name: 'tenant-scope-guard',
   query: {
     $allModels: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async $allOperations({ model, operation, args, query }: any) {
         if (
           model &&

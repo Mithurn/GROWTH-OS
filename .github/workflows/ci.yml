@@ -19,9 +19,9 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -34,6 +34,9 @@ jobs:
         run: npx prisma generate
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -82,9 +85,9 @@ jobs:
         working-directory: channel-service
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -119,9 +122,9 @@ jobs:
       NEXT_PUBLIC_API_URL: https://placeholder.onrender.com/api
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -140,3 +143,51 @@ jobs:
       # violations, bad metadata, and prerender failures only surface at build time.
       - name: Build
         run: npm run build
+
+  dependency-audit:
+    name: Dependency audit — ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, channel-service, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+
+      - name: Block critical runtime vulnerabilities
+        run: npm audit --omit=dev --audit-level=critical
+
+  repository-security:
+    name: Secrets and generated artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Scan Git history for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject tracked build artifacts
+        run: |
+          tracked="$(git ls-files | grep -E '(^|/)(dist|build|coverage|\.next)/' || true)"
+          if [ -n "$tracked" ]; then
+            echo "$tracked"
+            exit 1
+          fi

@@ -157,12 +157,6 @@ function roundToTwo(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function toDateKey(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  return trimmed.length >= 10 ? trimmed.slice(0, 10) : null;
-}
-
 function normalizeConfidence(value: number | string | null | undefined): number {
   const parsed = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
   if (!Number.isFinite(parsed)) return 0.5;

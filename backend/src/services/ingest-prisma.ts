@@ -135,7 +135,7 @@ export async function importOrdersPrisma(
   let skippedOrders = 0;
   let skippedItems = 0;
 
-  for (const [orderId, items] of orderGroups) {
+  for (const items of orderGroups.values()) {
     const customerId = customerMap.get(items[0].customer_id);
     if (!customerId) {
       skippedOrders++;

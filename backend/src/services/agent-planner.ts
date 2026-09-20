@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { openai, openRouterConfig } from '../config/openrouter';
-import { SHADOW_SYSTEM_PROMPT, type Plan, type Planner } from '@growthos/agent-core';
+import { SHADOW_SYSTEM_PROMPT, type Planner } from '@growthos/agent-core';
 import { catalogFor } from '@growthos/agent-core';
 import { assertPlatformBudget, estimateOpenRouterCost, recordCost } from './cost-ledger';
 
@@ -93,7 +93,7 @@ export function openRouterPlanner(deps: PlannerDeps = {}): Planner {
 
       const mapped = toolCalls.map((c) => {
         const name = 'function' in c ? c.function.name : '';
-        let args: unknown = {};
+        let args: unknown;
         try {
           args = JSON.parse(('function' in c ? c.function.arguments : '') || '{}');
         } catch {
