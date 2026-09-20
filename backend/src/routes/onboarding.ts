@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { supabase } from '../lib/supabase';
+import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import {
   requireAuth,
@@ -23,32 +23,36 @@ onboardingRouter.post(
       const { companyName, industry } = req.body;
 
       // Re-running onboarding must not create a second company for the same user.
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('company_id, companies(id, company_name, industry)')
-        .eq('id', req.userId!)
-        .maybeSingle();
-
-      if (existing?.companies) {
-        return res.json({ success: true, data: existing.companies });
+      const existing = await prisma.profile.findUnique({
+        where: { id: req.userId! },
+        include: { company: { select: { id: true, companyName: true, industry: true } } },
+      });
+      if (existing) {
+        return res.json({
+          success: true,
+          data: {
+            id: existing.company.id,
+            company_name: existing.company.companyName,
+            industry: existing.company.industry,
+          },
+        });
       }
 
-      const { data: company, error } = await supabase
-        .from('companies')
-        .insert({ company_name: companyName, industry, user_id: req.userId })
-        .select('id, company_name, industry')
-        .single();
-
-      if (error) throw error;
-
-      // The profile row is what every later request resolves tenancy through.
-      await supabase.from('profiles').insert({
-        id: req.userId,
-        company_id: company.id,
-        role: 'owner',
+      const company = await prisma.$transaction(async (tx) => {
+        const created = await tx.company.create({
+          data: { companyName, industry, userId: req.userId },
+          select: { id: true, companyName: true, industry: true },
+        });
+        await tx.profile.create({
+          data: { id: req.userId!, companyId: created.id, role: 'owner' },
+        });
+        return created;
       });
 
-      res.json({ success: true, data: company });
+      res.json({
+        success: true,
+        data: { id: company.id, company_name: company.companyName, industry: company.industry },
+      });
     } catch (error) {
       logger.error({ err: error }, 'Error saving business info');
       res.status(500).json({ error: 'Failed to save business info' });
@@ -65,20 +69,21 @@ onboardingRouter.post(
     try {
       const { profile } = req.body;
 
-      const { data, error } = await supabase
-        .from('companies')
-        .update({
-          onboarding_profile: profile,
-          onboarding_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', req.companyId)
-        .select('id, company_name, industry, onboarding_profile, onboarding_completed_at')
-        .single();
+      const company = await prisma.company.update({
+        where: { id: req.companyId },
+        data: { onboardingProfile: profile, onboardingCompletedAt: new Date() },
+      });
 
-      if (error) throw error;
-
-      res.json({ success: true, data });
+      res.json({
+        success: true,
+        data: {
+          id: company.id,
+          company_name: company.companyName,
+          industry: company.industry,
+          onboarding_profile: company.onboardingProfile,
+          onboarding_completed_at: company.onboardingCompletedAt,
+        },
+      });
     } catch (error) {
       logger.error({ err: error }, 'Error saving onboarding profile');
       res.status(500).json({ error: 'Failed to save onboarding profile' });

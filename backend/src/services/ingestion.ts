@@ -47,24 +47,8 @@ export async function startIngestionJob(
   customerBuffer: Buffer,
   orderBuffer: Buffer,
 ): Promise<string> {
-  // Local Prisma can lag the cloud `companies` row the JWT resolved. Ensure the
-  // FK exists before we write the session — same id, so tenancy stays aligned.
   const existing = await prisma.company.findUnique({ where: { id: companyId } });
-  if (!existing) {
-    const { data } = await supabase
-      .from('companies')
-      .select('company_name, industry, user_id')
-      .eq('id', companyId)
-      .maybeSingle();
-    await prisma.company.create({
-      data: {
-        id: companyId,
-        companyName: data?.company_name ?? `Workspace ${companyId.slice(0, 8)}`,
-        industry: data?.industry ?? undefined,
-        userId: data?.user_id ?? undefined,
-      },
-    });
-  }
+  if (!existing) throw new Error(`Company ${companyId} not found`);
 
   const session = await prisma.ingestionSession.create({
     data: {
