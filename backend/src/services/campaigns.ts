@@ -5,6 +5,7 @@ import { parseWithRetry } from '../lib/ai';
 import { prisma } from '../lib/prisma';
 import { launchPolicyReason } from './campaign-launch-policy';
 import { getConfig } from '../lib/config';
+import { Prisma } from '../../generated/prisma';
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -180,8 +181,8 @@ async function ensureCompanyRow(companyId?: string): Promise<CompanyRow> {
   return { id: company.id, company_name: company.companyName, industry: company.industry };
 }
 
-async function fetchOpportunity(opportunityId: string): Promise<OpportunityRow> {
-  const row = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
+async function fetchOpportunity(opportunityId: string, companyId: string): Promise<OpportunityRow> {
+  const row = await prisma.opportunity.findFirst({ where: { id: opportunityId, companyId } });
   if (!row) throw new Error(`Opportunity ${opportunityId} not found`);
   return {
     id: row.id,
@@ -202,7 +203,7 @@ export async function generateCampaign(
   request: CampaignGenerationRequest,
 ): Promise<{ campaign: GeneratedCampaign }> {
   const company = await ensureCompanyRow(request.companyId);
-  const opportunity = await fetchOpportunity(request.opportunityId);
+  const opportunity = await fetchOpportunity(request.opportunityId, company.id);
 
   const model = request.model ?? openRouterConfig.defaultModel;
   
@@ -289,6 +290,7 @@ export async function saveCampaign(
   companyId?: string,
 ): Promise<CampaignRow> {
   const company = await ensureCompanyRow(companyId);
+  await fetchOpportunity(opportunityId, company.id);
   const existing = await prisma.campaign.findFirst({
     where: { opportunityId, companyId: company.id },
     orderBy: { createdAt: 'asc' },
@@ -308,7 +310,7 @@ export async function saveCampaign(
         messageContent: campaign.campaign_content,
         expectedOutcome: campaign.expected_outcome,
         reasoning: campaign.reasoning,
-        status: 'Draft',
+        status: 'PendingApproval',
       },
     });
     await prisma.campaignAuditEvent.create({
@@ -328,7 +330,7 @@ export async function saveCampaign(
 export async function launchCampaign(
   campaignId: string,
 ): Promise<{ campaign: CampaignRow; communications_created: number }> {
-  const result = await prisma.$transaction(async (tx) => {
+  const runLaunchTransaction = () => prisma.$transaction(async (tx) => {
     const campaign = await tx.campaign.findUnique({
       where: { id: campaignId },
       include: {
@@ -337,6 +339,7 @@ export async function launchCampaign(
         opportunity: {
           select: {
             audienceSize: true,
+            potentialRevenue: true,
             audience: {
               select: {
                 customerId: true,
@@ -363,28 +366,49 @@ export async function launchCampaign(
     if (campaign.status !== 'Approved') {
       throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
     }
-    if (campaign.approvedAt && Date.now() - campaign.approvedAt.getTime() > 24 * 60 * 60 * 1000) {
-      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'Draft', approvedAt: null } });
+    const approvalTtlHours = await getConfig(campaign.companyId, 'campaign.approval_ttl_hours');
+    if (campaign.approvedAt && Date.now() - campaign.approvedAt.getTime() > approvalTtlHours * 60 * 60 * 1000) {
+      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'PendingApproval', approvedAt: null } });
       await tx.campaignAuditEvent.create({
-        data: { companyId: campaign.companyId, campaignId, eventType: 'EXPIRED', metadata: { approvalTtlHours: 24 } },
+        data: { companyId: campaign.companyId, campaignId, eventType: 'EXPIRED', metadata: { approvalTtlHours } },
       });
       throw new Error('Campaign approval expired; review and approve it again');
     }
 
     const audience = campaign.opportunity.audience.slice(0, campaign.opportunity.audienceSize);
-    const quietHours = await getConfig(campaign.companyId, 'campaign.quiet_hours');
+    const companyQuietHours = await getConfig(campaign.companyId, 'campaign.quiet_hours');
+    const guardrails = campaign.agent?.guardrails as { channels?: unknown; max_budget?: unknown } | null;
     const policyReason = launchPolicyReason({
       channel: campaign.channel,
       timezone: campaign.company.timezone,
       customers: audience.map(({ customer }) => customer),
-      allowedChannels: (campaign.agent?.guardrails as { channels?: unknown } | null)?.channels,
-      quietHours,
+      allowedChannels: guardrails?.channels,
+      quietHours: companyQuietHours,
+      potentialRevenue: Number(campaign.opportunity.potentialRevenue),
+      maxBudget: guardrails?.max_budget,
     });
     if (policyReason) {
       await tx.campaignAuditEvent.create({
         data: { companyId: campaign.companyId, campaignId, eventType: 'POLICY_DENIED', metadata: { reason: policyReason } },
       });
       return { campaign, communications: existing, policyReason };
+    }
+
+    const periodStart = new Date();
+    periodStart.setUTCDate(1);
+    periodStart.setUTCHours(0, 0, 0, 0);
+    const companyQuota = await getConfig(campaign.companyId, 'campaign.monthly_recipient_quota');
+    const reserved = await tx.campaignQuotaReservation.aggregate({
+      where: { companyId: campaign.companyId, periodStart },
+      _sum: { recipients: true },
+    });
+    const usedRecipients = reserved._sum.recipients ?? 0;
+    if (usedRecipients + audience.length > companyQuota) {
+      const reason = `Campaign exceeds the monthly recipient quota (${companyQuota})`;
+      await tx.campaignAuditEvent.create({
+        data: { companyId: campaign.companyId, campaignId, eventType: 'POLICY_DENIED', metadata: { reason, usedRecipients, requestedRecipients: audience.length } },
+      });
+      return { campaign, communications: existing, policyReason: reason };
     }
 
     const claimed = await tx.campaign.updateMany({
@@ -397,6 +421,9 @@ export async function launchCampaign(
         communications: await tx.communication.findMany({ where: { campaignId } }),
       };
     }
+    await tx.campaignQuotaReservation.create({
+      data: { companyId: campaign.companyId, campaignId, periodStart, recipients: audience.length },
+    });
     await tx.communication.createMany({
       data: audience.map(({ customerId }) => ({
         campaignId,
@@ -425,11 +452,30 @@ export async function launchCampaign(
         metadata: { recipients: communications.length, channel: campaign.channel },
       },
     });
+    await tx.campaignAuditEvent.create({
+      data: {
+        companyId: campaign.companyId,
+        campaignId,
+        eventType: 'QUOTA_RESERVED',
+        metadata: { periodStart: periodStart.toISOString(), recipients: audience.length, limit: companyQuota },
+      },
+    });
     return {
       campaign: await tx.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
       communications,
     };
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+  let result: Awaited<ReturnType<typeof runLaunchTransaction>> | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      result = await runLaunchTransaction();
+      break;
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2034' || attempt === 2) throw error;
+    }
+  }
+  if (!result) throw new Error('Campaign launch transaction did not complete');
 
   if ('policyReason' in result) throw new Error(result.policyReason);
 
@@ -446,20 +492,20 @@ export async function launchCampaign(
 
 export async function getCampaigns(
   companyId?: string,
-  opts: { page?: number; limit?: number } = {},
+  opts: { page?: number; limit?: number; status?: string } = {},
 ): Promise<{ data: CampaignWithMetrics[]; total: number }> {
   const company = await ensureCompanyRow(companyId);
   const limit = opts.limit ?? 20;
   const page = opts.page ?? 1;
   const [campaigns, total] = await Promise.all([
     prisma.campaign.findMany({
-      where: { companyId: company.id },
+      where: { companyId: company.id, ...(opts.status ? { status: opts.status } : {}) },
       include: { opportunity: { select: { audienceSize: true } } },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.campaign.count({ where: { companyId: company.id } }),
+    prisma.campaign.count({ where: { companyId: company.id, ...(opts.status ? { status: opts.status } : {}) } }),
   ]);
   const campaignIds = campaigns.map((campaign) => campaign.id);
   const communications = await prisma.communication.findMany({
@@ -499,11 +545,13 @@ export async function refineCampaignMessage(
   campaignId: string,
   modifier: string,
   newChannel?: string,
-  options: { model?: string } = {},
+  options: { model?: string; companyId?: string; actorId?: string } = {},
 ): Promise<{ message_content: string; channel: string }> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: campaignId, ...(options.companyId ? { companyId: options.companyId } : {}) },
+  });
   if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
-  if (campaign.status !== 'Draft') throw new Error('Only draft campaigns can be edited');
+  if (!['Draft', 'PendingApproval'].includes(campaign.status)) throw new Error('Only pending campaigns can be edited');
 
   const targetChannel = newChannel ?? campaign.channel;
   const isChannelSwitch = newChannel && newChannel !== campaign.channel;
@@ -546,22 +594,34 @@ export async function refineCampaignMessage(
     RefinedMessageSchema,
   );
 
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: {
-      messageContent: parsed.message_content,
-      ...(isChannelSwitch ? { channel: targetChannel } : {}),
-    },
-  });
+  await prisma.$transaction([
+    prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        messageContent: parsed.message_content,
+        ...(isChannelSwitch ? { channel: targetChannel } : {}),
+      },
+    }),
+    prisma.campaignAuditEvent.create({
+      data: {
+        companyId: campaign.companyId,
+        campaignId,
+        eventType: 'OVERRIDDEN',
+        actorId: options.actorId,
+        metadata: { channel: targetChannel, modifier },
+      },
+    }),
+  ]);
 
   return { message_content: parsed.message_content, channel: targetChannel };
 }
 
 export async function getCampaignById(
   campaignId: string,
+  companyId: string,
 ): Promise<CampaignWithMetrics> {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: campaignId, companyId },
     include: {
       opportunity: { select: { audienceSize: true } },
       communications: { include: { events: { select: { eventType: true } } } },

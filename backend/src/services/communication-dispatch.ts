@@ -4,6 +4,7 @@ import { injectTraceHeaders } from '../lib/trace-context';
 import { getVerifiedCredentials, type IntegrationKind } from './integrations';
 import { isPaidAndActive } from './billing';
 import { createHmac } from 'node:crypto';
+import { getConfig } from '../lib/config';
 
 type Channel = 'WhatsApp' | 'Email' | 'SMS';
 
@@ -112,8 +113,9 @@ export async function dispatchCommunication(communicationId: string): Promise<vo
     await failCommunication(communication.id, communication.campaignId, communication.campaign.companyId, 'Recipient contact is missing');
     return;
   }
-  if (await checkAndIncrFrequencyCap(communication.customerId, communication.id)) {
-    await failCommunication(communication.id, communication.campaignId, communication.campaign.companyId, 'Suppressed: frequency cap exceeded (2 messages/day)');
+  const frequencyCap = await getConfig(communication.campaign.companyId, 'campaign.frequency_cap_per_day');
+  if (await checkAndIncrFrequencyCap(communication.customerId, communication.id, frequencyCap)) {
+    await failCommunication(communication.id, communication.campaignId, communication.campaign.companyId, `Suppressed: frequency cap exceeded (${frequencyCap} messages/day)`);
     return;
   }
 

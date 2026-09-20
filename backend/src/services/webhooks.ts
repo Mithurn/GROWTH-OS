@@ -33,6 +33,26 @@ const STATE_ORDER: Record<string, number> = {
 // FAILED is only valid from pre-success states (before READ).
 // Once a message is READ/CLICKED/CONVERTED it cannot regress to FAILED.
 const FAILED_ALLOWED_FROM = new Set(['QUEUED', 'SENT', 'DELIVERED']);
+const TERMINAL_STATUSES = ['DELIVERED', 'READ', 'CLICKED', 'CONVERTED', 'FAILED'];
+
+async function finishCampaignFromDelivery(campaignId: string, companyId: string): Promise<void> {
+  const [total, pending, failed] = await Promise.all([
+    prisma.communication.count({ where: { campaignId } }),
+    prisma.communication.count({ where: { campaignId, status: { notIn: TERMINAL_STATUSES } } }),
+    prisma.communication.count({ where: { campaignId, status: 'FAILED' } }),
+  ]);
+  if (total === 0 || pending > 0) return;
+  const status = failed === 0 ? 'Completed' : failed === total ? 'Failed' : 'Partial';
+  const updated = await prisma.campaign.updateMany({
+    where: { id: campaignId, companyId, status: { in: ['Dispatching', 'Launched'] } },
+    data: { status, completedAt: new Date() },
+  });
+  if (updated.count) {
+    await prisma.campaignAuditEvent.create({
+      data: { companyId, campaignId, eventType: 'DELIVERY_COMPLETED', metadata: { status, total, failed } },
+    });
+  }
+}
 
 export function verifySignature(payload: string, signature: string): boolean {
   if (typeof signature !== 'string' || signature.length === 0) return false;
@@ -192,6 +212,7 @@ export async function processWebhook(
       createdAt: new Date(),
     });
   }
+  await finishCampaignFromDelivery(comm.campaignId, comm.campaign.companyId);
 
   return {
     success: true,

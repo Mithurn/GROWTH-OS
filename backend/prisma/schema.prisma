@@ -97,6 +97,7 @@ model Company {
   campaigns    Campaign[]
   campaignApprovals CampaignApproval[]
   campaignAuditEvents CampaignAuditEvent[]
+  campaignQuotaReservations CampaignQuotaReservation[]
   agents       Agent[]
   agentRuns    AgentRun[]
   ingestionSessions IngestionSession[]
@@ -334,7 +335,7 @@ model Campaign {
   messageVariants  Json?     @map("message_variants") // Different message versions for personalization
   expectedOutcome  String?   @map("expected_outcome")
   reasoning        String?
-  status           String    @default("Draft")
+  status           String    @default("PendingApproval")
   performance      Json?     // {sent: 1248, delivered: 1200, clicked: 450, converted: 89, revenue: 45200}
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
@@ -348,6 +349,7 @@ model Campaign {
   communications   Communication[]
   approvals        CampaignApproval[]
   auditEvents      CampaignAuditEvent[]
+  quotaReservation CampaignQuotaReservation?
 
   @@index([companyId])
   @@index([agentId])
@@ -391,6 +393,21 @@ model CampaignAuditEvent {
 
   @@index([companyId, campaignId, createdAt])
   @@map("campaign_audit_events")
+}
+
+model CampaignQuotaReservation {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  campaignId  String   @unique @map("campaign_id")
+  periodStart DateTime @map("period_start")
+  recipients  Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, periodStart])
+  @@map("campaign_quota_reservations")
 }
 
 model Communication {

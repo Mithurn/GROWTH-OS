@@ -55,6 +55,9 @@ export const CONFIG_REGISTRY = {
     startHour: z.number().int().min(0).max(23),
     endHour: z.number().int().min(0).max(23),
   }).default({ startHour: 21, endHour: 9 }),
+  'campaign.frequency_cap_per_day': z.number().int().positive().default(2),
+  'campaign.approval_ttl_hours': z.number().int().positive().default(24),
+  'campaign.monthly_recipient_quota': z.number().int().positive().default(10_000),
 
   // ── Rate limits & uploads (backend/src/middleware/rate-limits.ts, upload.ts) ─
   // Plan-overridable today via plan_config; becomes plan_limits proper in

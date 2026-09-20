@@ -658,7 +658,7 @@ function CampaignsContent() {
                     <p className="text-xs text-gray-400 italic border-l-2 border-indigo-100 pl-3">{selectedCampaign.reasoning}</p>
                   )}
 
-                  {selectedCampaign.status === 'Draft' && (
+                  {selectedCampaign.status === 'PendingApproval' && (
                     <div className="flex gap-3 mt-5">
                       <button
                         onClick={async () => {

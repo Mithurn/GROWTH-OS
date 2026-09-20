@@ -115,13 +115,19 @@ describe('campaign approval — real Postgres transactions and RLS', () => {
       policyVersion: 1,
     });
     expect(approval.policySnapshot).toMatchObject({
-      version: 1,
+      version: 2,
       campaignId: campaign.id,
+      actorId: 'user_1',
       involvementMode: 'manual',
       channel: 'Email',
-      audienceSize: 42,
-      potentialRevenue: '9000',
-      guardrails: { channels: ['Email'], max_budget: 10000 },
+      audience: { declaredSize: 42, resolvedSize: 0, eligibleForChannel: 0 },
+      predictedImpact: { potentialRevenue: '9000' },
+      policy: {
+        frequencyCapPerDay: 2,
+        approvalTtlHours: 24,
+        maxBudget: 10000,
+        allowedChannels: ['Email'],
+      },
     });
   });
 
@@ -140,7 +146,7 @@ describe('campaign approval — real Postgres transactions and RLS', () => {
     await expect(decide(campaign.id, 'approved')).rejects.toThrow();
     await expect(
       db.prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } }),
-    ).resolves.toMatchObject({ status: 'Draft' });
+    ).resolves.toMatchObject({ status: 'PendingApproval' });
   });
 
   it('makes concurrent duplicate approval idempotent', async () => {

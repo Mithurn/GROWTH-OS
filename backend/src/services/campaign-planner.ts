@@ -6,7 +6,7 @@ import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
 import { ensureCampaignApprovalWorkflow } from './campaign-approval-workflow';
 
-const LIVE_STATUSES = ['Draft', 'Approved', 'Running', 'Launched'] as const;
+const LIVE_STATUSES = ['Draft', 'PendingApproval', 'Approved', 'Dispatching', 'Running', 'Launched'] as const;
 
 /** Shape the model must produce. Every field is written straight onto the campaign row. */
 const CampaignStrategySchema = z.object({
@@ -41,8 +41,8 @@ export async function createCampaignForOpportunity(
 
   try {
     // Get opportunity details
-    const opportunity = await prisma.opportunity.findUnique({
-      where: { id: opportunityId },
+    const opportunity = await prisma.opportunity.findFirst({
+      where: { id: opportunityId, companyId },
       include: {
         audience: {
           take: 10,
@@ -84,7 +84,7 @@ export async function createCampaignForOpportunity(
           messageVariants: campaignStrategy.messageVariants,
           expectedOutcome: campaignStrategy.expectedOutcome,
           reasoning: campaignStrategy.reasoning,
-          status: 'Draft', // Start as draft
+          status: 'PendingApproval',
           performance: {
             sent: 0,
             delivered: 0,
@@ -101,9 +101,9 @@ export async function createCampaignForOpportunity(
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const existing = await prisma.campaign.findFirstOrThrow({
-          where: { opportunityId, status: { in: [...LIVE_STATUSES] } },
+          where: { companyId, opportunityId, status: { in: [...LIVE_STATUSES] } },
         });
-        if (existing.status === 'Draft') {
+        if (existing.status === 'PendingApproval') {
           await ensureCampaignApprovalWorkflow({ campaignId: existing.id, companyId });
         }
         logger.info(

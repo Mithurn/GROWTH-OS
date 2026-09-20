@@ -53,12 +53,12 @@ export async function assertRedisReachable(timeoutMs = 10_000): Promise<void> {
   }
 }
 
-/**
- * Frequency cap: max 2 messages per customer per calendar day.
- * Returns true if the message should be suppressed.
- * Fails open on a transient Redis error, so no message is suppressed.
- */
-export async function checkAndIncrFrequencyCap(customerId: string, communicationId: string): Promise<boolean> {
+/** Returns true if the message should be suppressed. */
+export async function checkAndIncrFrequencyCap(
+  customerId: string,
+  communicationId: string,
+  maxMessagesPerDay: number,
+): Promise<boolean> {
   const redis = getClient();
 
   const date = new Date().toISOString().slice(0, 10);
@@ -74,7 +74,7 @@ export async function checkAndIncrFrequencyCap(customerId: string, communication
        local result = count > tonumber(ARGV[2]) and 1 or 0
        redis.call('SET', KEYS[2], result, 'EX', ARGV[1])
        return result`,
-      2,
+      maxMessagesPerDay,
       key,
       reservationKey,
       86400,
@@ -82,7 +82,7 @@ export async function checkAndIncrFrequencyCap(customerId: string, communication
     );
     return Number(suppressed) === 1;
   } catch {
-    return false;
+    return true;
   }
 }
 

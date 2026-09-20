@@ -370,7 +370,7 @@ async function draftCampaign(args: unknown, ctx: RunContext) {
       messageContent: `Follow-up for ${opportunity.title}. Review copy before approval.`,
       expectedOutcome: 'Pending review.',
       reasoning: 'Drafted by the growth agent without sending.',
-      status: 'Draft',
+      status: 'PendingApproval',
     },
   });
   await ensureCampaignApprovalWorkflow({ campaignId: campaign.id, companyId: ctx.companyId });
