@@ -13,11 +13,67 @@ export interface OrderImportSummary {
 const CUSTOMER_BATCH_SIZE = 100;
 const INSERT_CHUNK_SIZE = 1000;
 
+type CsvRow = Record<string, unknown>;
+
+export type CleanOrderRow = {
+  orderId: string;
+  customerExternalId: string;
+  orderDate: Date;
+  sku: string;
+  amount: number;
+  quantity: number;
+  channel: string | null;
+};
+
+function text(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function validDate(value: unknown): Date | null {
+  const raw = text(value);
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function validAmount(value: unknown): number | null {
+  const raw = text(value).replace(/,/g, '');
+  if (!raw) return null;
+  const amount = Number(raw);
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+function validQuantity(value: unknown): number | null {
+  const raw = text(value);
+  if (!raw) return 1;
+  const quantity = Number(raw);
+  return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
+}
+
+export function cleanOrderRow(row: CsvRow): CleanOrderRow | null {
+  const orderId = text(row.order_id);
+  const customerExternalId = text(row.customer_id);
+  const orderDate = validDate(row.order_date);
+  const sku = text(row.product_sku);
+  const amount = validAmount(row.amount);
+  const quantity = validQuantity(row.quantity);
+  if (!orderId || !customerExternalId || !orderDate || !sku || amount === null || quantity === null) return null;
+  return {
+    orderId,
+    customerExternalId,
+    orderDate,
+    sku,
+    amount,
+    quantity,
+    channel: text(row.channel) || null,
+  };
+}
+
 export function isConsentGranted(value: unknown): boolean {
   return value === true || ['true', '1', 'yes'].includes(String(value).trim().toLowerCase());
 }
 
-export async function seedProductsPrisma(companyId: string, orders: any[]) {
+export async function seedProductsPrisma(companyId: string, orders: CsvRow[]) {
   const seen = new Set<string>();
   const toInsert: Array<{
     sku: string;
@@ -29,15 +85,15 @@ export async function seedProductsPrisma(companyId: string, orders: any[]) {
   }> = [];
 
   for (const row of orders) {
-    const sku = String(row.product_sku ?? '').trim();
+    const sku = text(row.product_sku);
     if (!sku || seen.has(sku)) continue;
     seen.add(sku);
     toInsert.push({
       sku,
-      productName: String(row.product_name ?? '').trim() || sku,
-      category: String(row.category ?? '').trim() || 'General',
-      subcategory: String(row.subcategory ?? '').trim() || null,
-      price: parseFloat(row.unit_price || row.price || row.amount || '0') || 0,
+      productName: text(row.product_name) || sku,
+      category: text(row.category) || 'General',
+      subcategory: text(row.subcategory) || null,
+      price: validAmount(row.unit_price ?? row.price ?? row.amount) ?? 0,
       companyId,
     });
   }
@@ -63,35 +119,40 @@ export async function seedProductsPrisma(companyId: string, orders: any[]) {
   logger.info({ count: toInsert.length, companyId }, 'Products seeded');
 }
 
-export async function importCustomersPrisma(customers: any[], companyId: string) {
+export async function importCustomersPrisma(customers: CsvRow[], companyId: string) {
   const customerMap = new Map<string, string>();
+  let skippedCustomers = 0;
 
   for (let i = 0; i < customers.length; i += CUSTOMER_BATCH_SIZE) {
     const batch = customers.slice(i, i + CUSTOMER_BATCH_SIZE);
     for (const row of batch) {
-      const externalCustomerId = String(row.customer_id ?? '').trim();
-      if (!externalCustomerId) continue;
+      const externalCustomerId = text(row.customer_id);
+      if (!externalCustomerId) {
+        skippedCustomers++;
+        continue;
+      }
+      const signupDate = validDate(row.signup_date) ?? new Date();
       const created = await prisma.customer.upsert({
         where: { companyId_externalCustomerId: { companyId, externalCustomerId } },
         create: {
           companyId,
           externalCustomerId,
-          firstName: row.first_name ?? 'Customer',
-          lastName: row.last_name || null,
-          email: row.email || null,
-          phone: row.phone || null,
+          firstName: text(row.first_name) || 'Customer',
+          lastName: text(row.last_name) || null,
+          email: text(row.email).toLowerCase() || null,
+          phone: text(row.phone) || null,
           emailMarketingConsent: isConsentGranted(row.email_marketing_consent),
           smsMarketingConsent: isConsentGranted(row.sms_marketing_consent),
-          gender: row.gender || null,
-          city: row.city || null,
-          state: row.state || null,
-          signupDate: row.signup_date ? new Date(row.signup_date) : new Date(),
+          gender: text(row.gender) || null,
+          city: text(row.city) || null,
+          state: text(row.state) || null,
+          signupDate,
         },
         update: {
-          firstName: row.first_name ?? 'Customer',
-          lastName: row.last_name || null,
-          email: row.email || null,
-          phone: row.phone || null,
+          firstName: text(row.first_name) || 'Customer',
+          lastName: text(row.last_name) || null,
+          email: text(row.email).toLowerCase() || null,
+          phone: text(row.phone) || null,
           emailMarketingConsent: isConsentGranted(row.email_marketing_consent),
           smsMarketingConsent: isConsentGranted(row.sms_marketing_consent),
         },
@@ -100,11 +161,13 @@ export async function importCustomersPrisma(customers: any[], companyId: string)
     }
   }
 
+  if (skippedCustomers > 0) logger.warn({ skippedCustomers, companyId }, 'Customer rows skipped during import');
+
   return customerMap;
 }
 
 export async function importOrdersPrisma(
-  orders: any[],
+  orders: CsvRow[],
   customerMap: Map<string, string>,
   companyId: string,
 ): Promise<OrderImportSummary> {
@@ -118,16 +181,27 @@ export async function importOrdersPrisma(
     throw new Error('No products available for order item import');
   }
 
-  const orderGroups = new Map<string, any[]>();
+  const orderGroups = new Map<string, CleanOrderRow[]>();
+  let skippedInvalidRows = 0;
   for (const row of orders) {
-    if (!orderGroups.has(row.order_id)) orderGroups.set(row.order_id, []);
-    orderGroups.get(row.order_id)!.push(row);
+    const clean = cleanOrderRow(row);
+    if (!clean) {
+      skippedInvalidRows++;
+      continue;
+    }
+    if (!orderGroups.has(clean.orderId)) orderGroups.set(clean.orderId, []);
+    orderGroups.get(clean.orderId)!.push(clean);
   }
+  const existingOrderIds = new Set((await prisma.order.findMany({
+    where: { companyId, externalOrderId: { in: [...orderGroups.keys()] } },
+    select: { externalOrderId: true },
+  })).flatMap((order) => order.externalOrderId ? [order.externalOrderId] : []));
 
   const ordersToInsert: Array<{
     id: string;
     companyId: string;
     customerId: string;
+    externalOrderId: string;
     orderDate: Date;
     totalAmount: number;
     channel: string | null;
@@ -144,38 +218,46 @@ export async function importOrdersPrisma(
   let skippedItems = 0;
 
   for (const items of orderGroups.values()) {
-    const customerId = customerMap.get(items[0].customer_id);
+    if (existingOrderIds.has(items[0].orderId)) {
+      skippedOrders++;
+      continue;
+    }
+    const customerId = customerMap.get(items[0].customerExternalId);
     if (!customerId) {
       skippedOrders++;
       continue;
     }
 
     const generatedOrderId = randomUUID();
-    const totalAmount = items.reduce((sum: number, item: any) => sum + parseFloat(item.amount || '0'), 0);
-    ordersToInsert.push({
-      id: generatedOrderId,
-      companyId,
-      customerId,
-      orderDate: new Date(items[0].order_date),
-      totalAmount,
-      channel: items[0].channel || 'Website',
-    });
-
+    const validItems: typeof orderItemsToInsert = [];
     for (const item of items) {
-      const productId = productMap.get(item.product_sku);
+      const productId = productMap.get(item.sku);
       if (!productId) {
         skippedItems++;
         continue;
       }
-      const quantity = parseInt(item.quantity, 10) || 1;
-      orderItemsToInsert.push({
+      validItems.push({
         companyId,
         orderId: generatedOrderId,
         productId,
-        quantity,
-        unitPrice: parseFloat(item.amount || '0') / quantity,
+        quantity: item.quantity,
+        unitPrice: item.amount / item.quantity,
       });
     }
+    if (!validItems.length) {
+      skippedOrders++;
+      continue;
+    }
+    ordersToInsert.push({
+      id: generatedOrderId,
+      companyId,
+      externalOrderId: items[0].orderId,
+      customerId,
+      orderDate: items[0].orderDate,
+      totalAmount: validItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+      channel: items[0].channel || 'Website',
+    });
+    orderItemsToInsert.push(...validItems);
   }
 
   for (let i = 0; i < ordersToInsert.length; i += INSERT_CHUNK_SIZE) {
@@ -191,6 +273,7 @@ export async function importOrdersPrisma(
       orderItemsInserted: orderItemsToInsert.length,
       skippedOrders,
       skippedItems,
+      skippedInvalidRows,
     },
     'Orders import complete',
   );
@@ -199,7 +282,7 @@ export async function importOrdersPrisma(
     ordersInserted: ordersToInsert.length,
     orderItemsInserted: orderItemsToInsert.length,
     skippedOrders,
-    skippedItems,
+    skippedItems: skippedItems + skippedInvalidRows,
   };
 }
 

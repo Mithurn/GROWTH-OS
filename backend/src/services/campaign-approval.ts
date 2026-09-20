@@ -1,4 +1,5 @@
 import type { Prisma } from '../../generated/prisma';
+import { schemaDefault } from '@growthos/contracts/config/registry';
 
 type Decision = 'approved' | 'rejected';
 
@@ -8,6 +9,11 @@ export interface CampaignDecisionInput {
   actorId: string;
   decision: Decision;
   reason?: string;
+  policy?: {
+    quietHours: { startHour: number; endHour: number };
+    frequencyCapPerDay: number;
+    approvalTtlHours: number;
+  };
 }
 
 export class CampaignTransitionError extends Error {}
@@ -19,7 +25,25 @@ export async function decideCampaignTransaction(
     const campaign = await tx.campaign.findFirst({
       where: { id: input.campaignId, companyId: input.companyId },
       include: {
-        opportunity: { select: { audienceSize: true, potentialRevenue: true } },
+        company: { select: { timezone: true } },
+        opportunity: {
+          select: {
+            audienceSize: true,
+            potentialRevenue: true,
+            audience: {
+              select: {
+                customer: {
+                  select: {
+                    email: true,
+                    phone: true,
+                    emailMarketingConsent: true,
+                    smsMarketingConsent: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         agent: { select: { involvementMode: true, guardrails: true } },
       },
     });
@@ -27,12 +51,12 @@ export async function decideCampaignTransaction(
 
     const target = input.decision === 'approved' ? 'Approved' : 'Rejected';
     if (campaign.status === target) return campaign;
-    if (campaign.status !== 'Draft') {
+    if (campaign.status !== 'PendingApproval') {
       throw new CampaignTransitionError(`Campaign cannot be ${input.decision} from ${campaign.status}`);
     }
 
     const updated = await tx.campaign.updateMany({
-      where: { id: input.campaignId, companyId: input.companyId, status: 'Draft' },
+      where: { id: input.campaignId, companyId: input.companyId, status: 'PendingApproval' },
       data: {
         status: target,
         approvedAt: input.decision === 'approved' ? new Date() : null,
@@ -46,6 +70,20 @@ export async function decideCampaignTransaction(
       throw new CampaignTransitionError(`Campaign cannot be ${input.decision} from ${current.status}`);
     }
 
+    const policy = input.policy ?? {
+      quietHours: schemaDefault('campaign.quiet_hours'),
+      frequencyCapPerDay: schemaDefault('campaign.frequency_cap_per_day'),
+      approvalTtlHours: schemaDefault('campaign.approval_ttl_hours'),
+    };
+    const audience = campaign.opportunity.audience.map(({ customer }) => customer);
+    const guardrails = campaign.agent?.guardrails as { max_budget?: unknown; channels?: unknown } | null;
+    const integration = campaign.channel === 'Email' || campaign.channel === 'WhatsApp'
+      ? await tx.integration.findFirst({
+        where: { companyId: input.companyId, kind: campaign.channel === 'Email' ? 'email' : 'whatsapp' },
+        select: { provider: true, mode: true, status: true },
+      })
+      : null;
+
     await tx.campaignApproval.create({
       data: {
         companyId: input.companyId,
@@ -54,15 +92,32 @@ export async function decideCampaignTransaction(
         decision: input.decision,
         reason: input.reason,
         policySnapshot: {
-          version: 1,
+          version: 2,
           companyId: input.companyId,
           campaignId: input.campaignId,
           agentId: campaign.agentId,
+          actorId: input.actorId,
+          reason: input.reason ?? null,
           involvementMode: campaign.agent?.involvementMode ?? 'manual',
           channel: campaign.channel,
-          audienceSize: campaign.opportunity.audienceSize,
-          potentialRevenue: campaign.opportunity.potentialRevenue.toString(),
-          guardrails: campaign.agent?.guardrails ?? {},
+          audience: {
+            declaredSize: campaign.opportunity.audienceSize,
+            resolvedSize: audience.length,
+            eligibleForChannel: audience.filter((customer) => campaign.channel === 'Email'
+              ? Boolean(customer.email && customer.emailMarketingConsent)
+              : Boolean(customer.phone && customer.smsMarketingConsent)).length,
+          },
+          predictedImpact: { potentialRevenue: campaign.opportunity.potentialRevenue.toString() },
+          policy: {
+            timezone: campaign.company.timezone,
+            quietHours: policy.quietHours,
+            frequencyCapPerDay: policy.frequencyCapPerDay,
+            approvalTtlHours: policy.approvalTtlHours,
+            maxBudget: guardrails?.max_budget ?? null,
+            allowedChannels: guardrails?.channels ?? null,
+          },
+          message: { length: campaign.messageContent.length, hasTemplateVariables: /{{[^}]+}}/.test(campaign.messageContent) },
+          provider: integration,
         },
       },
     });
@@ -90,8 +145,17 @@ export async function decideCampaign(input: CampaignDecisionInput) {
     companyId: input.companyId,
   });
   const { prisma } = await import('../lib/prisma');
+  const { getConfig } = await import('../lib/config');
+  const [quietHours, frequencyCapPerDay, approvalTtlHours] = await Promise.all([
+    getConfig(input.companyId, 'campaign.quiet_hours'),
+    getConfig(input.companyId, 'campaign.frequency_cap_per_day'),
+    getConfig(input.companyId, 'campaign.approval_ttl_hours'),
+  ]);
   const campaign = await prisma.$transaction((tx) =>
-    decideCampaignTransaction(tx as unknown as Prisma.TransactionClient, input));
+    decideCampaignTransaction(tx as unknown as Prisma.TransactionClient, {
+      ...input,
+      policy: { quietHours, frequencyCapPerDay, approvalTtlHours },
+    }));
   await resumeCampaignApprovalWorkflow(input.campaignId, {
     decision: input.decision,
     actorId: input.actorId,

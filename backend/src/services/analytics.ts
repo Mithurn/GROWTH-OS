@@ -181,8 +181,8 @@ function buildPersonaBreakdown(personas: Array<{ personaName: string }>) {
   return [...counts.entries()].map(([persona_name, count]) => ({ persona_name, count, percentage: Math.round((count / total) * 100) })).sort((a, b) => b.count - a.count);
 }
 
-export async function getCampaignAnalytics(campaignId: string) {
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, include: { opportunity: true, communications: { include: { events: true } } } });
+export async function getCampaignAnalytics(campaignId: string, companyId: string) {
+  const campaign = await prisma.campaign.findFirst({ where: { id: campaignId, companyId }, include: { opportunity: true, communications: { include: { events: true } } } });
   if (!campaign) throw new Error('Campaign not found');
   const events = campaign.communications.flatMap((communication) => communication.events);
   const funnel = { targeted: campaign.communications.length, ...eventCounts(events) };

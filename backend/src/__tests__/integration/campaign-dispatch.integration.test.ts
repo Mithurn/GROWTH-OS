@@ -89,10 +89,23 @@ describe('campaign dispatch outbox — real Postgres and Redis', () => {
       .resolves.toMatchObject({ status: 'Dispatching' });
     expect(await db.prisma.communication.count({ where: { campaignId: campaign.id } })).toBe(1);
     expect(await db.prisma.communicationEvent.count()).toBe(1);
+    await expect(db.prisma.campaignQuotaReservation.count({ where: { companyId: company.id, campaignId: campaign.id } }))
+      .resolves.toBe(1);
 
     const { communicationDispatchQueue } = await import('../../lib/queues');
     const jobs = await communicationDispatchQueue.getJobs(['waiting', 'delayed', 'active']);
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.data).toMatchObject({ companyId: company.id });
+
+    const communication = await db.prisma.communication.findFirstOrThrow({ where: { campaignId: campaign.id } });
+    const { processWebhook } = await import('../../services/webhooks');
+    await processWebhook({
+      eventId: 'delivery-complete', providerMessageId: 'provider-message', communicationId: communication.id,
+      status: 'DELIVERED', timestamp: '2026-01-01T12:01:00Z', sequenceNumber: 1,
+    });
+    await expect(db.prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } }))
+      .resolves.toMatchObject({ status: 'Completed' });
+    await expect(db.prisma.campaignAuditEvent.count({ where: { campaignId: campaign.id, eventType: 'DELIVERY_COMPLETED' } }))
+      .resolves.toBe(1);
   });
 });

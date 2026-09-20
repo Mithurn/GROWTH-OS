@@ -347,10 +347,11 @@ export async function saveCampaign(opportunityId: string, campaign: GeneratedCam
   return response.json();
 }
 
-export function getCampaigns(opts?: { page?: number; limit?: number }) {
+export function getCampaigns(opts?: { page?: number; limit?: number; status?: 'PendingApproval' }) {
   const params = new URLSearchParams();
   if (opts?.page) params.set('page', String(opts.page));
   if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.status) params.set('status', opts.status);
   const qs = params.toString();
   const key = `campaigns-${qs}`;
   return swr(key, 90_000, () =>

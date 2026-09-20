@@ -78,10 +78,10 @@ async function resolveFromDb<K extends ConfigKey>(companyId: string | null, key:
  * (nothing a tenant should override); pass it whenever the call site has one.
  */
 export async function getConfig<K extends ConfigKey>(companyId: string | null, key: K): Promise<ConfigValue<K>> {
-  const redis = getClient();
   const ck = cacheKey(companyId, key);
 
   try {
+    const redis = getClient();
     const cached = await redis.get(ck);
     if (cached !== null) {
       const parsed = CONFIG_REGISTRY[key].safeParse(JSON.parse(cached));
@@ -94,7 +94,7 @@ export async function getConfig<K extends ConfigKey>(companyId: string | null, k
   const resolved = await resolveFromDb(companyId, key);
 
   try {
-    await redis.set(ck, JSON.stringify(resolved), 'EX', CACHE_TTL_SECONDS);
+    await getClient().set(ck, JSON.stringify(resolved), 'EX', CACHE_TTL_SECONDS);
   } catch (err) {
     logger.warn({ err, key }, 'config cache write failed (non-fatal)');
   }

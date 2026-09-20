@@ -95,7 +95,7 @@ describe('campaign state machine — real Postgres', () => {
       db.prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'Launched' } }),
     ).rejects.toThrow(/invalid campaign status transition/i);
 
-    await expect(createCampaign('valid-state')).resolves.toMatchObject({ status: 'Draft' });
+    await expect(createCampaign('valid-state')).resolves.toMatchObject({ status: 'PendingApproval' });
     await expect(
       db.prisma.$executeRaw`
         INSERT INTO campaigns (

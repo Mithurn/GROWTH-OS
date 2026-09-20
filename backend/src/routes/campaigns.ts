@@ -66,7 +66,7 @@ campaignsRouter.post(
       const { opportunityId, campaign } = req.body ?? {};
 
       const result = await saveCampaign(opportunityId, campaign, req.companyId!);
-      if (result.status === 'Draft') {
+      if (result.status === 'PendingApproval') {
         await ensureCampaignApprovalWorkflow({ campaignId: result.id, companyId: req.companyId! });
       }
       res.json({ success: true, data: result });
@@ -87,7 +87,8 @@ campaignsRouter.get(
     try {
       const page = Math.max(1, parseInt(req.query['page'] as string) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(req.query['limit'] as string) || 20));
-      const { data, total } = await getCampaigns(req.companyId!, { page, limit });
+      const status = req.query['status'] === 'PendingApproval' ? 'PendingApproval' : undefined;
+      const { data, total } = await getCampaigns(req.companyId!, { page, limit, status });
       res.json({
         success: true,
         data,
@@ -108,7 +109,7 @@ campaignsRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const campaign = await getCampaignById(id);
+      const campaign = await getCampaignById(id, req.companyId!);
       res.json({ success: true, data: campaign });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching campaign');
@@ -126,7 +127,7 @@ campaignsRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const analytics = await getCampaignAnalytics(id);
+      const analytics = await getCampaignAnalytics(id, req.companyId!);
       res.json({ success: true, data: analytics });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching campaign analytics');
@@ -165,7 +166,10 @@ campaignsRouter.post(
       const id = req.params['id'] as string;
       const { modifier, channel } = req.body;
 
-      const result = await refineCampaignMessage(id, modifier, channel ?? undefined);
+      const result = await refineCampaignMessage(id, modifier, channel ?? undefined, {
+        companyId: req.companyId!,
+        actorId: req.userId,
+      });
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error refining campaign message');
