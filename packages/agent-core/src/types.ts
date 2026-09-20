@@ -4,14 +4,7 @@ export type ToolKind = 'read' | 'mutating' | 'external' | 'control';
 export type PermissionMode = 'shadow' | 'live';
 export type RunStatus = 'running' | 'finished' | 'stopped';
 
-/**
- * A supervisor-orchestrated specialist. Discovery finds and sizes
- * opportunities; Strategy drafts a campaign against one, grounded in real
- * retrieved history; Guardrail runs the deterministic budget/channel check;
- * Faithfulness scores the draft against real retrieved campaigns and flags
- * any unsupported claim before anything could launch.
- */
-export type SupervisorRole = 'discovery' | 'strategy' | 'guardrail' | 'faithfulness';
+export type SupervisorRole = 'strategy' | 'risk_reviewer';
 
 export interface RunContext {
   companyId: string;
@@ -63,6 +56,8 @@ export interface Planner {
     tools: Array<{ name: string; description: string }>;
     companyId?: string;
     runId?: string;
+    mode?: PermissionMode;
+    role?: SupervisorRole;
   }): Promise<Plan>;
 }
 

@@ -1,6 +1,7 @@
 import { prisma, prismaSystem } from '../lib/prisma';
 import { enqueueOpportunityDiscovery, enqueueCampaignGeneration } from '../lib/queues';
 import { logger } from '../lib/logger';
+import { getConfig } from '../lib/config';
 import { checkGuardrails, type Guardrails } from '@growthos/domain';
 import { runShadowObserve } from './agent-shadow';
 
@@ -127,6 +128,16 @@ export class AgentOrchestrator {
     const { agentId, companyId, goal, guardrails } = context;
     logger.info({ agentId, companyId }, 'Executing agent');
 
+    const [enabled, killSwitch] = await Promise.all([
+      getConfig(companyId, 'agent.campaign_cases_enabled'),
+      getConfig(companyId, 'agent.kill_switch'),
+    ]);
+    if (!enabled || killSwitch) {
+      await prisma.agent.update({ where: { id: agentId }, data: { status: 'paused' } });
+      logger.warn({ agentId, companyId, enabled, killSwitch }, 'Agent execution disabled by tenant control');
+      return;
+    }
+
     // Step 1: Enqueue opportunity discovery.
     // The worker calls the LLM, persists discoveries, then chains campaign-generation
     // jobs for each new opportunity — all with 3-attempt exponential-backoff retry.
@@ -166,7 +177,7 @@ export class AgentOrchestrator {
 
     // Workflow (ledger) first. Operator observes beside it. A throw here
     // must never fail the enqueue that already committed.
-    if (process.env.SHADOW_AGENT !== '0') {
+    if (process.env.SHADOW_AGENT === '1') {
       try {
         await this.observeShadow({ companyId, agentId, goal, guardrails });
       } catch (error) {

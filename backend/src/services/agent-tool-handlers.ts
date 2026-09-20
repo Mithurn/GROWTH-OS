@@ -2,12 +2,11 @@ import { prisma } from '../lib/prisma';
 import { estimateImpact, toPrismaWhere, type OpportunityType } from '@growthos/domain';
 import type { RunContext, ToolHandler } from '@growthos/agent-core';
 import { checkGuardrails } from '@growthos/domain';
-import { z } from 'zod';
 import { searchSimilarCampaigns } from './campaign-embeddings';
-import { parseWithRetry } from '../lib/ai';
-import { openai, openRouterConfig } from '../config/openrouter';
+import { reviewCampaignFaithfulness } from './campaign-faithfulness';
 import { getConfig } from '../lib/config';
 import { ensureCampaignApprovalWorkflow } from './campaign-approval-workflow';
+import { completeCampaignCase } from './campaign-case';
 
 async function estimatorParams(companyId: string) {
   const [globalPriorConversionRate, priorWeight, confidenceZ] = await Promise.all([
@@ -195,71 +194,8 @@ async function searchPrior(args: unknown, ctx: RunContext) {
   }
 }
 
-const FaithfulnessJudgment = z.object({
-  groundedness_score: z.number().min(0).max(100),
-  unsupported_claims: z.array(z.string()),
-  reasoning: z.string(),
-});
-
-/**
- * Agentic RAG, the documented 2026 pattern: retrieve real similar campaigns
- * for the draft, then have the model score the draft's claims against only
- * what those retrieved rows actually show — not general knowledge, not
- * what the model thinks is plausible. Falls back to an honest "cannot
- * verify" rather than a fabricated score if there's no history to check
- * against or the LLM call fails; a faithfulness check that always passes
- * when it can't actually check anything would be worse than no check.
- */
 async function faithfulness(args: unknown, ctx: RunContext) {
-  const { draft } = args as { draft: string };
-
-  if (!openRouterConfig.configured) {
-    return { groundedness_score: null, unsupported_claims: [], reasoning: 'No LLM configured — cannot judge.' };
-  }
-
-  const retrieved = await searchSimilarCampaigns(ctx.companyId, draft, 3);
-  if (retrieved.length === 0) {
-    return {
-      groundedness_score: null,
-      unsupported_claims: [],
-      reasoning: 'No prior campaign history embedded for this tenant — nothing to ground the draft against. Not the same as "ungrounded"; there is simply no evidence either way yet.',
-    };
-  }
-
-  const evidence = retrieved.map((r, i) => `[${i + 1}] ${r.content}`).join('\n\n');
-  const prompt = `You are a strict fact-checker for a marketing draft. Score how well the DRAFT's specific claims (numbers, offers, product names, promised outcomes) are supported by the EVIDENCE below — real records of this tenant's own past campaigns. Do not use outside knowledge. Anything in the draft that the evidence does not support is an unsupported claim, even if it sounds plausible.
-
-EVIDENCE (this tenant's real past campaigns):
-${evidence}
-
-DRAFT TO CHECK:
-${draft}
-
-Return JSON: { "groundedness_score": 0-100, "unsupported_claims": ["..."], "reasoning": "one sentence" }`;
-
-  try {
-    const judgment = await parseWithRetry(
-      () =>
-        openai.chat.completions.create({
-          model: openRouterConfig.defaultModel,
-          temperature: 0,
-          max_tokens: 500,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: 'You output only valid JSON and never include markdown formatting.' },
-            { role: 'user', content: prompt },
-          ],
-        }).then((r) => r.choices[0]?.message?.content ?? ''),
-      FaithfulnessJudgment,
-    );
-    return { ...judgment, grounded_in: retrieved.map((r) => r.campaignId).filter(Boolean) };
-  } catch (err) {
-    return {
-      groundedness_score: null,
-      unsupported_claims: [],
-      reasoning: `Judge call failed: ${err instanceof Error ? err.message : String(err)}. Treat as unverified, not as passed.`,
-    };
-  }
+  return reviewCampaignFaithfulness(ctx.companyId, (args as { draft: string }).draft);
 }
 
 async function guardrails(args: unknown, ctx: RunContext) {
@@ -373,6 +309,7 @@ async function draftCampaign(args: unknown, ctx: RunContext) {
       status: 'PendingApproval',
     },
   });
+  await completeCampaignCase({ companyId: ctx.companyId, campaignId: campaign.id, agentId: ctx.agentId });
   await ensureCampaignApprovalWorkflow({ campaignId: campaign.id, companyId: ctx.companyId });
   return { id: campaign.id, status: campaign.status, channel: campaign.channel };
 }

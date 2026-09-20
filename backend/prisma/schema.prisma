@@ -98,6 +98,8 @@ model Company {
   campaignApprovals CampaignApproval[]
   campaignAuditEvents CampaignAuditEvent[]
   campaignQuotaReservations CampaignQuotaReservation[]
+  campaignRiskReviews CampaignRiskReview[]
+  campaignCases      CampaignCase[]
   agents       Agent[]
   agentRuns    AgentRun[]
   ingestionSessions IngestionSession[]
@@ -292,6 +294,7 @@ model Opportunity {
   agent                     Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
   audience                  OpportunityCustomer[]
   campaigns                 Campaign[]
+  campaignCase              CampaignCase?
 
   @@unique([companyId, opportunityKey])
   @@index([companyId])
@@ -350,6 +353,8 @@ model Campaign {
   approvals        CampaignApproval[]
   auditEvents      CampaignAuditEvent[]
   quotaReservation CampaignQuotaReservation?
+  riskReview       CampaignRiskReview?
+  campaignCase     CampaignCase?
 
   @@index([companyId])
   @@index([agentId])
@@ -408,6 +413,44 @@ model CampaignQuotaReservation {
 
   @@index([companyId, periodStart])
   @@map("campaign_quota_reservations")
+}
+
+model CampaignRiskReview {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  campaignId  String   @unique @map("campaign_id")
+  verdict     String
+  reasons     Json
+  reviewedAt  DateTime @default(now()) @map("reviewed_at")
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("campaign_risk_reviews")
+}
+
+model CampaignCase {
+  id             String   @id @default(uuid())
+  companyId      String   @map("company_id")
+  agentId        String?  @map("agent_id")
+  opportunityId  String   @unique @map("opportunity_id")
+  campaignId     String?  @unique @map("campaign_id")
+  runId          String?  @unique @map("run_id")
+  status         String   @default("RUNNING")
+  evidence       Json?
+  reviewerReport Json?    @map("reviewer_report")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agent          Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  opportunity    Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  run            AgentRun?    @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@map("campaign_cases")
 }
 
 model Communication {
@@ -507,6 +550,7 @@ model Agent {
   campaigns       Campaign[]
   actions         AgentAction[]
   runs            AgentRun[]
+  campaignCases   CampaignCase[]
 
   @@index([companyId])
   @@index([status])
@@ -548,6 +592,7 @@ model AgentRun {
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   agent       Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
   steps       AgentStep[]
+  campaignCase CampaignCase?
 
   @@index([companyId])
   @@index([agentId])

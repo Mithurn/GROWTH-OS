@@ -7,7 +7,11 @@ BEGIN
   END IF;
 END $$;
 
-GRANT growthos_app TO CURRENT_USER;
+DO $$
+DECLARE migration_role name := current_user;
+BEGIN
+  EXECUTE format('GRANT growthos_app TO %I', migration_role);
+END $$;
 GRANT USAGE ON SCHEMA public TO growthos_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO growthos_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO growthos_app;

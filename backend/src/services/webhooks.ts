@@ -51,6 +51,12 @@ async function finishCampaignFromDelivery(campaignId: string, companyId: string)
     await prisma.campaignAuditEvent.create({
       data: { companyId, campaignId, eventType: 'DELIVERY_COMPLETED', metadata: { status, total, failed } },
     });
+    try {
+      const { embedCampaignOutcome } = await import('./campaign-embeddings');
+      await embedCampaignOutcome(campaignId);
+    } catch (err) {
+      logger.warn({ err, campaignId }, 'Campaign outcome embedding failed after delivery completion');
+    }
   }
 }
 

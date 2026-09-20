@@ -392,7 +392,10 @@ export async function launchCampaign(campaignId: string) {
     method: 'POST',
     // Launch fans out sends and first wakes the spun-down channel service.
   }, 120_000);
-  if (!response.ok) throw new Error('Failed to launch campaign');
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(body?.error ?? 'Failed to launch campaign');
+  }
   await bust('campaigns-');
   return response.json();
 }

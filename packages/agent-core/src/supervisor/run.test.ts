@@ -17,52 +17,48 @@ const handlers: Record<string, ToolHandler> = {
 };
 
 describe('role enforcement', () => {
-  it('denies a discovery-role context calling a strategy-only tool', async () => {
-    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'discovery' };
-    const outcome = await invokeTool({ name: 'growthos_draft_campaign', args: { opportunity_id: 'opp_1' } }, ctx, handlers);
+  it('denies a strategist context calling a risk-only tool', async () => {
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'strategy' };
+    const outcome = await invokeTool({ name: 'growthos_check_faithfulness', args: { draft: 'x' } }, ctx, handlers);
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error).toMatch(/discovery specialist/i);
+    if (!outcome.ok) expect(outcome.error).toMatch(/strategy specialist/i);
   });
 
-  it('allows a discovery-role context to call its own tools', async () => {
-    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'discovery' };
+  it('denies a risk reviewer context calling a strategist-only tool', async () => {
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'risk_reviewer' };
+    const outcome = await invokeTool({ name: 'growthos_draft_campaign', args: { opportunity_id: 'opp_1' } }, ctx, handlers);
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error).toMatch(/risk_reviewer specialist/i);
+  });
+
+  it('allows a strategist context to call its own tools', async () => {
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'strategy' };
     const outcome = await invokeTool({ name: 'growthos_query_metrics', args: {} }, ctx, handlers);
     expect(outcome.ok).toBe(true);
   });
 
   it('a role can always reach growthos_think and growthos_finish', async () => {
-    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'guardrail' };
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'risk_reviewer' };
     expect((await invokeTool({ name: 'growthos_think', args: { thought: 'x' } }, ctx, handlers)).ok).toBe(true);
     expect((await invokeTool({ name: 'growthos_finish', args: { summary: 'x' } }, ctx, handlers)).ok).toBe(true);
   });
 
-  it('denies a guardrail-role context calling the faithfulness judge', async () => {
-    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'guardrail' };
-    const outcome = await invokeTool({ name: 'growthos_check_faithfulness', args: { draft: 'x' } }, ctx, handlers);
-    expect(outcome.ok).toBe(false);
-  });
-
-  it('allows the faithfulness role to search prior campaigns', async () => {
-    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'faithfulness' };
+  it('allows the risk reviewer to search prior campaigns', async () => {
+    const ctx: RunContext = { companyId: 'co_1', runId: 'r1', goal: 'g', mode: 'shadow', role: 'risk_reviewer' };
     const outcome = await invokeTool({ name: 'growthos_search_prior_campaigns', args: { query: 'x', limit: 3 } }, ctx, handlers);
     expect(outcome.ok).toBe(true);
   });
 });
 
 describe('runSupervisedAgent', () => {
-  it('runs discovery, strategy, faithfulness, guardrail in order when discovery finds an audience', async () => {
+  it('runs strategist then risk reviewer in order', async () => {
     const seen: string[] = [];
-    // scriptedPlanner is stateful across the whole run — each buildGrowthAgent call gets a fresh
-    // graph but shares this one planner instance, so turns advance sequentially across all four roles.
     const planner = scriptedPlanner([
       calls([{ name: 'growthos_list_opportunities', args: {} }]),
-      finish('found 174 in Retention-VIP'),
-      calls([{ name: 'growthos_estimate_impact', args: { audience_size: 174, avg_order_value: 1200 } }]),
       finish('drafted a campaign at ₹9000 expected'),
       calls([{ name: 'growthos_check_faithfulness', args: { draft: 'Win back VIP customers with 15% off' } }]),
-      finish('grounded at 92'),
       calls([{ name: 'growthos_check_guardrails', args: { potential_revenue: 9000 } }]),
-      finish('guardrails pass'),
+      finish('risk review passed'),
     ]);
 
     const result = await runSupervisedAgent({
@@ -76,36 +72,13 @@ describe('runSupervisedAgent', () => {
       },
     });
 
-    expect(result.roles.map((r) => r.role)).toEqual(['discovery', 'strategy', 'faithfulness', 'guardrail']);
+    expect(result.roles.map((r) => r.role)).toEqual(['strategy', 'risk_reviewer']);
     expect(result.status).toBe('finished');
     expect(seen).toEqual([
-      'start->discovery',
-      'discovery->strategy',
-      'strategy->faithfulness',
-      'faithfulness->guardrail',
-      'guardrail->end',
+      'start->strategy',
+      'strategy->risk_reviewer',
+      'risk_reviewer->end',
     ]);
-  });
-
-  it('skips strategy and guardrail when discovery finds nothing', async () => {
-    const emptyHandlers: Record<string, ToolHandler> = {
-      ...handlers,
-      growthos_list_opportunities: async () => ({ audience_size: 0, data: [] }),
-    };
-    const planner = scriptedPlanner([
-      calls([{ name: 'growthos_list_opportunities', args: {} }]),
-      finish('nothing found'),
-    ]);
-
-    const result = await runSupervisedAgent({
-      companyId: 'co_1',
-      goal: 'grow repeat purchases',
-      runId: 'run_empty',
-      planner,
-      handlers: emptyHandlers,
-    });
-
-    expect(result.roles.map((r) => r.role)).toEqual(['discovery']);
   });
 
   it('gives each role a distinct checkpoint thread id derived from the run id', async () => {
@@ -131,10 +104,8 @@ describe('runSupervisedAgent', () => {
 
     expect(new Set(threadIds)).toEqual(
       new Set([
-        'run_threads:discovery',
         'run_threads:strategy',
-        'run_threads:faithfulness',
-        'run_threads:guardrail',
+        'run_threads:risk_reviewer',
       ]),
     );
   });

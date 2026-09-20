@@ -324,3 +324,23 @@ TOTAL_CUSTOMERS=500 TOTAL_ORDERS=3000 npm run generate:data
 ```
 
 The agent will process your data and surface opportunities in ~60 seconds.
+
+### Verify the local stack
+
+```bash
+./scripts/verify-local.sh
+```
+
+This applies local migrations, regenerates Prisma, runs backend unit and
+Testcontainers integration tests, then lints/builds the frontend and channel
+service. If Docker is unavailable, use `SKIP_INTEGRATION=1` to run everything
+else. Remote databases are refused unless `ALLOW_REMOTE_DB=1` and
+`CONFIRM_REMOTE_DB=I_UNDERSTAND` are explicitly set.
+
+### Run the local app
+
+```bash
+./scripts/dev-local.sh
+```
+
+Open http://localhost:3000. Press `Ctrl-C` to stop all services.

@@ -18,6 +18,7 @@ declare global {
         };
       };
     };
+    __growthosGoogleInitialized?: string;
   }
 }
 
@@ -35,6 +36,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
+  const googleInitialized = useRef(false);
 
   const supabase = createClient();
 
@@ -50,8 +52,10 @@ function LoginForm() {
 
     script.onload = () => {
       if (!window.google || !googleBtnRef.current) return;
-
-      window.google.accounts.id.initialize({
+      if (!googleInitialized.current && window.__growthosGoogleInitialized !== clientId) {
+        googleInitialized.current = true;
+        window.__growthosGoogleInitialized = clientId;
+        window.google.accounts.id.initialize({
         client_id: clientId,
         callback: async (response: { credential: string }) => {
           setError(null);
@@ -66,7 +70,8 @@ function LoginForm() {
             router.refresh();
           }
         },
-      });
+        });
+      }
 
       window.google.accounts.id.renderButton(googleBtnRef.current, {
         theme: 'outline',
@@ -116,7 +121,7 @@ function LoginForm() {
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <Image src="/logo.png" alt="GrowthOS" width={120} height={40} className="object-contain" />
+          <Image src="/logo.png" alt="GrowthOS" width={120} height={33} className="object-contain" />
         </div>
 
         <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-8">

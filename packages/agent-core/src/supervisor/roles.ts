@@ -8,24 +8,17 @@ import type { SupervisorRole } from '../types';
 const SHARED_TOOLS = ['growthos_think', 'growthos_finish'];
 
 export const ROLE_TOOLS: Record<SupervisorRole, string[]> = {
-  discovery: [
+  strategy: [
     'growthos_query_metrics',
     'growthos_segment_customers',
     'growthos_list_opportunities',
-    ...SHARED_TOOLS,
-  ],
-  strategy: [
     'growthos_estimate_impact',
     'growthos_search_prior_campaigns',
-    'growthos_draft_campaign',
     ...SHARED_TOOLS,
   ],
-  faithfulness: [
+  risk_reviewer: [
     'growthos_check_faithfulness',
     'growthos_search_prior_campaigns',
-    ...SHARED_TOOLS,
-  ],
-  guardrail: [
     'growthos_check_guardrails',
     'growthos_read_campaign_performance',
     ...SHARED_TOOLS,
@@ -38,4 +31,4 @@ export const ROLE_TOOLS: Record<SupervisorRole, string[]> = {
  * before Guardrail: check the draft is telling the truth before checking
  * whether it's within budget, not the other way round.
  */
-export const ROLE_SEQUENCE: SupervisorRole[] = ['discovery', 'strategy', 'faithfulness', 'guardrail'];
+export const ROLE_SEQUENCE: SupervisorRole[] = ['strategy', 'risk_reviewer'];

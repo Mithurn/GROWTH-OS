@@ -12,7 +12,8 @@
     "generate:data": "tsx src/data-generator/generate-data.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "verify:local": "../scripts/verify-local.sh"
   },
   "keywords": [],
   "author": "",

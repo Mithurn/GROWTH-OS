@@ -48,6 +48,9 @@ interface CampaignData {
   audience_size?: number;
   communications_sent?: number;
   communications_delivered?: number;
+  case_status?: string | null;
+  reviewer_report?: unknown;
+  case_evidence?: unknown;
 }
 
 interface Opportunity {
@@ -658,7 +661,19 @@ function CampaignsContent() {
                     <p className="text-xs text-gray-400 italic border-l-2 border-indigo-100 pl-3">{selectedCampaign.reasoning}</p>
                   )}
 
-                  {selectedCampaign.status === 'PendingApproval' && (
+                  <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${selectedCampaign.case_status === 'BLOCKED' ? 'border-red-200 bg-red-50 text-red-700' : 'border-indigo-100 bg-indigo-50 text-indigo-700'}`}>
+                    <span className="font-semibold">Campaign case: </span>
+                    {selectedCampaign.case_status === 'READY_FOR_APPROVAL' ? 'Scout, strategist, and reviewer completed. Owner approval is required before sending.' : selectedCampaign.case_status === 'BLOCKED' ? 'Reviewer blocked this campaign. Edit the draft to create a new review.' : 'Review is still running or unavailable.'}
+                  </div>
+                  {Boolean(selectedCampaign.case_evidence) && (
+                    <div className="mt-3 flex gap-2 text-[11px] text-gray-500">
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Scout evidence captured</span>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Prior campaigns retrieved: {Array.isArray((selectedCampaign.case_evidence as { priorCampaigns?: unknown[] }).priorCampaigns) ? (selectedCampaign.case_evidence as { priorCampaigns: unknown[] }).priorCampaigns.length : 0}</span>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Human approval required</span>
+                    </div>
+                  )}
+
+                  {selectedCampaign.status === 'PendingApproval' && selectedCampaign.case_status === 'READY_FOR_APPROVAL' && (
                     <div className="flex gap-3 mt-5">
                       <button
                         onClick={async () => {

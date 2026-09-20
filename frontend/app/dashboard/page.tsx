@@ -66,6 +66,14 @@ const formatCurrency = (amount: number) => {
   return `₹${amount}`;
 };
 
+const opportunityRevenue = (opportunity: Opportunity): number => {
+  const amount = Number(opportunity.potential_revenue);
+  if (Number.isFinite(amount) && amount > 0) return amount;
+  const summary = `${opportunity.ai_summary ?? ''} ${opportunity.description ?? ''}`;
+  const match = summary.match(/₹\s*([\d,]+)/);
+  return match ? Number(match[1].replace(/,/g, '')) : 0;
+};
+
 const parseChannel = (action: string): string => {
   if (action.toLowerCase().includes('whatsapp')) return 'WhatsApp';
   if (action.toLowerCase().includes('email')) return 'Email';
@@ -579,7 +587,7 @@ export default function HomePage() {
                       Recoverable Revenue
                     </p>
                     <p className="text-3xl font-bold text-[#5B4FFF]">
-                      {formatCurrency(featuredOpportunity.potential_revenue)}
+                      {formatCurrency(opportunityRevenue(featuredOpportunity))}
                     </p>
                   </div>
                   <div>
@@ -783,7 +791,7 @@ export default function HomePage() {
                       </span>
                     </div>
                     <p className="text-xl font-bold text-[#5B4FFF] mb-2">
-                      {formatCurrency(opp.potential_revenue)}
+                      {formatCurrency(opportunityRevenue(opp))}
                       <span className="text-xs font-normal text-[#9CA3AF] ml-1">Est. Value</span>
                     </p>
                     <p className="text-sm text-[#6B7280] line-clamp-2">{opp.description}</p>

@@ -64,6 +64,9 @@ export interface CampaignWithMetrics extends Campaign {
   communications_read: number;
   communications_clicked: number;
   communications_failed: number;
+  case_status?: 'READY_FOR_APPROVAL' | 'BLOCKED' | 'RUNNING' | 'FAILED' | null;
+  reviewer_report?: unknown;
+  case_evidence?: unknown;
 }
 
 /**

@@ -167,11 +167,10 @@ export default function AgentPage() {
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
-          <p className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#8B92A5] mb-2">Shadow</p>
+          <p className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#8B92A5] mb-2">Campaign cases</p>
           <h1 className="text-2xl font-semibold text-[#1A1A1A]">Agent run trace</h1>
           <p className="text-sm text-[#6B7280] mt-2 max-w-xl">
-            Observe-only. The operator records what it would do. It cannot create, draft, or launch.
-            Without an OpenRouter key this is a fixed script over your tenant numbers — not a live model.
+            Each case records Scout, Strategist, and Reviewer work. Campaign creation can draft, but only the owner can approve and launch.
           </p>
         </div>
         <button

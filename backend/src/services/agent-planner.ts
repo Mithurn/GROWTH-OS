@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { openai, openRouterConfig } from '../config/openrouter';
-import { SHADOW_SYSTEM_PROMPT, type Planner } from '@growthos/agent-core';
+import { SHADOW_SYSTEM_PROMPT, type Planner, type PermissionMode, type SupervisorRole } from '@growthos/agent-core';
 import { catalogFor } from '@growthos/agent-core';
 import { assertPlatformBudget, estimateOpenRouterCost, recordCost } from './cost-ledger';
 
-function toOpenAiTools(mode: 'shadow' | 'live' = 'shadow') {
-  return catalogFor(mode).map((t) => ({
+function toOpenAiTools(mode: PermissionMode = 'shadow', role?: SupervisorRole) {
+  return catalogFor(mode, role).map((t) => ({
     type: 'function' as const,
     function: {
       name: t.name,
@@ -35,7 +35,7 @@ export function openRouterPlanner(deps: PlannerDeps = {}): Planner {
   const source = deps.source ?? 'platform';
 
   return {
-    async plan({ goal, steps, tools, companyId, runId }) {
+    async plan({ goal, steps, tools, companyId, runId, mode = 'shadow', role }) {
       if (companyId) {
         const gate = await budget(companyId, source);
         if (!gate.allowed) {
@@ -68,7 +68,7 @@ export function openRouterPlanner(deps: PlannerDeps = {}): Planner {
             ].join('\n\n'),
           },
         ],
-        tools: toOpenAiTools('shadow'),
+        tools: toOpenAiTools(mode, role),
         tool_choice: 'auto',
       });
 

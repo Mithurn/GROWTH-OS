@@ -79,6 +79,17 @@ describe('campaign dispatch outbox — real Postgres and Redis', () => {
         status: 'Approved',
       },
     });
+    await db.prisma.campaignRiskReview.create({
+      data: { companyId: company.id, campaignId: campaign.id, verdict: 'ALLOW', reasons: [] },
+    });
+    await db.prisma.campaignCase.create({
+      data: {
+        companyId: company.id,
+        opportunityId: opportunity.id,
+        campaignId: campaign.id,
+        status: 'READY_FOR_APPROVAL',
+      },
+    });
 
     const { launchCampaign } = await import('../../services/campaigns');
     vi.setSystemTime(new Date('2026-01-01T12:00:00Z'));

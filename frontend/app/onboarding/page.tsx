@@ -39,7 +39,7 @@ import {
 function Logo() {
   return (
     <Link href="/">
-      <Image src="/logo.png" alt="GrowthOS" width={120} height={40} className="object-contain" />
+      <Image src="/logo.png" alt="GrowthOS" width={120} height={33} className="object-contain" />
     </Link>
   );
 }
@@ -273,7 +273,7 @@ export default function OnboardingPage() {
         </header>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="max-w-md w-full text-center">
-            <Image src="/favicon.png" alt="GrowthOS" width={56} height={56} className="mx-auto mb-8 rounded-2xl" />
+          <Image src="/favicon.png" alt="GrowthOS" width={56} height={55} className="mx-auto mb-8 rounded-2xl" />
             <h1 className="text-4xl font-black text-[#1A1A1A] mb-4 tracking-tight leading-tight">
               Welcome to GrowthOS
             </h1>

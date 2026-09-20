@@ -135,7 +135,7 @@ export default function LandingPage() {
             src="/logo.png"
             alt="GrowthOS"
             width={104}
-            height={40}
+            height={29}
             className="object-contain"
             priority
           />

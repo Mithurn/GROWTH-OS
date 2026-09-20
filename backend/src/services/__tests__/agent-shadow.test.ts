@@ -120,9 +120,7 @@ describe('runShadowObserve', () => {
       const nodes = vi
         .mocked(prisma.agentStep.create)
         .mock.calls.map((call) => (call[0] as { data: { node: string } }).data.node);
-      expect(nodes).toEqual(
-        expect.arrayContaining(['discovery.planner', 'strategy.planner', 'faithfulness.planner', 'guardrail.planner']),
-      );
+      expect(nodes).toEqual(expect.arrayContaining(['strategy.planner', 'risk_reviewer.planner']));
     } finally {
       if (previous === undefined) delete process.env.SHADOW_SUPERVISOR;
       else process.env.SHADOW_SUPERVISOR = previous;

@@ -96,6 +96,8 @@ export function buildGrowthAgent(options: HarnessOptions) {
       tools: tools.map((t: ToolSpec) => ({ name: t.name, description: t.description })),
       companyId: state.companyId,
       runId: state.runId,
+      mode,
+      role: options.role,
     });
     if (wallClockExceeded(state, maxWallMs)) return stopForWall(state);
     const latencyMs = Date.now() - started;

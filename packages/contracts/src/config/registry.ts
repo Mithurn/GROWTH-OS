@@ -85,6 +85,9 @@ export const CONFIG_REGISTRY = {
   // ── Agent (packages/agent-core/src/supervisor/run.ts, backend/src/server.ts) ─
   'agent.max_steps_per_role': z.number().int().positive().default(6),
   'agent.max_steps_single': z.number().int().positive().default(8),
+  'agent.max_revisions': z.number().int().min(0).max(2).default(1),
+  'agent.campaign_cases_enabled': z.boolean().default(true),
+  'agent.kill_switch': z.boolean().default(false),
   'agent.interval_ms': z.number().int().positive().default(21_600_000),
 } as const;
 

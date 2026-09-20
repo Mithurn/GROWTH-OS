@@ -22,6 +22,7 @@ export interface SupervisorOptions {
   handlers: Record<string, ToolHandler>;
   checkpointer?: HarnessOptions['checkpointer'];
   maxStepsPerRole?: number;
+  mode?: 'shadow' | 'live';
   onStep?: (step: TraceStep, ctx: RunContext) => void | Promise<void>;
   onRoleTransition?: (from: SupervisorRole | null, to: SupervisorRole | null, reason: string) => void | Promise<void>;
 }
@@ -37,29 +38,14 @@ export interface SupervisorOptions {
  * An LLM-driven router is the natural upgrade once eval coverage shows this
  * fixed sequence actually falls short, not before.
  */
-function nextRole(current: SupervisorRole | null, discoveryFoundNothing: boolean): SupervisorRole | null {
+function nextRole(current: SupervisorRole | null): SupervisorRole | null {
   if (current === null) return ROLE_SEQUENCE[0];
   const idx = ROLE_SEQUENCE.indexOf(current);
-  if (current === 'discovery' && discoveryFoundNothing) return null;
   return ROLE_SEQUENCE[idx + 1] ?? null;
 }
 
-/** A discovery run found nothing worth acting on — every real read tool came back empty or errored. */
-function discoveryFoundNothing(steps: TraceStep[]): boolean {
-  const reads = steps.filter((s) => s.tool && s.tool !== 'growthos_think' && s.tool !== 'growthos_finish');
-  if (reads.length === 0) return true;
-  return reads.every((s) => {
-    if (s.error) return true;
-    const result = s.result as { audience_size?: number; count?: number; data?: unknown[] } | undefined;
-    if (typeof result?.audience_size === 'number') return result.audience_size === 0;
-    if (typeof result?.count === 'number') return result.count === 0;
-    if (Array.isArray(result?.data)) return result.data.length === 0;
-    return false;
-  });
-}
-
 /**
- * Runs Discovery → Strategy → Guardrail as a real supervised sequence: each
+ * Runs Strategist → Risk Reviewer as a real supervised sequence: each
  * role is a complete, independently checkpointed LangGraph run
  * (`${runId}:${role}` thread id), scoped to its own tool subset and denied
  * anything outside it (see registry.ts's role enforcement). The next role's
@@ -78,7 +64,6 @@ export async function runSupervisedAgent(options: SupervisorOptions): Promise<{
     const roles: RoleResult[] = [];
     let role: SupervisorRole | null = ROLE_SEQUENCE[0];
     let priorSummary = '';
-    let foundNothing = false;
 
     try {
       while (role) {
@@ -91,7 +76,7 @@ export async function runSupervisedAgent(options: SupervisorOptions): Promise<{
         const graph = buildGrowthAgent({
           planner: options.planner,
           handlers: options.handlers,
-          mode: 'shadow',
+          mode: options.mode ?? 'shadow',
           role,
           maxSteps: options.maxStepsPerRole ?? 6,
           checkpointer: options.checkpointer,
@@ -108,9 +93,7 @@ export async function runSupervisedAgent(options: SupervisorOptions): Promise<{
 
         roles.push({ role, status: out.status, summary: out.summary, stepCount: out.stepCount });
         priorSummary = out.summary;
-        if (role === 'discovery') foundNothing = discoveryFoundNothing(out.steps);
-
-        role = nextRole(role, foundNothing);
+        role = nextRole(role);
       }
 
       await options.onRoleTransition?.(roles.length ? roles[roles.length - 1].role : null, null, 'sequence complete');
