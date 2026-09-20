@@ -15,12 +15,15 @@ export class ResendProvider implements ChannelProvider {
   }
 
   async send(request: SendRequest): Promise<string> {
-    const { data, error } = await this.client.emails.send({
-      from: this.fromEmail,
-      to:   request.recipient,
-      subject: 'A message for you',
-      text: request.content,
-    });
+    const { data, error } = await this.client.emails.send(
+      {
+        from: this.fromEmail,
+        to: request.recipient,
+        subject: 'A message for you',
+        text: request.content,
+      },
+      { idempotencyKey: request.communicationId },
+    );
 
     if (error || !data) {
       throw new Error(`Resend error: ${error?.message ?? 'unknown'}`);

@@ -1,7 +1,6 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { selectIn, selectPaged } from '../lib/scoped-query';
 import { openRouterConfig, openai } from '../config/openrouter';
 import { logger as rootLogger } from '../lib/logger';
+import { prisma } from '../lib/prisma';
 
 export interface PersonaLogger {
   info: (message: string, ...args: unknown[]) => void;
@@ -156,12 +155,6 @@ function toNumber(value: number | string | null | undefined): number {
 
 function roundToTwo(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function toDateKey(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  return trimmed.length >= 10 ? trimmed.slice(0, 10) : null;
 }
 
 function normalizeConfidence(value: number | string | null | undefined): number {
@@ -461,96 +454,100 @@ function clusterProfiles(customers: CustomerProfile[]): PersonaCluster[] {
  * attributed generated personas to another tenant.
  */
 async function ensureCompanyRow(
-  supabase: SupabaseClient,
   companyId?: string,
 ): Promise<CompanyRow> {
   if (!companyId) {
     throw new Error('companyId is required');
   }
 
-  const { data, error } = await supabase
-    .from('companies')
-    .select('id, company_name, industry')
-    .eq('id', companyId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!data) throw new Error(`Company ${companyId} not found`);
-
-  return data as CompanyRow;
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, companyName: true, industry: true },
+  });
+  if (!company) throw new Error(`Company ${companyId} not found`);
+  return { id: company.id, company_name: company.companyName, industry: company.industry };
 }
 
-async function upsertPersonaRows(
-  supabase: SupabaseClient,
-  records: PersonaRecord[],
-): Promise<void> {
-  const { error } = await supabase
-    .from('personas')
-    .upsert(records, { onConflict: 'customer_id' });
-
-  if (error) {
-    throw new Error(`Failed to upsert personas: ${error.message}`);
-  }
+async function upsertPersonaRows(records: PersonaRecord[]): Promise<void> {
+  await prisma.$transaction(records.map((record) => prisma.persona.upsert({
+    where: { customerId: record.customer_id },
+    create: {
+      companyId: record.company_id,
+      customerId: record.customer_id,
+      personaName: record.persona_name,
+      personaDescription: record.persona_description,
+      confidenceScore: record.confidence_score,
+    },
+    update: {
+      personaName: record.persona_name,
+      personaDescription: record.persona_description,
+      confidenceScore: record.confidence_score,
+    },
+  })));
 }
 
-async function fetchPersonaRows(
-  supabase: SupabaseClient,
-  companyId: string,
-): Promise<Array<PersonaRecord & { customers?: CustomerRow | CustomerRow[] | null }>> {
-  const { data, error } = await supabase
-    .from('personas')
-    .select('id, company_id, customer_id, persona_name, persona_description, confidence_score, customers(id, first_name, last_name)')
-    .eq('company_id', companyId)
-    .order('persona_name', { ascending: true });
-
-  if (error) {
-    throw new Error(`Failed to load personas: ${error.message}`);
-  }
-
-  return (data ?? []) as unknown as Array<PersonaRecord & { customers?: CustomerRow | CustomerRow[] | null }>;
+async function fetchPersonaRows(companyId: string): Promise<PersonaRecord[]> {
+  const rows = await prisma.persona.findMany({
+    where: { companyId },
+    orderBy: { personaName: 'asc' },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    company_id: row.companyId,
+    customer_id: row.customerId,
+    persona_name: row.personaName,
+    persona_description: row.personaDescription,
+    confidence_score: Number(row.confidenceScore),
+    updated_at: row.updatedAt.toISOString(),
+  }));
 }
 
-// Scoped by the customer ids of one company. `customer_metrics` and
-// `customer_attributes` have no company_id of their own — their tenant is implied by
-// the customer. These reads were previously global while their derived personas were
-// written back tagged with the caller's company.
 async function fetchMetricsByCustomer(
-  supabase: SupabaseClient,
+  companyId: string,
   customerIds: string[],
 ): Promise<Map<string, MetricRow>> {
-  const rows = await selectIn<MetricRow>(
-    supabase,
-    'customer_metrics',
-    'customer_id, total_orders, total_spent, avg_order_value, last_order_date, days_since_last_order, purchase_frequency, engagement_score',
-    'customer_id',
-    customerIds,
-  );
-
-  return new Map(rows.map((row) => [row.customer_id, row]));
+  const rows = await prisma.customerMetrics.findMany({
+    where: { companyId, customerId: { in: customerIds } },
+  });
+  return new Map(rows.map((row) => [row.customerId, {
+    customer_id: row.customerId,
+    total_orders: row.totalOrders,
+    total_spent: Number(row.totalSpent),
+    avg_order_value: Number(row.avgOrderValue),
+    last_order_date: row.lastOrderDate?.toISOString() ?? null,
+    days_since_last_order: row.daysSinceLastOrder,
+    purchase_frequency: row.purchaseFrequency,
+    engagement_score: row.engagementScore === null ? null : Number(row.engagementScore),
+  }]));
 }
 
 async function fetchAttributesByCustomer(
-  supabase: SupabaseClient,
+  companyId: string,
   customerIds: string[],
 ): Promise<Map<string, AttributeRow>> {
-  const rows = await selectIn<AttributeRow>(
-    supabase,
-    'customer_attributes',
-    'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score',
-    'customer_id',
-    customerIds,
-  );
-
-  return new Map(rows.map((row) => [row.customer_id, row]));
+  const rows = await prisma.customerAttributes.findMany({
+    where: { companyId, customerId: { in: customerIds } },
+  });
+  return new Map(rows.map((row) => [row.customerId, {
+    customer_id: row.customerId,
+    favorite_category: row.favoriteCategory,
+    second_favorite_category: row.secondFavoriteCategory,
+    preferred_channel: row.preferredChannel,
+    discount_affinity: row.discountAffinity,
+    avg_days_between_orders: row.avgDaysBetweenOrders === null ? null : Number(row.avgDaysBetweenOrders),
+    dominant_price_band: row.dominantPriceBand,
+    category_diversity_score: Number(row.categoryDiversityScore),
+  }]));
 }
 
-async function fetchCustomers(supabase: SupabaseClient, companyId: string): Promise<CustomerRow[]> {
-  return selectPaged<CustomerRow>(
-    supabase,
-    'customers',
-    'id, first_name, last_name',
-    (q) => q.eq('company_id', companyId).order('created_at', { ascending: true }),
-  );
+async function fetchCustomers(companyId: string): Promise<CustomerRow[]> {
+  const rows = await prisma.customer.findMany({
+    where: { companyId },
+    orderBy: { createdAt: 'asc' },
+    take: 5_000,
+    select: { id: true, firstName: true, lastName: true },
+  });
+  return rows.map((row) => ({ id: row.id, first_name: row.firstName, last_name: row.lastName }));
 }
 
 function buildProfiles(
@@ -630,19 +627,18 @@ function buildDistribution(records: PersonaRecord[], profiles: CustomerProfile[]
 }
 
 export async function generatePersonas(
-  supabase: SupabaseClient,
   options: PersonaGenerationOptions = {},
 ): Promise<PersonaGenerationReport> {
   const logger = options.logger ?? defaultLogger;
-  const company = await ensureCompanyRow(supabase, options.companyId);
+  const company = await ensureCompanyRow(options.companyId);
   const model = options.model ?? openRouterConfig.defaultModel;
   
   logger.info(`[personas] Starting persona generation for company=${company.company_name} (${company.id})`);
 
-  const customers = await fetchCustomers(supabase, company.id);
+  const customers = await fetchCustomers(company.id);
   const customerIds = customers.map((c) => c.id);
-  const metricsByCustomer = await fetchMetricsByCustomer(supabase, customerIds);
-  const attributesByCustomer = await fetchAttributesByCustomer(supabase, customerIds);
+  const metricsByCustomer = await fetchMetricsByCustomer(company.id, customerIds);
+  const attributesByCustomer = await fetchAttributesByCustomer(company.id, customerIds);
   const profiles = buildProfiles(customers, metricsByCustomer, attributesByCustomer);
   const clusters = clusterProfiles(profiles);
 
@@ -705,9 +701,9 @@ export async function generatePersonas(
     throw new Error('No personas could be generated from the available customer data');
   }
 
-  await upsertPersonaRows(supabase, personaRecords);
+  await upsertPersonaRows(personaRecords);
 
-  const persistedRows = await fetchPersonaRows(supabase, company.id);
+  const persistedRows = await fetchPersonaRows(company.id);
   const distribution = buildDistribution(persistedRows, profiles);
   const totalPersonas = distribution.length;
   const everyCustomerHasPersona = persistedRows.length === customers.length;
@@ -738,15 +734,14 @@ export async function generatePersonas(
 }
 
 export async function getPersonaDistribution(
-  supabase: SupabaseClient,
   companyId?: string,
 ): Promise<{ companyId: string; personaDistribution: PersonaDistributionRow[]; totalCustomers: number; totalPersonas: number; totalRevenue: number; }> {
-  const company = await ensureCompanyRow(supabase, companyId);
-  const customers = await fetchCustomers(supabase, company.id);
+  const company = await ensureCompanyRow(companyId);
+  const customers = await fetchCustomers(company.id);
   const customerIds = customers.map((c) => c.id);
-  const metricsByCustomer = await fetchMetricsByCustomer(supabase, customerIds);
-  const persistedRows = await fetchPersonaRows(supabase, company.id);
-  const profiles = buildProfiles(customers, metricsByCustomer, await fetchAttributesByCustomer(supabase, customerIds));
+  const metricsByCustomer = await fetchMetricsByCustomer(company.id, customerIds);
+  const persistedRows = await fetchPersonaRows(company.id);
+  const profiles = buildProfiles(customers, metricsByCustomer, await fetchAttributesByCustomer(company.id, customerIds));
   const distribution = buildDistribution(persistedRows, profiles);
   const totalRevenue = profiles.reduce((sum, profile) => sum + profile.totalSpent, 0);
 
@@ -760,17 +755,16 @@ export async function getPersonaDistribution(
 }
 
 export async function getPersonaCustomers(
-  supabase: SupabaseClient,
   personaName: string,
   companyId?: string,
 ): Promise<{ companyId: string; personaName: string; personas: PersonaDistributionRow[]; customers: PersonaCustomerRow[]; }> {
-  const company = await ensureCompanyRow(supabase, companyId);
-  const customers = await fetchCustomers(supabase, company.id);
+  const company = await ensureCompanyRow(companyId);
+  const customers = await fetchCustomers(company.id);
   const customerIds = customers.map((c) => c.id);
-  const metricsByCustomer = await fetchMetricsByCustomer(supabase, customerIds);
-  const attributesByCustomer = await fetchAttributesByCustomer(supabase, customerIds);
+  const metricsByCustomer = await fetchMetricsByCustomer(company.id, customerIds);
+  const attributesByCustomer = await fetchAttributesByCustomer(company.id, customerIds);
   const profiles = buildProfiles(customers, metricsByCustomer, attributesByCustomer);
-  const persistedRows = await fetchPersonaRows(supabase, company.id);
+  const persistedRows = await fetchPersonaRows(company.id);
   const distribution = buildDistribution(persistedRows, profiles);
 
   const selectedRows = persistedRows.filter((row) => row.persona_name === personaName);

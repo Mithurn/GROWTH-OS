@@ -1,6 +1,5 @@
 import { Readable } from 'stream';
 import csvParser from 'csv-parser';
-import { supabase } from '../lib/supabase';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { generateCustomerAttributes } from './customer-attributes';
@@ -47,24 +46,8 @@ export async function startIngestionJob(
   customerBuffer: Buffer,
   orderBuffer: Buffer,
 ): Promise<string> {
-  // Local Prisma can lag the cloud `companies` row the JWT resolved. Ensure the
-  // FK exists before we write the session — same id, so tenancy stays aligned.
   const existing = await prisma.company.findUnique({ where: { id: companyId } });
-  if (!existing) {
-    const { data } = await supabase
-      .from('companies')
-      .select('company_name, industry, user_id')
-      .eq('id', companyId)
-      .maybeSingle();
-    await prisma.company.create({
-      data: {
-        id: companyId,
-        companyName: data?.company_name ?? `Workspace ${companyId.slice(0, 8)}`,
-        industry: data?.industry ?? undefined,
-        userId: data?.user_id ?? undefined,
-      },
-    });
-  }
+  if (!existing) throw new Error(`Company ${companyId} not found`);
 
   const session = await prisma.ingestionSession.create({
     data: {
@@ -157,7 +140,7 @@ export async function processIngestion(sessionId: string) {
     });
 
     // Personas take another LLM round-trip, so they run after the user is already in.
-    generatePersonas(supabase, {
+    generatePersonas({
       companyId,
       logger: {
         info: (msg) => logger.info(msg),
@@ -201,12 +184,12 @@ async function generateCustomerMetricsWithVerification(companyId: string) {
 }
 
 async function generateCustomerAttributesWithVerification(companyId: string) {
-  const firstPass = await generateCustomerAttributes(supabase, { companyId });
+  const firstPass = await generateCustomerAttributes({ companyId });
   if (firstPass.totalAttributesRecords >= firstPass.totalCustomers) return firstPass;
 
   logger.warn('customer_attributes incomplete after first pass, retrying...');
   await sleep(1000);
-  const secondPass = await generateCustomerAttributes(supabase, { companyId });
+  const secondPass = await generateCustomerAttributes({ companyId });
   if (secondPass.totalAttributesRecords < secondPass.totalCustomers) {
     throw new Error(
       `Customer attributes incomplete after retry: ${secondPass.totalAttributesRecords}/${secondPass.totalCustomers}`,

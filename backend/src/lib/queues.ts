@@ -2,6 +2,7 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { tracer } from './tracing';
 import { getConfig } from './config';
+import { runWithTenant } from './tenant-context';
 
 /** One span per job execution, wrapping whatever the processor already does. */
 function withJobSpan<T, R>(queueName: string, handler: (job: Job<T>) => Promise<R>) {
@@ -16,7 +17,7 @@ function withJobSpan<T, R>(queueName: string, handler: (job: Job<T>) => Promise<
         span.setAttribute('langfuse.user.id', companyId);
       }
       try {
-        return await handler(job);
+        return companyId ? await runWithTenant(companyId, () => handler(job)) : await handler(job);
       } catch (err) {
         span.recordException(err as Error);
         span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
@@ -52,7 +53,6 @@ export interface OpportunityDiscoveryJob {
   agentId: string;
   goal: string;
   guardrails: Record<string, unknown>;
-  involvement: string;
 }
 
 export interface CampaignGenerationJob {
@@ -60,7 +60,6 @@ export interface CampaignGenerationJob {
   companyId: string;
   agentId: string;
   guardrails: Record<string, unknown>;
-  involvement: string;
   audienceSize?: number;
   potentialRevenue?: number;
 }
@@ -74,12 +73,18 @@ export interface IngestionJob {
   sessionId: string;
 }
 
+export interface CommunicationDispatchJob {
+  companyId: string;
+  communicationId: string;
+}
+
 // ── Queues ────────────────────────────────────────────────────────────────────
 
 export const opportunityQueue = new Queue<OpportunityDiscoveryJob>('opportunity-discovery', { connection });
 export const campaignQueue = new Queue<CampaignGenerationJob>('campaign-generation', { connection });
 export const personaQueue = new Queue<PersonaGenerationJob>('persona-generation', { connection });
 export const ingestionQueue = new Queue<IngestionJob>('ingestion', { connection });
+export const communicationDispatchQueue = new Queue<CommunicationDispatchJob>('communication-dispatch', { connection });
 
 export async function enqueueOpportunityDiscovery(data: OpportunityDiscoveryJob): Promise<void> {
   await opportunityQueue.add('discover', data, await jobOptions());
@@ -97,6 +102,16 @@ export async function enqueueIngestion(data: IngestionJob): Promise<void> {
   await ingestionQueue.add('process', data, await jobOptions());
 }
 
+export async function enqueueCommunicationDispatchBatch(data: CommunicationDispatchJob[]): Promise<void> {
+  if (!data.length) return;
+  const options = await jobOptions();
+  await communicationDispatchQueue.addBulk(data.map((job) => ({
+    name: 'send',
+    data: job,
+    opts: { ...options, jobId: job.communicationId },
+  })));
+}
+
 // ── Workers ───────────────────────────────────────────────────────────────────
 
 let workersStarted = false;
@@ -106,11 +121,12 @@ export async function startWorkers(): Promise<void> {
   if (workersStarted) return;
   workersStarted = true;
 
-  const [discoveryConcurrency, campaignConcurrency, personaConcurrency, ingestionConcurrency] = await Promise.all([
+  const [discoveryConcurrency, campaignConcurrency, personaConcurrency, ingestionConcurrency, communicationConcurrency] = await Promise.all([
     getConfig(null, 'queue.opportunity_discovery.concurrency'),
     getConfig(null, 'queue.campaign_generation.concurrency'),
     getConfig(null, 'queue.persona_generation.concurrency'),
     getConfig(null, 'queue.ingestion.concurrency'),
+    getConfig(null, 'queue.communication_dispatch.concurrency'),
   ]);
 
   // Opportunity discovery worker
@@ -119,7 +135,7 @@ export async function startWorkers(): Promise<void> {
   activeWorkers.push(new Worker<OpportunityDiscoveryJob>(
     'opportunity-discovery',
     withJobSpan('opportunity-discovery', async (job) => {
-      const { companyId, agentId, goal, guardrails, involvement } = job.data;
+      const { companyId, agentId, goal, guardrails } = job.data;
 
       const { discoverOpportunities } = await import('../services/opportunity-discovery');
       const { logAgentAction } = await import('../services/agent-logger');
@@ -150,7 +166,6 @@ export async function startWorkers(): Promise<void> {
               companyId,
               agentId,
               guardrails,
-              involvement,
               audienceSize: opp.audienceSize,
               potentialRevenue: opp.potentialRevenue,
             },
@@ -165,14 +180,12 @@ export async function startWorkers(): Promise<void> {
   ));
 
   // Campaign generation worker
-  // Creates the campaign in DB, logs it, and auto-launches based on involvement.
   // Includes an idempotency check so duplicate jobs are safe to retry.
   activeWorkers.push(new Worker<CampaignGenerationJob>(
     'campaign-generation',
     withJobSpan('campaign-generation', async (job) => {
-      const { opportunityId, companyId, agentId, guardrails, involvement, audienceSize, potentialRevenue } = job.data;
+      const { opportunityId, companyId, agentId, guardrails, audienceSize, potentialRevenue } = job.data;
 
-      const { prisma } = await import('../lib/prisma');
       const { createCampaignForOpportunity } = await import('../services/campaign-planner');
       const { logAgentAction } = await import('../services/agent-logger');
 
@@ -190,34 +203,7 @@ export async function startWorkers(): Promise<void> {
         details: { campaignId: campaign.id, opportunityId, audienceSize, potentialRevenue },
       });
 
-      // ponytail: still a substring match on free text, not a real involvement enum
-      // or a human approval gate (Phase 0.6 / Phase 5.4 in docs/V3_PLAN.md) — the
-      // threshold itself is at least no longer a bare literal.
-      const autoLaunchMaxValue = await getConfig(companyId, 'approval.auto_launch_max_value');
-      const involvementLower = involvement.toLowerCase();
-      const shouldAutoLaunch =
-        involvementLower.includes('autopilot') ||
-        involvementLower.includes('auto') ||
-        (involvementLower.includes('major') && Number(potentialRevenue ?? 0) < autoLaunchMaxValue);
-
-      if (shouldAutoLaunch) {
-        const { supabase } = await import('./supabase');
-        await prisma.campaign.update({
-          where: { id: campaign.id },
-          data: { status: 'Approved', approvedAt: new Date() },
-        });
-        const { launchCampaign } = await import('../services/campaigns');
-        await launchCampaign(supabase, campaign.id);
-
-        await logAgentAction({
-          agentId,
-          actionType: 'launched_campaign',
-          description: `Auto-launched campaign "${campaign.name}"`,
-          details: { campaignId: campaign.id, mode: involvement },
-        });
-      }
-
-      return { campaignId: campaign.id, autoLaunched: shouldAutoLaunch };
+      return { campaignId: campaign.id, autoLaunched: false };
     }),
     { connection, concurrency: campaignConcurrency },
   ));
@@ -227,9 +213,8 @@ export async function startWorkers(): Promise<void> {
     'persona-generation',
     withJobSpan('persona-generation', async (job) => {
       const { companyId, model } = job.data;
-      const { supabase } = await import('./supabase');
       const { generatePersonas } = await import('../services/personas');
-      return generatePersonas(supabase, { companyId, model });
+      return generatePersonas({ companyId, model });
     }),
     { connection, concurrency: personaConcurrency },
   ));
@@ -244,9 +229,33 @@ export async function startWorkers(): Promise<void> {
     { connection, concurrency: ingestionConcurrency },
   ));
 
-  console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation, ingestion');
+  activeWorkers.push(new Worker<CommunicationDispatchJob>(
+    'communication-dispatch',
+    withJobSpan('communication-dispatch', async (job) => {
+      const { dispatchCommunication, markCommunicationDispatchFailed } = await import('../services/communication-dispatch');
+      try {
+        await dispatchCommunication(job.data.communicationId);
+      } catch (error) {
+        const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+        if (finalAttempt) {
+          await markCommunicationDispatchFailed(
+            job.data.communicationId,
+            error instanceof Error ? error.message : String(error),
+          );
+        }
+        throw error;
+      }
+      return { communicationId: job.data.communicationId };
+    }),
+    { connection, concurrency: communicationConcurrency },
+  ));
+
+  console.log('[BullMQ] Workers started: opportunity-discovery, campaign-generation, persona-generation, ingestion, communication-dispatch');
 
   void resumeIncompleteIngestions();
+  void resumeQueuedCommunications();
+  dispatchSweep = setInterval(() => void resumeQueuedCommunications(), 60_000);
+  dispatchSweep.unref();
 }
 
 /**
@@ -256,13 +265,35 @@ export async function startWorkers(): Promise<void> {
  * to them.
  */
 export async function closeWorkers(): Promise<void> {
+  if (dispatchSweep) clearInterval(dispatchSweep);
   await Promise.all(activeWorkers.map((w) => w.close()));
   await Promise.all([
     opportunityQueue.close(),
     campaignQueue.close(),
     personaQueue.close(),
     ingestionQueue.close(),
+    communicationDispatchQueue.close(),
   ]);
+}
+
+let dispatchSweep: NodeJS.Timeout | undefined;
+
+async function resumeQueuedCommunications(): Promise<void> {
+  try {
+    const { prismaSystem } = await import('./prisma');
+    const rows = await prismaSystem.communication.findMany({
+      where: { status: 'QUEUED', providerMessageId: null },
+      select: { id: true, campaign: { select: { companyId: true } } },
+      take: 1_000,
+    });
+    await enqueueCommunicationDispatchBatch(rows.map((row) => ({
+      communicationId: row.id,
+      companyId: row.campaign.companyId,
+    })));
+  } catch (error) {
+    const { logger } = await import('./logger');
+    logger.error({ err: error }, 'Failed to sweep queued communications');
+  }
 }
 
 /**

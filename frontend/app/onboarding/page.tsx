@@ -246,10 +246,9 @@ export default function OnboardingPage() {
       saveOnboardingProfile({ companyName, industry, primaryGoal: goalLabel, operatingMode: mode }).catch(() => {});
       createAgent(goalLabel, {
         channels: ['WhatsApp', 'Email'],
-        involvement: mode === 'autonomous' ? 'autopilot' : 'review every campaign',
         max_budget: 100000,
         frequency_cap: 3,
-      }).catch(() => {});
+      }, mode === 'autonomous' ? 'autonomous_within_policy' : 'manual').catch(() => {});
       // Wait for at least one opportunity so the dashboard isn't empty on arrival
       await generateOpportunities().catch(() => {});
 
@@ -642,8 +641,8 @@ export default function OnboardingPage() {
                 </button>
 
                 <button
-                  onClick={() => setMode('autonomous')}
-                  className={`p-6 rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                  disabled
+                  className={`p-6 rounded-xl border-2 text-left opacity-60 cursor-not-allowed ${
                     mode === 'autonomous' ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C4BFFF]'
                   }`}
                 >
@@ -651,7 +650,7 @@ export default function OnboardingPage() {
                     <Zap className="h-5 w-5 text-[#5B4FFF]" />
                   </div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-black text-[#1A1A1A]">Autonomous</span>
+                    <span className="text-sm font-black text-[#1A1A1A]">Autonomous — coming soon</span>
                     {mode === 'autonomous' && (
                       <div className="w-5 h-5 bg-[#5B4FFF] rounded-full flex items-center justify-center">
                         <Check className="h-3 w-3 text-white" />
@@ -659,8 +658,7 @@ export default function OnboardingPage() {
                     )}
                   </div>
                   <p className="text-xs text-[#6B7280] leading-relaxed">
-                    GrowthOS discovers opportunities, creates campaigns, and launches automatically.{' '}
-                    <span className="font-semibold text-[#374151]">Full autopilot.</span>
+                    Available after launch policy, approval audit, and recipient safety controls are enabled.
                   </p>
                 </button>
               </div>

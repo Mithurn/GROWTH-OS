@@ -1,74 +1,8 @@
-import crypto from 'crypto';
 import { z } from 'zod';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { openRouterConfig, openai } from '../config/openrouter';
-import { checkAndIncrFrequencyCap } from '../lib/redis';
 import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
-import { selectIn } from '../lib/scoped-query';
-import { getVerifiedCredentials, type IntegrationKind } from './integrations';
-import { isPaidAndActive } from './billing';
-import { injectTraceHeaders } from '../lib/trace-context';
-
-/**
- * Real credentials for this send, or `undefined` for the channel service's
- * own simulator. Two ways to get real credentials, checked in order:
- *
- * 1. The tenant's own verified BYOK integration — their account, their bill,
- *    works on any plan.
- * 2. The platform's own provider keys (`PLATFORM_*` env vars), but only for
- *    a tenant with an active paid subscription — their subscription funds
- *    it, not the founder. These are deliberately separate env var names from
- *    what channel-service reads for its own ambient fallback, so a platform
- *    key configured here can never leak into a free tenant's send by
- *    accident; the backend is the only thing that decides to use them.
- *
- * Free tier with no BYOK key: undefined, every time — the channel service's
- * simulator, unconditionally.
- */
-async function resolveSendCredentials(
-  companyId: string,
-  channel: 'WhatsApp' | 'Email' | 'SMS',
-): Promise<Record<string, string> | undefined> {
-  const kind: IntegrationKind = channel === 'Email' ? 'email' : 'whatsapp';
-
-  const byok = await getVerifiedCredentials(companyId, kind);
-  if (byok) {
-    if (kind === 'email') {
-      return { resendApiKey: byok.apiKey, resendFromEmail: byok.fromEmail ?? '' };
-    }
-    return {
-      twilioAccountSid: byok.accountSid,
-      twilioAuthToken: byok.authToken,
-      twilioPhoneNumber: byok.whatsappNumber,
-      twilioWhatsappNumber: byok.whatsappNumber,
-    };
-  }
-
-  if (await isPaidAndActive(companyId)) {
-    if (kind === 'email' && process.env.PLATFORM_RESEND_API_KEY) {
-      return {
-        resendApiKey: process.env.PLATFORM_RESEND_API_KEY,
-        resendFromEmail: process.env.PLATFORM_RESEND_FROM_EMAIL ?? '',
-      };
-    }
-    if (
-      kind === 'whatsapp' &&
-      process.env.PLATFORM_TWILIO_ACCOUNT_SID &&
-      process.env.PLATFORM_TWILIO_AUTH_TOKEN &&
-      process.env.PLATFORM_TWILIO_WHATSAPP_NUMBER
-    ) {
-      return {
-        twilioAccountSid: process.env.PLATFORM_TWILIO_ACCOUNT_SID,
-        twilioAuthToken: process.env.PLATFORM_TWILIO_AUTH_TOKEN,
-        twilioPhoneNumber: process.env.PLATFORM_TWILIO_WHATSAPP_NUMBER,
-        twilioWhatsappNumber: process.env.PLATFORM_TWILIO_WHATSAPP_NUMBER,
-      };
-    }
-  }
-
-  return undefined;
-}
+import { prisma } from '../lib/prisma';
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -151,6 +85,46 @@ interface CompanyRow {
   industry: string | null;
 }
 
+function toCampaignRow(row: {
+  id: string;
+  companyId: string;
+  opportunityId: string;
+  name: string;
+  objective: string;
+  channel: string;
+  offer: string | null;
+  messageAngle: string | null;
+  messageContent: string;
+  expectedOutcome: string | null;
+  reasoning: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  approvedAt: Date | null;
+  launchedAt: Date | null;
+  completedAt: Date | null;
+}): CampaignRow {
+  return {
+    id: row.id,
+    company_id: row.companyId,
+    opportunity_id: row.opportunityId,
+    name: row.name,
+    objective: row.objective,
+    channel: row.channel,
+    offer: row.offer,
+    message_angle: row.messageAngle,
+    message_content: row.messageContent,
+    expected_outcome: row.expectedOutcome,
+    reasoning: row.reasoning,
+    status: row.status,
+    created_at: row.createdAt.toISOString(),
+    updated_at: row.updatedAt.toISOString(),
+    approved_at: row.approvedAt?.toISOString() ?? null,
+    launched_at: row.launchedAt?.toISOString() ?? null,
+    completed_at: row.completedAt?.toISOString() ?? null,
+  };
+}
+
 function buildCampaignPrompt(opportunity: OpportunityRow, company: CompanyRow): string {
   return [
     'You are a retail marketing campaign strategist.',
@@ -191,47 +165,42 @@ function buildCampaignPrompt(opportunity: OpportunityRow, company: CompanyRow): 
  * Load a company by id, failing closed. The previous fallback to the oldest row in
  * `companies` meant a missing id quietly resolved to some other tenant.
  */
-async function ensureCompanyRow(supabase: SupabaseClient, companyId?: string): Promise<CompanyRow> {
+async function ensureCompanyRow(companyId?: string): Promise<CompanyRow> {
   if (!companyId) {
     throw new Error('companyId is required');
   }
 
-  const { data, error } = await supabase
-    .from('companies')
-    .select('id, company_name, industry')
-    .eq('id', companyId)
-    .maybeSingle();
-
-  if (error) throw new Error(`Failed to load company ${companyId}: ${error.message}`);
-  if (!data) throw new Error(`Company ${companyId} not found`);
-
-  return data as CompanyRow;
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, companyName: true, industry: true },
+  });
+  if (!company) throw new Error(`Company ${companyId} not found`);
+  return { id: company.id, company_name: company.companyName, industry: company.industry };
 }
 
-async function fetchOpportunity(supabase: SupabaseClient, opportunityId: string): Promise<OpportunityRow> {
-  const { data, error } = await supabase
-    .from('opportunities')
-    .select('id, title, description, opportunity_type, audience_size, potential_revenue, confidence_score, recommended_action, supporting_customer_segment, trigger_reason, ai_summary')
-    .eq('id', opportunityId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to load opportunity: ${error.message}`);
-  }
-
-  if (!data) {
-    throw new Error(`Opportunity ${opportunityId} not found`);
-  }
-
-  return data as OpportunityRow;
+async function fetchOpportunity(opportunityId: string): Promise<OpportunityRow> {
+  const row = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
+  if (!row) throw new Error(`Opportunity ${opportunityId} not found`);
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    opportunity_type: row.opportunityType,
+    audience_size: row.audienceSize,
+    potential_revenue: Number(row.potentialRevenue),
+    confidence_score: Number(row.confidenceScore),
+    recommended_action: row.recommendedAction,
+    supporting_customer_segment: row.supportingCustomerSegment,
+    trigger_reason: row.triggerReason,
+    ai_summary: row.aiSummary,
+  };
 }
 
 export async function generateCampaign(
-  supabase: SupabaseClient,
   request: CampaignGenerationRequest,
 ): Promise<{ campaign: GeneratedCampaign }> {
-  const company = await ensureCompanyRow(supabase, request.companyId);
-  const opportunity = await fetchOpportunity(supabase, request.opportunityId);
+  const company = await ensureCompanyRow(request.companyId);
+  const opportunity = await fetchOpportunity(request.opportunityId);
 
   const model = request.model ?? openRouterConfig.defaultModel;
   
@@ -313,356 +282,158 @@ function buildFallbackCampaign(opportunity: OpportunityRow, company: CompanyRow)
 }
 
 export async function saveCampaign(
-  supabase: SupabaseClient,
   opportunityId: string,
   campaign: GeneratedCampaign,
   companyId?: string,
 ): Promise<CampaignRow> {
-  const company = await ensureCompanyRow(supabase, companyId);
+  const company = await ensureCompanyRow(companyId);
+  const existing = await prisma.campaign.findFirst({
+    where: { opportunityId, companyId: company.id },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (existing) return toCampaignRow(existing);
 
-  // Check for existing campaign with same opportunity (use limit(1) to handle duplicates)
-  const { data: existingRows } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('opportunity_id', opportunityId)
-    .eq('company_id', company.id)
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  if (existingRows && existingRows.length > 0) {
-    return existingRows[0] as CampaignRow;
-  }
-
-  const { data, error } = await supabase
-    .from('campaigns')
-    .insert({
-      id: crypto.randomUUID(),
-      company_id: company.id,
-      opportunity_id: opportunityId,
-      name: campaign.name,
-      objective: campaign.objective,
-      channel: campaign.channel,
-      offer: campaign.offer,
-      message_angle: campaign.message_angle,
-      message_content: campaign.campaign_content,
-      expected_outcome: campaign.expected_outcome,
-      reasoning: campaign.reasoning,
-      status: 'Draft',
-      updated_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to save campaign: ${error.message}`);
-  }
-
-  return data as CampaignRow;
-}
-
-export async function approveCampaign(
-  supabase: SupabaseClient,
-  campaignId: string,
-): Promise<CampaignRow> {
-  const { data: existing } = await supabase
-    .from('campaigns')
-    .select('status')
-    .eq('id', campaignId)
-    .single();
-
-  if (existing?.status === 'Launched') {
-    throw new Error('Campaign has already been launched and cannot be re-approved');
-  }
-
-  const { data, error } = await supabase
-    .from('campaigns')
-    .update({
-      status: 'Approved',
-      approved_at: new Date().toISOString(),
-    })
-    .eq('id', campaignId)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to approve campaign: ${error.message}`);
-  }
-
-  return data as CampaignRow;
-}
-
-const CHANNEL_WAKE_TIMEOUT_MS = 90_000;
-const CHANNEL_SEND_TIMEOUT_MS = 60_000;
-
-/**
- * Block until the channel service answers /health, or until the wake budget runs out.
- * Resolves either way — a failed wake-up still lets individual sends attempt and record
- * their own failure reasons rather than aborting the whole launch.
- */
-async function warmChannelService(baseUrl: string): Promise<void> {
-  const startedAt = Date.now();
   try {
-    const response = await fetch(`${baseUrl}/health`, {
-      signal: AbortSignal.timeout(CHANNEL_WAKE_TIMEOUT_MS),
-    });
-    logger.info(
-      { ok: response.ok, waitedMs: Date.now() - startedAt },
-      'Launch: channel service warm',
-    );
+    return toCampaignRow(await prisma.campaign.create({
+      data: {
+        companyId: company.id,
+        opportunityId,
+        name: campaign.name,
+        objective: campaign.objective,
+        channel: campaign.channel,
+        offer: campaign.offer,
+        messageAngle: campaign.message_angle,
+        messageContent: campaign.campaign_content,
+        expectedOutcome: campaign.expected_outcome,
+        reasoning: campaign.reasoning,
+        status: 'Draft',
+      },
+    }));
   } catch (error) {
-    logger.warn(
-      { err: error, waitedMs: Date.now() - startedAt },
-      'Launch: channel service did not wake in time — attempting sends anyway',
-    );
+    if ((error as { code?: string }).code !== 'P2002') throw error;
+    const winner = await prisma.campaign.findFirstOrThrow({
+      where: { opportunityId, companyId: company.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    return toCampaignRow(winner);
   }
 }
 
 export async function launchCampaign(
-  supabase: SupabaseClient,
   campaignId: string,
 ): Promise<{ campaign: CampaignRow; communications_created: number }> {
-  // Get campaign details + opportunity audience_size
-  const { data: campaign, error: campaignError } = await supabase
-    .from('campaigns')
-    .select('id, company_id, opportunity_id, channel, message_content, status, opportunities(audience_size)')
-    .eq('id', campaignId)
-    .single();
+  const result = await prisma.$transaction(async (tx) => {
+    const campaign = await tx.campaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        opportunity: {
+          select: {
+            audienceSize: true,
+            audience: { select: { customerId: true } },
+          },
+        },
+      },
+    });
+    if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
-  if (campaignError) {
-    throw new Error(`Failed to load campaign: ${campaignError.message}`);
-  }
-
-  const audienceCap = (campaign as any).opportunities?.audience_size ?? null;
-
-  // Get audience from opportunity, capped to audience_size to stay consistent with what's shown in UI
-  let query = supabase
-    .from('opportunity_customers')
-    .select('customer_id')
-    .eq('opportunity_id', campaign.opportunity_id);
-
-  if (audienceCap) query = query.limit(audienceCap);
-
-  const { data: audienceRows, error: audienceError } = await query;
-
-  if (audienceError) {
-    throw new Error(`Failed to load campaign audience: ${audienceError.message}`);
-  }
-
-  if (!audienceRows || audienceRows.length === 0) {
-    throw new Error('No customers found in opportunity audience');
-  }
-
-  // ── Claim the campaign ───────────────────────────────────────────────────────
-  // A single conditional UPDATE, so exactly one caller can move a campaign out of
-  // Approved. The status used to be flipped at the very end, after a fan-out that
-  // can take a minute — two clicks on Launch both passed the status read and
-  // messaged the entire audience twice.
-  //
-  // Claiming up front means a crash mid-fan-out leaves the campaign Launched with
-  // some communications still QUEUED, which the per-communication status already
-  // models. That is the safer failure: unsent beats double-sent when the recipients
-  // are real customers.
-  const { data: claimed, error: claimError } = await supabase
-    .from('campaigns')
-    .update({ status: 'Launched', launched_at: new Date().toISOString() })
-    .eq('id', campaignId)
-    .eq('status', 'Approved')
-    .select()
-    .maybeSingle();
-
-  if (claimError) {
-    throw new Error(`Failed to update campaign status: ${claimError.message}`);
-  }
-
-  if (!claimed) {
-    throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
-  }
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const now = new Date().toISOString();
-
-  // Inserted with `.select()` so we get back exactly the rows we created. The old
-  // code re-queried by campaign_id, which also picked up communications from any
-  // earlier launch attempt and re-sent to customers who had already been messaged.
-  const { data: createdComms, error: commsError } = await supabase
-    .from('communications')
-    .insert(
-      audienceRows.map((row: any) => ({
-        id: crypto.randomUUID(),
-        campaign_id: campaignId,
-        customer_id: row.customer_id,
-        channel: campaign.channel,
-        message: campaign.message_content,
-        status: 'QUEUED',
-        updated_at: now,
-      })),
-    )
-    .select('id, customer_id, channel, message, customers(email, phone)');
-
-  if (commsError) {
-    throw new Error(`Failed to create communications: ${commsError.message}`);
-  }
-
-  // Send all communications to Channel Service in parallel
-  const CHANNEL_SERVICE_URL = process.env.CHANNEL_SERVICE_URL || 'http://localhost:5001';
-
-  // The channel service runs on Render's free tier and is deliberately left to spin
-  // down, so it may be cold here. Pay the ~15-60s wake-up once, before the fan-out —
-  // otherwise every recipient's send races the same cold start in parallel and the
-  // whole audience fails together.
-  await warmChannelService(CHANNEL_SERVICE_URL);
-
-  const sendCredentials = await resolveSendCredentials(campaign.company_id, campaign.channel);
-  logger.info(
-    { campaignId, mode: sendCredentials ? 'real' : 'simulator' },
-    'Launch: resolved send credentials',
-  );
-
-  await Promise.allSettled(createdComms.map(async (comm) => {
-    try {
-      const customer = (comm as any).customers;
-      const recipient = campaign.channel === 'Email' ? customer?.email : customer?.phone;
-
-      if (!recipient) {
-        logger.warn({ commId: comm.id, channel: campaign.channel }, 'Launch: skipping — no recipient contact');
-        return;
-      }
-
-      // Frequency cap: suppress if customer has already received 2+ messages today
-      const suppressed = await checkAndIncrFrequencyCap(comm.customer_id);
-      if (suppressed) {
-        logger.info({ customerId: comm.customer_id }, 'Launch: frequency cap hit, suppressing');
-        await supabase.from('communications').update({
-          status: 'FAILED',
-          failure_reason: 'Suppressed: frequency cap exceeded (2 messages/day)',
-          failed_at: new Date().toISOString(),
-        }).eq('id', comm.id);
-        return;
-      }
-
-      const response = await fetch(`${CHANNEL_SERVICE_URL}/send`, {
-        method: 'POST',
-        headers: injectTraceHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          communicationId: comm.id,
-          recipient,
-          channel: campaign.channel,
-          content: comm.message,
-          credentials: sendCredentials,
-        }),
-        signal: AbortSignal.timeout(CHANNEL_SEND_TIMEOUT_MS),
-      });
-
-      if (!response.ok) throw new Error(`Channel Service responded with ${response.status}`);
-      const result = await response.json() as { providerMessageId?: string };
-
-      await supabase
-        .from('communications')
-        .update({ provider_message_id: result.providerMessageId })
-        .eq('id', comm.id);
-
-      logger.info({ commId: comm.id, providerMessageId: result.providerMessageId }, 'Launch: sent');
-    } catch (error) {
-      logger.error({ err: error, commId: comm.id }, 'Launch: failed to send');
-      await supabase
-        .from('communications')
-        .update({
-          status: 'FAILED',
-          failure_reason: `Channel Service error: ${error}`,
-          failed_at: new Date().toISOString(),
-        })
-        .eq('id', comm.id);
+    const existing = await tx.communication.findMany({ where: { campaignId } });
+    if (campaign.status === 'Dispatching' || campaign.status === 'Launched') {
+      return { campaign, communications: existing };
     }
-  }));
+    if (campaign.status !== 'Approved') {
+      throw new Error(`Campaign must be approved before launch (current status: ${campaign.status})`);
+    }
 
-  // Create QUEUED events for all communications
-  const events = createdComms.map((comm: any) => ({
-    id: crypto.randomUUID(),
-    communication_id: comm.id,
-    event_type: 'QUEUED',
-    event_timestamp: new Date().toISOString(),
-    sequence_number: 1,
-  }));
+    const audience = campaign.opportunity.audience.slice(0, campaign.opportunity.audienceSize);
+    if (!audience.length) throw new Error('No customers found in opportunity audience');
 
-  const { error: eventsError } = await supabase
-    .from('communication_events')
-    .insert(events);
+    const claimed = await tx.campaign.updateMany({
+      where: { id: campaignId, companyId: campaign.companyId, status: 'Approved' },
+      data: { status: 'Dispatching' },
+    });
+    if (claimed.count === 0) {
+      return {
+        campaign: await tx.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
+        communications: await tx.communication.findMany({ where: { campaignId } }),
+      };
+    }
+    await tx.communication.createMany({
+      data: audience.map(({ customerId }) => ({
+        campaignId,
+        customerId,
+        channel: campaign.channel,
+        message: campaign.messageContent,
+        status: 'QUEUED',
+        idempotencyKey: `${campaignId}:${customerId}`,
+      })),
+      skipDuplicates: true,
+    });
+    const communications = await tx.communication.findMany({ where: { campaignId } });
+    await tx.communicationEvent.createMany({
+      data: communications.map((communication) => ({
+        communicationId: communication.id,
+        eventType: 'QUEUED',
+        sequenceNumber: 1,
+      })),
+      skipDuplicates: true,
+    });
+    return {
+      campaign: await tx.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
+      communications,
+    };
+  });
 
-  if (eventsError) {
-    throw new Error(`Failed to create communication events: ${eventsError.message}`);
-  }
-
+  const { enqueueCommunicationDispatchBatch } = await import('../lib/queues');
+  await enqueueCommunicationDispatchBatch(result.communications.map((communication) => ({
+    companyId: result.campaign.companyId,
+    communicationId: communication.id,
+  })));
   return {
-    campaign: claimed as CampaignRow,
-    communications_created: createdComms.length,
+    campaign: toCampaignRow(result.campaign),
+    communications_created: result.communications.length,
   };
 }
 
 export async function getCampaigns(
-  supabase: SupabaseClient,
   companyId?: string,
   opts: { page?: number; limit?: number } = {},
 ): Promise<{ data: CampaignWithMetrics[]; total: number }> {
-  const company = await ensureCompanyRow(supabase, companyId);
+  const company = await ensureCompanyRow(companyId);
   const limit = opts.limit ?? 20;
   const page = opts.page ?? 1;
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-
-  const { data: campaigns, error, count } = await supabase
-    .from('campaigns')
-    .select(`*, opportunities(audience_size)`, { count: 'exact' })
-    .eq('company_id', company.id)
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (error) {
-    throw new Error(`Failed to load campaigns: ${error.message}`);
-  }
-
-  // Delivery counters for the whole page in two queries rather than two per campaign.
-  // The previous version also passed an unchunked `.in()` over every communication id,
-  // which overflows the URL once a campaign has more than a few hundred recipients.
-  const campaignIds = (campaigns ?? []).map((c: any) => c.id as string);
-
-  const communications = await selectIn<{ id: string; campaign_id: string }>(
-    supabase,
-    'communications',
-    'id, campaign_id',
-    'campaign_id',
-    campaignIds,
-  );
-
-  const campaignIdByCommunication = new Map(
-    communications.map((c) => [c.id, c.campaign_id]),
-  );
-
-  const events = await selectIn<{ event_type: string; communication_id: string }>(
-    supabase,
-    'communication_events',
-    'event_type, communication_id',
-    'communication_id',
-    communications.map((c) => c.id),
-  );
+  const [campaigns, total] = await Promise.all([
+    prisma.campaign.findMany({
+      where: { companyId: company.id },
+      include: { opportunity: { select: { audienceSize: true } } },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.campaign.count({ where: { companyId: company.id } }),
+  ]);
+  const campaignIds = campaigns.map((campaign) => campaign.id);
+  const communications = await prisma.communication.findMany({
+    where: { campaignId: { in: campaignIds } },
+    include: { events: { select: { eventType: true } } },
+  });
 
   const countsByCampaign = new Map<string, Record<string, number>>();
-  for (const event of events) {
-    const campaignId = campaignIdByCommunication.get(event.communication_id);
-    if (!campaignId) continue;
-
-    let counts = countsByCampaign.get(campaignId);
+  for (const communication of communications) {
+    let counts = countsByCampaign.get(communication.campaignId);
     if (!counts) {
       counts = {};
-      countsByCampaign.set(campaignId, counts);
+      countsByCampaign.set(communication.campaignId, counts);
     }
-    counts[event.event_type] = (counts[event.event_type] ?? 0) + 1;
+    for (const event of communication.events) {
+      counts[event.eventType] = (counts[event.eventType] ?? 0) + 1;
+    }
   }
 
-  const campaignsWithMetrics = (campaigns ?? []).map((campaign: any) => {
+  const campaignsWithMetrics = campaigns.map((campaign) => {
     const counts = countsByCampaign.get(campaign.id) ?? {};
     return {
-      ...campaign,
-      audience_size: campaign.opportunities?.audience_size ?? 0,
+      ...toCampaignRow(campaign),
+      audience_size: campaign.opportunity.audienceSize,
       communications_sent: counts.SENT ?? 0,
       communications_delivered: counts.DELIVERED ?? 0,
       communications_read: counts.READ ?? 0,
@@ -671,23 +442,17 @@ export async function getCampaigns(
     };
   });
 
-  return { data: campaignsWithMetrics as CampaignWithMetrics[], total: count ?? 0 };
+  return { data: campaignsWithMetrics, total };
 }
 
 export async function refineCampaignMessage(
-  supabase: SupabaseClient,
   campaignId: string,
   modifier: string,
   newChannel?: string,
   options: { model?: string } = {},
 ): Promise<{ message_content: string; channel: string }> {
-  const { data: campaign, error: fetchError } = await supabase
-    .from('campaigns')
-    .select('id, channel, message_content, offer, objective, name')
-    .eq('id', campaignId)
-    .single();
-
-  if (fetchError || !campaign) throw new Error(`Campaign ${campaignId} not found`);
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
   const targetChannel = newChannel ?? campaign.channel;
   const isChannelSwitch = newChannel && newChannel !== campaign.channel;
@@ -707,7 +472,7 @@ export async function refineCampaignMessage(
     `Objective: ${campaign.objective ?? 'Re-engage customers'}`,
     '',
     'Current message:',
-    campaign.message_content,
+    campaign.messageContent,
     '',
     `Marketer instruction: "${modifier.trim() || (isChannelSwitch ? `Adapt this message for ${targetChannel}` : 'Improve the copy')}"`,
     '',
@@ -730,64 +495,42 @@ export async function refineCampaignMessage(
     RefinedMessageSchema,
   );
 
-  const updates: Record<string, unknown> = {
-    message_content: parsed.message_content,
-    updated_at: new Date().toISOString(),
-  };
-  if (isChannelSwitch) updates.channel = targetChannel;
-
-  const { error: updateError } = await supabase
-    .from('campaigns')
-    .update(updates)
-    .eq('id', campaignId);
-
-  if (updateError) throw new Error(`Failed to update campaign: ${updateError.message}`);
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: {
+      messageContent: parsed.message_content,
+      ...(isChannelSwitch ? { channel: targetChannel } : {}),
+    },
+  });
 
   return { message_content: parsed.message_content, channel: targetChannel };
 }
 
 export async function getCampaignById(
-  supabase: SupabaseClient,
   campaignId: string,
 ): Promise<CampaignWithMetrics> {
-  const { data: campaign, error } = await supabase
-    .from('campaigns')
-    .select(`
-      *,
-      opportunities(audience_size, potential_revenue, title, description)
-    `)
-    .eq('id', campaignId)
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to load campaign: ${error.message}`);
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    include: {
+      opportunity: { select: { audienceSize: true } },
+      communications: { include: { events: { select: { eventType: true } } } },
+    },
+  });
+  if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+  const eventCounts: Record<string, number> = {};
+  for (const communication of campaign.communications) {
+    for (const event of communication.events) {
+      eventCounts[event.eventType] = (eventCounts[event.eventType] ?? 0) + 1;
+    }
   }
 
-  // Get communication events
-  const { data: communications } = await supabase
-    .from('communications')
-    .select('id')
-    .eq('campaign_id', campaignId);
-
-  const commIds = (communications ?? []).map((c: any) => c.id);
-
-  const { data: events } = await supabase
-    .from('communication_events')
-    .select('event_type')
-    .in('communication_id', commIds);
-
-  const eventCounts = (events ?? []).reduce((acc: any, event: any) => {
-    acc[event.event_type] = (acc[event.event_type] || 0) + 1;
-    return acc;
-  }, {});
-
   return {
-    ...campaign,
-    audience_size: campaign.opportunities?.audience_size ?? 0,
+    ...toCampaignRow(campaign),
+    audience_size: campaign.opportunity.audienceSize,
     communications_sent: eventCounts.SENT ?? 0,
     communications_delivered: eventCounts.DELIVERED ?? 0,
     communications_read: eventCounts.READ ?? 0,
     communications_clicked: eventCounts.CLICKED ?? 0,
     communications_failed: eventCounts.FAILED ?? 0,
-  } as CampaignWithMetrics;
+  };
 }

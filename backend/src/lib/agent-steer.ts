@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'http';
 import type { Server } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { supabase } from './supabase';
+import { prisma } from './prisma';
 import { logger } from './logger';
 import { emitActivity } from './activity-emitter';
 
@@ -45,18 +46,17 @@ export function attachAgentSteer(server: Server): WebSocketServer {
           ws.close();
           return;
         }
-        const profile = await supabase
-          .from('profiles')
-          .select('company_id')
-          .eq('id', data.user.id)
-          .maybeSingle();
-        if (!profile.data?.company_id) {
+        const profile = await prisma.profile.findUnique({
+          where: { id: data.user.id },
+          select: { companyId: true },
+        });
+        if (!profile?.companyId) {
           ws.send(JSON.stringify({ type: 'error', error: 'No company' }));
           ws.close();
           return;
         }
         userId = data.user.id;
-        companyId = profile.data.company_id;
+        companyId = profile.companyId;
         ws.send(JSON.stringify({ type: 'ready', companyId }));
         return;
       }

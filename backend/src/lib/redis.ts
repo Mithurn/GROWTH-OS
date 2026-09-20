@@ -58,16 +58,29 @@ export async function assertRedisReachable(timeoutMs = 10_000): Promise<void> {
  * Returns true if the message should be suppressed.
  * Fails open on a transient Redis error, so no message is suppressed.
  */
-export async function checkAndIncrFrequencyCap(customerId: string): Promise<boolean> {
+export async function checkAndIncrFrequencyCap(customerId: string, communicationId: string): Promise<boolean> {
   const redis = getClient();
 
   const date = new Date().toISOString().slice(0, 10);
   const key = `comm:${customerId}:${date}`;
+  const reservationKey = `comm-reservation:${communicationId}`;
 
   try {
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, 86400);
-    return count > 2;
+    const suppressed = await redis.eval(
+      `local existing = redis.call('GET', KEYS[2])
+       if existing then return tonumber(existing) end
+       local count = redis.call('INCR', KEYS[1])
+       if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+       local result = count > tonumber(ARGV[2]) and 1 or 0
+       redis.call('SET', KEYS[2], result, 'EX', ARGV[1])
+       return result`,
+      2,
+      key,
+      reservationKey,
+      86400,
+      2,
+    );
+    return Number(suppressed) === 1;
   } catch {
     return false;
   }

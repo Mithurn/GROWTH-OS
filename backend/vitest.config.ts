@@ -39,7 +39,7 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+      SUPABASE_ANON_KEY: 'test-anon-key',
       WEBHOOK_SECRET: 'test-webhook-secret',
       FRONTEND_URL: 'http://localhost:3000',
       LOG_LEVEL: 'silent',

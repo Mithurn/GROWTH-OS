@@ -4,17 +4,22 @@ import { MemorySaver } from '@langchain/langgraph';
 import { logger } from './logger';
 
 let cached: Promise<BaseCheckpointSaver> | null = null;
+let durableCached: Promise<BaseCheckpointSaver> | null = null;
 
-/**
- * Shared LangGraph checkpointer for the whole process. `setup()` runs its own
- * internal migrations against DATABASE_URL and must only run once per boot,
- * not once per agent tick — hence the module-level cache.
- *
- * Fail-soft, unlike Redis: nothing suspends a graph mid-run yet (shadow mode
- * has no real `interrupt()` in use), so a MemorySaver fallback loses nothing
- * observable today. Once Phase 4 arms real interrupts, a failure here should
- * become a hard boot failure the same way Redis is — not yet.
- */
+export async function getDurableAgentCheckpointer(): Promise<BaseCheckpointSaver> {
+  if (!durableCached) {
+    durableCached = (async () => {
+      const url = process.env.DATABASE_URL;
+      if (!url) throw new Error('DATABASE_URL is required for durable agent checkpoints');
+      const saver = await createPostgresCheckpointer(url);
+      logger.info('Agent checkpoints: PostgresSaver ready');
+      return saver;
+    })();
+  }
+  return durableCached;
+}
+
+/** Shadow runs may fall back to memory; campaign approval uses the durable accessor above. */
 export async function getAgentCheckpointer(): Promise<BaseCheckpointSaver> {
   if (!cached) {
     cached = (async () => {
@@ -24,9 +29,7 @@ export async function getAgentCheckpointer(): Promise<BaseCheckpointSaver> {
         return new MemorySaver();
       }
       try {
-        const saver = await createPostgresCheckpointer(url);
-        logger.info('Agent checkpoints: PostgresSaver ready');
-        return saver;
+        return await getDurableAgentCheckpointer();
       } catch (err) {
         logger.warn({ err }, 'PostgresSaver setup failed — falling back to in-memory MemorySaver');
         return new MemorySaver();
@@ -36,7 +39,17 @@ export async function getAgentCheckpointer(): Promise<BaseCheckpointSaver> {
   return cached;
 }
 
+export async function closeAgentCheckpointer(): Promise<void> {
+  const saver = durableCached ? await durableCached : null;
+  if (saver && 'end' in saver && typeof saver.end === 'function') {
+    await saver.end();
+  }
+  cached = null;
+  durableCached = null;
+}
+
 /** Test-only: force a fresh checkpointer on the next call. */
 export function resetAgentCheckpointerForTests(): void {
   cached = null;
+  durableCached = null;
 }

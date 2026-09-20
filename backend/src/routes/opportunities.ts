@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import {
   requireAuth,
@@ -33,7 +32,7 @@ opportunitiesRouter.post(
   async (req: AuthRequest, res) => {
     try {
       const { model } = req.body ?? {};
-      const report = await generateOpportunities(supabase, { companyId: req.companyId!, model });
+      const report = await generateOpportunities({ companyId: req.companyId!, model });
       res.json({ success: true, data: report });
     } catch (error) {
       logger.error({ err: error }, 'Error generating opportunities');
@@ -48,7 +47,7 @@ opportunitiesRouter.get(
   resolveCompanyMiddleware,
   async (req: AuthRequest, res) => {
     try {
-      const report = await getOpportunityDashboard(supabase, req.companyId!);
+      const report = await getOpportunityDashboard(req.companyId!);
       res.json({ success: true, data: report });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching opportunities');
@@ -72,7 +71,7 @@ opportunitiesRouter.post(
     try {
       const { goal, model } = req.body;
 
-      const opportunity = await createOpportunityFromGoal(supabase, goal.trim(), {
+      const opportunity = await createOpportunityFromGoal(goal.trim(), {
         companyId: req.companyId!,
         model,
       });
@@ -95,7 +94,7 @@ opportunitiesRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const opportunityId = req.params['opportunityId'] as string;
-      const result = await getOpportunityCustomers(supabase, opportunityId, req.companyId!);
+      const result = await getOpportunityCustomers(opportunityId, req.companyId!);
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching opportunity details');
@@ -115,7 +114,7 @@ opportunitiesRouter.post(
       const id = req.params['id'] as string;
       const { modifier } = req.body;
 
-      const opportunity = await refineOpportunity(supabase, id, modifier.trim());
+      const opportunity = await refineOpportunity(id, modifier.trim());
       res.json({ success: true, data: opportunity });
     } catch (error) {
       logger.error({ err: error }, 'Error refining opportunity');

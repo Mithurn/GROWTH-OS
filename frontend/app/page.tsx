@@ -37,7 +37,7 @@ const PIPELINE = [
   },
   {
     title: 'Send and measure',
-    body: 'Approved campaigns leave through a provider layer that reports back over signed webhooks. The funnel updates as delivery events land, in order, exactly once.',
+    body: 'Approved campaigns leave through durable recipient jobs and a provider layer that reports back over signed webhooks. Duplicate and out-of-order events cannot move the funnel backward.',
     detail: 'hmac webhooks → funnel',
   },
 ];
@@ -62,11 +62,11 @@ const ARCHITECTURE = [
   },
   {
     title: 'Tenancy enforced in the API',
-    body: 'Queries use the Supabase service role, which bypasses row-level security entirely. Every route therefore re-checks ownership in Express, and a cross-tenant id returns a 404 rather than a 403.',
+    body: 'Every database transaction carries the authenticated tenant into PostgreSQL. Row-level security and API ownership checks both reject cross-tenant access, including when a caller knows another tenant’s row id.',
   },
   {
     title: 'Built for a free tier that sleeps',
-    body: 'The agent loop runs from external cron instead of setInterval, ingestion resumes after a spin-down, and the channel service is woken once before a launch fans out instead of by every recipient at once.',
+    body: 'The agent loop runs from an authenticated external scheduler, ingestion resumes after interruption, and durable recipient jobs retry provider startup and transient delivery failures.',
   },
 ];
 

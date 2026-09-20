@@ -14,3 +14,11 @@ export const RefineCampaignSchema = z.object({
   modifier: z.string().optional().default(''),
   channel:  z.string().optional(),
 });
+
+export const ApproveCampaignSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+}).default({});
+
+export const RejectCampaignSchema = z.object({
+  reason: z.string().trim().min(1, 'reason is required').max(500),
+});

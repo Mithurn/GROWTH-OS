@@ -94,6 +94,9 @@ vi.mock('../lib/prisma', () => {
       create: vi.fn(),
       update: vi.fn(),
     },
+    profile: {
+      findUnique: vi.fn().mockResolvedValue({ companyId: 'co_test' }),
+    },
     customer: {
       count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([]),
@@ -124,6 +127,7 @@ vi.mock('../lib/prisma', () => {
     campaign: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
       findUniqueOrThrow: vi.fn(),
       create: vi.fn(),
     },

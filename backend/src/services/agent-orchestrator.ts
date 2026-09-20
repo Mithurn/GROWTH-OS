@@ -125,14 +125,12 @@ export class AgentOrchestrator {
    */
   private async executeAgent(context: AgentExecutionContext) {
     const { agentId, companyId, goal, guardrails } = context;
-    const involvement = (guardrails as any).involvement || 'review every campaign';
-
     logger.info({ agentId, companyId }, 'Executing agent');
 
     // Step 1: Enqueue opportunity discovery.
     // The worker calls the LLM, persists discoveries, then chains campaign-generation
     // jobs for each new opportunity — all with 3-attempt exponential-backoff retry.
-    await enqueueOpportunityDiscovery({ companyId, agentId, goal, guardrails: guardrails as any, involvement });
+    await enqueueOpportunityDiscovery({ companyId, agentId, goal, guardrails: guardrails as any });
 
     // Step 2: Enqueue campaign generation for any existing uncampaigned opportunities.
     // The campaign worker performs its own idempotency check before creating.
@@ -151,7 +149,6 @@ export class AgentOrchestrator {
         companyId,
         agentId,
         guardrails: guardrails as any,
-        involvement,
         audienceSize: opp.audienceSize,
         potentialRevenue: Number(opp.potentialRevenue),
       });

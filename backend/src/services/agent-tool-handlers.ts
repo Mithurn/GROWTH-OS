@@ -7,6 +7,7 @@ import { searchSimilarCampaigns } from './campaign-embeddings';
 import { parseWithRetry } from '../lib/ai';
 import { openai, openRouterConfig } from '../config/openrouter';
 import { getConfig } from '../lib/config';
+import { ensureCampaignApprovalWorkflow } from './campaign-approval-workflow';
 
 async function estimatorParams(companyId: string) {
   const [globalPriorConversionRate, priorWeight, confidenceZ] = await Promise.all([
@@ -372,6 +373,7 @@ async function draftCampaign(args: unknown, ctx: RunContext) {
       status: 'Draft',
     },
   });
+  await ensureCampaignApprovalWorkflow({ campaignId: campaign.id, companyId: ctx.companyId });
   return { id: campaign.id, status: campaign.status, channel: campaign.channel };
 }
 
@@ -387,10 +389,9 @@ async function requestApproval(args: unknown, ctx: RunContext) {
     throw new Error(`No campaign ${campaign_id} for this tenant.`);
   }
   return {
-    interrupt: true,
     campaign_id: campaign.id,
     status: campaign.status,
-    note: 'Human approval is required. The agent cannot approve or launch.',
+    note: 'The durable campaign approval workflow is waiting for a human decision.',
   };
 }
 

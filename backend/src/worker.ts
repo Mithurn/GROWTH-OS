@@ -12,6 +12,7 @@ import { startWorkers, closeWorkers } from './lib/queues';
 import { assertRedisReachable } from './lib/redis';
 import { assertConfigDefaultsSeeded } from './lib/config';
 import { prisma } from './lib/prisma';
+import { closeAgentCheckpointer } from './lib/agent-checkpointer';
 
 /**
  * BullMQ workers, split out of the API process (see docs/V3_PLAN.md Phase 0.2).
@@ -40,6 +41,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Worker: draining in-flight jobs before exit');
   try {
     await closeWorkers();
+    await closeAgentCheckpointer();
     await prisma.$disconnect();
   } catch (err) {
     logger.error({ err }, 'Worker: error during shutdown');

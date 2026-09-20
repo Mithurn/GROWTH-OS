@@ -91,6 +91,7 @@ model Company {
   personas     Persona[]
   opportunities Opportunity[]
   campaigns    Campaign[]
+  campaignApprovals CampaignApproval[]
   agents       Agent[]
   agentRuns    AgentRun[]
   ingestionSessions IngestionSession[]
@@ -340,6 +341,7 @@ model Campaign {
   agent            Agent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
   opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   communications   Communication[]
+  approvals        CampaignApproval[]
 
   @@index([companyId])
   @@index([agentId])
@@ -347,6 +349,26 @@ model Campaign {
   @@index([status])
   @@index([createdAt])
   @@map("campaigns")
+}
+
+model CampaignApproval {
+  id             String   @id @default(uuid())
+  companyId      String   @map("company_id")
+  campaignId     String   @unique @map("campaign_id")
+  actorId        String   @map("actor_id")
+  decision       String
+  reason         String?
+  policyVersion  Int      @default(1) @map("policy_version")
+  policySnapshot Json     @map("policy_snapshot")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("campaign_approvals")
 }
 
 model Communication {
@@ -358,6 +380,7 @@ model Communication {
   messageVariant      String?   @map("message_variant") // Which variant was used (A, B, C)
   status              String    @default("QUEUED")
   providerMessageId   String?   @map("provider_message_id")
+  idempotencyKey      String?   @unique @map("idempotency_key")
   failureReason       String?   @map("failure_reason")
   retryCount          Int       @default(0) @map("retry_count")
   converted           Boolean   @default(false) // Did customer make a purchase?
@@ -421,12 +444,19 @@ model ProcessedWebhookEvent {
 // AI-NATIVE SYSTEM: Autonomous Agents
 // ============================================
 
+enum InvolvementMode {
+  manual
+  approve_above_threshold
+  autonomous_within_policy
+}
+
 model Agent {
   id              String    @id @default(uuid())
   companyId       String    @map("company_id")
   name            String    // Auto-generated: "Repeat Purchase Agent"
   goal            String    // User input: "Increase repeat purchases by 20%"
   status          String    @default("discovering") // 'discovering', 'running', 'paused', 'completed'
+  involvementMode InvolvementMode @default(manual) @map("involvement_mode")
   guardrails      Json      // {max_budget: 50000, frequency_cap: 3, channels: ['whatsapp', 'email']}
   performance     Json?     // {revenue: 125000, conversion_rate: 0.38, customers_reached: 1248}
   createdAt       DateTime  @default(now()) @map("created_at")

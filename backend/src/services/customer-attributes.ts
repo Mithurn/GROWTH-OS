@@ -1,5 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger as rootLogger } from '../lib/logger';
+import { prisma } from '../lib/prisma';
 
 export interface CustomerAttributesLogger {
   info: (message: string, ...args: unknown[]) => void;
@@ -117,7 +117,7 @@ interface CustomerContext {
 interface GenerateCustomerAttributesOptions {
   batchSize?: number;
   logger?: CustomerAttributesLogger;
-  companyId?: string;
+  companyId: string;
 }
 
 const DEFAULT_BATCH_SIZE = 100;
@@ -372,7 +372,6 @@ function buildAttributes(
 }
 
 async function upsertInBatches(
-  supabase: SupabaseClient,
   attributes: CustomerAttributesRecord[],
   batchSize: number,
   logger: CustomerAttributesLogger,
@@ -386,46 +385,51 @@ async function upsertInBatches(
       `[customer_attributes] Upserting batch ${batchNumber}/${totalBatches} (${batch.length} records)`,
     );
 
-    const { error } = await supabase
-      .from('customer_attributes')
-      .upsert(batch, { onConflict: 'customer_id' });
-
-    if (error) {
-      logger.error('[customer_attributes] Failed batch payload:', batch);
-      throw new Error(`Failed to upsert customer attributes batch ${batchNumber}: ${error.message}`);
-    }
+    await prisma.$transaction(batch.map((row) => prisma.customerAttributes.upsert({
+      where: { customerId: row.customer_id },
+      create: {
+        companyId: row.company_id!,
+        customerId: row.customer_id,
+        favoriteCategory: row.favorite_category,
+        secondFavoriteCategory: row.second_favorite_category,
+        preferredChannel: row.preferred_channel,
+        discountAffinity: row.discount_affinity,
+        avgDaysBetweenOrders: row.avg_days_between_orders,
+        dominantPriceBand: row.dominant_price_band,
+        categoryDiversityScore: row.category_diversity_score,
+      },
+      update: {
+        favoriteCategory: row.favorite_category,
+        secondFavoriteCategory: row.second_favorite_category,
+        preferredChannel: row.preferred_channel,
+        discountAffinity: row.discount_affinity,
+        avgDaysBetweenOrders: row.avg_days_between_orders,
+        dominantPriceBand: row.dominant_price_band,
+        categoryDiversityScore: row.category_diversity_score,
+      },
+    })));
   }
 }
 
-async function fetchAttributesCount(supabase: SupabaseClient): Promise<number> {
-  const { count, error } = await supabase
-    .from('customer_attributes')
-    .select('id', { count: 'exact', head: true });
-
-  if (error) {
-    throw new Error(`Failed to count customer attributes: ${error.message}`);
-  }
-
-  return count ?? 0;
+async function fetchAttributesCount(companyId: string): Promise<number> {
+  return prisma.customerAttributes.count({ where: { companyId } });
 }
 
 async function fetchStoredAttributesForCustomer(
-  supabase: SupabaseClient,
   customerId: string,
 ): Promise<StoredAttributeRow | null> {
-  const { data, error } = await supabase
-    .from('customer_attributes')
-    .select(
-      'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score',
-    )
-    .eq('customer_id', customerId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to load stored attributes for customer ${customerId}: ${error.message}`);
-  }
-
-  return (data ?? null) as StoredAttributeRow | null;
+  const row = await prisma.customerAttributes.findUnique({ where: { customerId } });
+  if (!row) return null;
+  return {
+    customer_id: row.customerId,
+    favorite_category: row.favoriteCategory,
+    second_favorite_category: row.secondFavoriteCategory,
+    preferred_channel: row.preferredChannel,
+    discount_affinity: row.discountAffinity as 'High' | 'Medium' | 'Low',
+    avg_days_between_orders: row.avgDaysBetweenOrders === null ? null : Number(row.avgDaysBetweenOrders),
+    dominant_price_band: row.dominantPriceBand,
+    category_diversity_score: Number(row.categoryDiversityScore),
+  };
 }
 
 function compareAttributesToRawData(
@@ -514,8 +518,7 @@ function summarizeTopCategories(attributes: CustomerAttributesRecord[]): Attribu
 }
 
 export async function generateCustomerAttributes(
-  supabase: SupabaseClient,
-  options: GenerateCustomerAttributesOptions = {},
+  options: GenerateCustomerAttributesOptions,
 ): Promise<CustomerAttributesReport> {
   const logger = options.logger ?? defaultLogger;
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -524,49 +527,47 @@ export async function generateCustomerAttributes(
 
   logger.info('[customer_attributes] Starting generation pipeline');
 
-  let customersQuery = supabase.from('customers').select('id, first_name, last_name').order('created_at', { ascending: true });
-  if (companyId) customersQuery = customersQuery.eq('company_id', companyId);
-  const { data: customersData, error: customersError } = await customersQuery;
-
-  if (customersError) {
-    throw new Error(`Failed to load customers: ${customersError.message}`);
-  }
-
-  let ordersQuery = supabase.from('orders').select('id, customer_id, order_date, channel');
-  if (companyId) ordersQuery = ordersQuery.eq('company_id', companyId);
-  const { data: ordersData, error: ordersError } = await ordersQuery;
-
-  if (ordersError) {
-    throw new Error(`Failed to load orders: ${ordersError.message}`);
-  }
-
-  // order_items are linked to orders — chunk .in() to avoid URL length limits
-  const orderIds = (ordersData ?? []).map((o: any) => o.id);
-  const ORDER_ITEM_CHUNK = 200;
-  let orderItemsData: any[] = [];
-
-  for (let i = 0; i < orderIds.length; i += ORDER_ITEM_CHUNK) {
-    const chunk = orderIds.slice(i, i + ORDER_ITEM_CHUNK);
-    const { data, error } = await supabase
-      .from('order_items')
-      .select('order_id, product_id, quantity, unit_price')
-      .in('order_id', chunk);
-    if (error) throw new Error(`Failed to load order items: ${error.message}`);
-    orderItemsData = orderItemsData.concat(data ?? []);
-  }
-
-  let productsQuery = supabase.from('products').select('id, category, price');
-  if (companyId) productsQuery = productsQuery.eq('company_id', companyId);
-  const { data: productsData, error: productsError } = await productsQuery;
-
-  if (productsError) {
-    throw new Error(`Failed to load products: ${productsError.message}`);
-  }
-
-  const customers = (customersData ?? []) as CustomerRow[];
-  const orders = (ordersData ?? []) as OrderRow[];
-  const orderItems = orderItemsData as OrderItemRow[];
-  const products = (productsData ?? []) as ProductRow[];
+  const [customerRows, orderRows, orderItemRows, productRows] = await Promise.all([
+    prisma.customer.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, firstName: true, lastName: true },
+    }),
+    prisma.order.findMany({
+      where: { companyId },
+      select: { id: true, customerId: true, orderDate: true, channel: true },
+    }),
+    prisma.orderItem.findMany({
+      where: { companyId },
+      select: { orderId: true, productId: true, quantity: true, unitPrice: true },
+    }),
+    prisma.product.findMany({
+      where: { companyId },
+      select: { id: true, category: true, price: true },
+    }),
+  ]);
+  const customers: CustomerRow[] = customerRows.map((row) => ({
+    id: row.id,
+    first_name: row.firstName,
+    last_name: row.lastName,
+  }));
+  const orders: OrderRow[] = orderRows.map((row) => ({
+    id: row.id,
+    customer_id: row.customerId,
+    order_date: row.orderDate.toISOString(),
+    channel: row.channel,
+  }));
+  const orderItems: OrderItemRow[] = orderItemRows.map((row) => ({
+    order_id: row.orderId,
+    product_id: row.productId,
+    quantity: row.quantity,
+    unit_price: Number(row.unitPrice),
+  }));
+  const products: ProductRow[] = productRows.map((row) => ({
+    id: row.id,
+    category: row.category,
+    price: Number(row.price),
+  }));
 
   logger.info(
     `[customer_attributes] Loaded ${customers.length} customers, ${orders.length} orders, ${orderItems.length} order items`,
@@ -589,7 +590,7 @@ export async function generateCustomerAttributes(
 
   const attributes: CustomerAttributesRecord[] = attributesWithStats.map((row) => ({
     customer_id: row.customer_id,
-    ...(companyId ? { company_id: companyId } : {}),
+    company_id: companyId,
     favorite_category: row.favorite_category,
     second_favorite_category: row.second_favorite_category,
     preferred_channel: row.preferred_channel,
@@ -601,9 +602,9 @@ export async function generateCustomerAttributes(
 
   logger.info('[customer_attributes] Computed attributes for all customers');
 
-  await upsertInBatches(supabase, attributes, batchSize, logger);
+  await upsertInBatches(attributes, batchSize, logger);
 
-  const totalAttributesRecords = await fetchAttributesCount(supabase);
+  const totalAttributesRecords = await fetchAttributesCount(companyId);
   const topCategories = summarizeTopCategories(attributes);
 
   const highestDiscountAffinityCustomers = [...attributes]
@@ -655,7 +656,7 @@ export async function generateCustomerAttributes(
     const rawContext = contextByCustomerId.get(customerId);
     if (!rawContext) continue;
 
-    const storedAttributes = await fetchStoredAttributesForCustomer(supabase, customerId);
+    const storedAttributes = await fetchStoredAttributesForCustomer(customerId);
     const validation = compareAttributesToRawData(customerId, rawContext, storedAttributes, customer);
     sampleValidations.push(validation);
   }

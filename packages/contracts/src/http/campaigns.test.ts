@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { GenerateCampaignSchema, RefineCampaignSchema, SaveCampaignSchema } from './campaigns';
+import {
+  ApproveCampaignSchema,
+  GenerateCampaignSchema,
+  RefineCampaignSchema,
+  RejectCampaignSchema,
+  SaveCampaignSchema,
+} from './campaigns';
 
 describe('GenerateCampaignSchema', () => {
   it('requires an opportunityId', () => {
@@ -20,5 +26,13 @@ describe('RefineCampaignSchema', () => {
   it('defaults modifier to an empty string so a channel-only refine is valid', () => {
     expect(RefineCampaignSchema.parse({ channel: 'email' })).toEqual({ modifier: '', channel: 'email' });
     expect(RefineCampaignSchema.parse({})).toEqual({ modifier: '' });
+  });
+});
+
+describe('campaign decisions', () => {
+  it('allows approval without a reason and requires a rejection reason', () => {
+    expect(ApproveCampaignSchema.safeParse(undefined).success).toBe(true);
+    expect(RejectCampaignSchema.safeParse({}).success).toBe(false);
+    expect(RejectCampaignSchema.parse({ reason: 'Wrong audience' }).reason).toBe('Wrong audience');
   });
 });

@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 
-// Every backend query runs with the Supabase service role, which bypasses RLS, so
-// cross-tenant access can only be blocked in Express. These tests pin that behaviour:
-// knowing another company's row id must not grant access to it.
-
 const { mockGetUser, resourceCompanyId } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   resourceCompanyId: { value: 'co_caller' },
@@ -80,7 +76,9 @@ const SCOPED_ROUTES = [
 describe('Cross-tenant access', () => {
   beforeEach(() => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user_caller' } }, error: null });
+    vi.mocked(prisma.profile.findUnique).mockResolvedValue({ companyId: CALLER_COMPANY } as never);
     const ownedRow = async () => ({ companyId: resourceCompanyId.value });
+    vi.mocked(prisma.campaign.findUnique).mockImplementation(ownedRow as never);
     vi.mocked(prisma.agent.findUnique).mockImplementation(ownedRow as never);
     vi.mocked(prisma.ingestionSession.findUnique).mockImplementation(ownedRow as never);
     vi.mocked(prisma.opportunity.findUnique).mockImplementation(ownedRow as never);
@@ -135,6 +133,8 @@ describe('SSE event routes', () => {
   it('return 404 when the campaign belongs to another company', async () => {
     resourceCompanyId.value = OTHER_COMPANY;
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user_caller' } }, error: null });
+    vi.mocked(prisma.profile.findUnique).mockResolvedValue({ companyId: CALLER_COMPANY } as never);
+    vi.mocked(prisma.campaign.findUnique).mockResolvedValue({ companyId: OTHER_COMPANY } as never);
     const res = await request(app)
       .get('/api/campaigns/camp_1/events')
       .set('Authorization', 'Bearer valid-token');

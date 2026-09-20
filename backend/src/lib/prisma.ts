@@ -3,12 +3,12 @@ import { PrismaClient } from '../../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { tenantScopeExtension } from './tenant-scope';
-
-// Create connection pool
+import { installTenantRls } from './tenant-context';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+installTenantRls(pool);
 
 // Create adapter
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg(pool, { disposeExternalPool: true });
 
 function buildBaseClient(): PrismaClient {
   return new PrismaClient({

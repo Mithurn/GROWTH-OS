@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { startTestDb, type TestDb } from './testDb';
 import { toPrismaWhere, matchesSegment, type OpportunityType } from '@growthos/domain';
 import { tenantScopeExtension, MissingTenantScopeError } from '../../lib/tenant-scope';
+import { runWithTenant } from '../../lib/tenant-context';
 
 /**
  * This is the test the mocked suite (src/__tests__/tenant-isolation.test.ts) cannot
@@ -143,5 +144,35 @@ describe('tenant isolation — real Postgres, two live tenants', () => {
         where: toPrismaWhere('Retention-VIP' as OpportunityType, companyA),
       }),
     ).resolves.toBe(1);
+  });
+
+  it('Postgres RLS filters an unscoped query to the active tenant', async () => {
+    const [context] = await runWithTenant(companyA, () =>
+      db.rlsPrisma.$queryRaw<Array<{ currentUser: string; companyId: string }>>`
+        SELECT current_user AS "currentUser", current_setting('app.company_id') AS "companyId"
+      `,
+    );
+    const results = await runWithTenant(companyA, () =>
+      db.rlsPrisma.customerMetrics.findMany({
+        where: { totalSpent: { gte: 5000 }, daysSinceLastOrder: { gte: 15 } },
+        include: { customer: true },
+      }),
+    );
+
+    expect(context).toEqual({ currentUser: 'growthos_app', companyId: companyA });
+    expect(results).toHaveLength(1);
+    expect(results[0].companyId).toBe(companyA);
+    expect(results[0].customer.companyId).toBe(companyA);
+
+    const update = await runWithTenant(companyA, () =>
+      db.rlsPrisma.customerMetrics.updateMany({
+        where: { companyId: companyB },
+        data: { totalOrders: 999 },
+      }),
+    );
+    expect(update.count).toBe(0);
+    await expect(
+      db.prisma.customerMetrics.findFirstOrThrow({ where: { companyId: companyB } }),
+    ).resolves.toMatchObject({ totalOrders: 12 });
   });
 });

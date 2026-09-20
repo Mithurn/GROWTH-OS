@@ -1,6 +1,12 @@
 export { AgentState, type AgentStateType } from './state';
 export { buildShadowGraph } from './graph/shadow';
 export { buildGrowthAgent, runGrowthAgent } from './graph/run';
+export {
+  buildCampaignApprovalGraph,
+  campaignApprovalThreadId,
+  type CampaignApprovalStateType,
+  type CampaignDecision,
+} from './graph/campaign-approval';
 export { createPostgresCheckpointer } from './checkpoint/postgres';
 export { runSupervisedAgent, type RoleResult, type SupervisorOptions } from './supervisor/run';
 export { ROLE_TOOLS, ROLE_SEQUENCE } from './supervisor/roles';

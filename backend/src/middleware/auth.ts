@@ -1,7 +1,8 @@
 import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { trace } from '@opentelemetry/api';
-import { supabase } from '../lib/supabase';
+import { prisma } from '../lib/prisma';
+import { runWithTenant } from '../lib/tenant-context';
 import { verifySupabaseToken } from '../lib/verify-jwt';
 
 export interface AuthRequest extends Request {
@@ -10,11 +11,6 @@ export interface AuthRequest extends Request {
   companyId?: string;
 }
 
-/**
- * Verified locally (lib/verify-jwt.ts), not via `supabase.auth.getUser()` — that
- * call was a network round-trip to Supabase on every single request. See
- * docs/V3_PLAN.md Phase 2.
- */
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) {
@@ -31,37 +27,27 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   next();
 }
 
-// Resolves companyId from the profiles table using the authenticated userId.
-// Must run after requireAuth. Returns 403 if the user has no company yet.
 export async function resolveCompanyMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
-  const { data } = await supabase
-    .from('profiles')
-    .select('company_id')
-    .eq('id', req.userId!)
-    .maybeSingle();
+  const profile = await prisma.profile.findUnique({
+    where: { id: req.userId! },
+    select: { companyId: true },
+  });
 
-  if (!data?.company_id) {
+  if (!profile?.companyId) {
     return res.status(403).json({
       error: 'No company found for this user. Please complete onboarding first.',
     });
   }
 
-  req.companyId = data.company_id;
+  req.companyId = profile.companyId;
   const span = trace.getActiveSpan();
   if (span) {
-    span.setAttribute('company.id', data.company_id);
-    span.setAttribute('langfuse.user.id', data.company_id);
+    span.setAttribute('company.id', profile.companyId);
+    span.setAttribute('langfuse.user.id', profile.companyId);
   }
-  next();
+  runWithTenant(profile.companyId, () => next());
 }
 
-/**
- * Guard for machine-to-machine routes driven by an external scheduler.
- *
- * There is no user behind these calls, so a Supabase JWT is the wrong credential.
- * Compares a shared secret in constant time. If `INTERNAL_API_SECRET` is unset the
- * route is refused outright rather than left open.
- */
 export function requireInternalSecret(req: Request, res: Response, next: NextFunction) {
   const expected = process.env.INTERNAL_API_SECRET;
   if (!expected) {
@@ -82,7 +68,6 @@ export function requireInternalSecret(req: Request, res: Response, next: NextFun
   next();
 }
 
-// Soft auth — attaches userId if token present, continues either way
 export async function softAuth(req: AuthRequest, _res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (token) {
@@ -92,49 +77,24 @@ export async function softAuth(req: AuthRequest, _res: Response, next: NextFunct
   next();
 }
 
-/** Tables that expose a route parameter holding a row id, keyed to their company column. */
-const OWNED_TABLES = {
-  campaigns: 'company_id',
-  opportunities: 'company_id',
-  agents: 'company_id',
-  ingestion_sessions: 'company_id',
-} as const;
+type OwnedTable = 'campaigns' | 'opportunities' | 'agents' | 'ingestion_sessions';
 
-type OwnedTable = keyof typeof OWNED_TABLES;
-
-/**
- * Assert that the row named by `req.params[paramName]` belongs to the caller's company.
- *
- * Every backend query runs with the Supabase service role, which bypasses RLS
- * entirely, so row ownership has to be checked here. Without this, `requireAuth`
- * alone lets any signed-in user read, approve, or launch another tenant's records
- * just by knowing an id.
- *
- * Must run after `requireAuth` and `resolveCompanyMiddleware`.
- */
 export function requireCompanyOwnership(table: OwnedTable, paramName = 'id') {
-  const companyColumn = OWNED_TABLES[table];
-
   return async function (req: AuthRequest, res: Response, next: NextFunction) {
-    const id = req.params[paramName];
+    const raw = req.params[paramName];
+    const id = Array.isArray(raw) ? raw[0] : raw;
     if (!id) return res.status(400).json({ error: `Missing ${paramName}` });
 
-    const { data, error } = await supabase
-      .from(table)
-      .select(companyColumn)
-      .eq('id', id)
-      .maybeSingle();
+    const row =
+      table === 'campaigns'
+        ? await prisma.campaign.findUnique({ where: { id }, select: { companyId: true } })
+        : table === 'opportunities'
+          ? await prisma.opportunity.findUnique({ where: { id }, select: { companyId: true } })
+          : table === 'agents'
+            ? await prisma.agent.findUnique({ where: { id }, select: { companyId: true } })
+            : await prisma.ingestionSession.findUnique({ where: { id }, select: { companyId: true } });
 
-    if (error) {
-      return res.status(500).json({ error: 'Failed to verify resource ownership' });
-    }
-
-    if (!data) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    // 404 rather than 403 on a tenant mismatch — a 403 would confirm the id exists.
-    if ((data as Record<string, string>)[companyColumn] !== req.companyId) {
+    if (!row || row.companyId !== req.companyId) {
       return res.status(404).json({ error: 'Not found' });
     }
 

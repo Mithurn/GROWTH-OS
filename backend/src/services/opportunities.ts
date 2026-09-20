@@ -1,8 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { selectIn, selectPaged } from '../lib/scoped-query';
 import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { prisma } from '../lib/prisma';
+import { Prisma } from '../../generated/prisma';
 
 export type OpportunityStatus =
   | 'Detected'
@@ -319,124 +318,98 @@ function normalizeConfidence(value: number | string | null | undefined): number 
  * one tenant's generated data to another, so a missing id is now an error. Every caller
  * either passes the JWT-resolved company or one read off an ownership-verified row.
  */
-async function ensureCompanyRow(supabase: SupabaseClient, companyId?: string): Promise<CompanyRow> {
+async function ensureCompanyRow(companyId?: string): Promise<CompanyRow> {
   if (!companyId) {
     throw new Error('companyId is required');
   }
 
-  const { data, error } = await supabase
-    .from('companies')
-    .select('id, company_name, industry')
-    .eq('id', companyId)
-    .maybeSingle();
-
-  if (error) throw new Error(`Failed to load company ${companyId}: ${error.message}`);
-  if (!data) throw new Error(`Company ${companyId} not found`);
-
-  return data as CompanyRow;
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, companyName: true, industry: true },
+  });
+  if (!company) throw new Error(`Company ${companyId} not found`);
+  return { id: company.id, company_name: company.companyName, industry: company.industry };
 }
 
-// ── Tenant-scoped reads ──────────────────────────────────────────────────────
-// `customers`, `personas`, and `products` carry a `company_id`, so they filter on it
-// directly. `orders`, `order_items`, `customer_metrics`, and `customer_attributes` do
-// not — their tenant is implied by the customer or order they belong to, so they are
-// filtered by ids already narrowed to one company.
-//
-// These reads previously had no company filter at all while their results were written
-// back tagged with the caller's company, which mixed customers between tenants.
-
-async function fetchCustomers(supabase: SupabaseClient, companyId: string): Promise<CustomerRow[]> {
-  return selectPaged<CustomerRow>(
-    supabase,
-    'customers',
-    'id, first_name, last_name',
-    (q) => q.eq('company_id', companyId).order('created_at', { ascending: true }),
-  );
+async function fetchCustomers(companyId: string): Promise<CustomerRow[]> {
+  const rows = await prisma.customer.findMany({
+    where: { companyId },
+    orderBy: { createdAt: 'asc' },
+    take: 5_000,
+    select: { id: true, firstName: true, lastName: true },
+  });
+  return rows.map((row) => ({ id: row.id, first_name: row.firstName, last_name: row.lastName }));
 }
 
 async function fetchMetrics(
-  supabase: SupabaseClient,
+  companyId: string,
   customerIds: string[],
 ): Promise<Map<string, MetricRow>> {
-  const rows = await selectIn<MetricRow>(
-    supabase,
-    'customer_metrics',
-    'customer_id, total_orders, total_spent, avg_order_value, last_order_date, days_since_last_order, purchase_frequency, engagement_score',
-    'customer_id',
-    customerIds,
-  );
-
-  return new Map(rows.map((row) => [row.customer_id, row]));
+  const rows = await prisma.customerMetrics.findMany({ where: { companyId, customerId: { in: customerIds } } });
+  return new Map(rows.map((row) => [row.customerId, {
+    customer_id: row.customerId,
+    total_orders: row.totalOrders,
+    total_spent: Number(row.totalSpent),
+    avg_order_value: Number(row.avgOrderValue),
+    last_order_date: row.lastOrderDate?.toISOString() ?? null,
+    days_since_last_order: row.daysSinceLastOrder,
+    purchase_frequency: row.purchaseFrequency,
+    engagement_score: row.engagementScore === null ? null : Number(row.engagementScore),
+  }]));
 }
 
 async function fetchAttributes(
-  supabase: SupabaseClient,
+  companyId: string,
   customerIds: string[],
 ): Promise<Map<string, AttributeRow>> {
-  const rows = await selectIn<AttributeRow>(
-    supabase,
-    'customer_attributes',
-    'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, avg_days_between_orders, dominant_price_band, category_diversity_score',
-    'customer_id',
-    customerIds,
-  );
-
-  return new Map(rows.map((row) => [row.customer_id, row]));
+  const rows = await prisma.customerAttributes.findMany({ where: { companyId, customerId: { in: customerIds } } });
+  return new Map(rows.map((row) => [row.customerId, {
+    customer_id: row.customerId,
+    favorite_category: row.favoriteCategory,
+    second_favorite_category: row.secondFavoriteCategory,
+    preferred_channel: row.preferredChannel,
+    discount_affinity: row.discountAffinity,
+    avg_days_between_orders: row.avgDaysBetweenOrders === null ? null : Number(row.avgDaysBetweenOrders),
+    dominant_price_band: row.dominantPriceBand,
+    category_diversity_score: Number(row.categoryDiversityScore),
+  }]));
 }
 
-async function fetchPersonas(
-  supabase: SupabaseClient,
-  companyId: string,
-): Promise<Map<string, PersonaRow>> {
-  const { data, error } = await supabase
-    .from('personas')
-    .select('customer_id, persona_name, persona_description, confidence_score')
-    .eq('company_id', companyId);
-
-  if (error) {
-    throw new Error(`Failed to load personas: ${error.message}`);
-  }
-
-  return new Map((data ?? []).map((row) => [row.customer_id, row as PersonaRow]));
+async function fetchPersonas(companyId: string): Promise<Map<string, PersonaRow>> {
+  const rows = await prisma.persona.findMany({ where: { companyId } });
+  return new Map(rows.map((row) => [row.customerId, {
+    customer_id: row.customerId,
+    persona_name: row.personaName,
+    persona_description: row.personaDescription,
+    confidence_score: Number(row.confidenceScore),
+  }]));
 }
 
-async function fetchOrders(supabase: SupabaseClient, customerIds: string[]): Promise<OrderRow[]> {
-  return selectIn<OrderRow>(
-    supabase,
-    'orders',
-    'id, customer_id, order_date',
-    'customer_id',
-    customerIds,
-  );
+async function fetchOrders(companyId: string, customerIds: string[]): Promise<OrderRow[]> {
+  const rows = await prisma.order.findMany({
+    where: { companyId, customerId: { in: customerIds } },
+    select: { id: true, customerId: true, orderDate: true },
+  });
+  return rows.map((row) => ({ id: row.id, customer_id: row.customerId, order_date: row.orderDate.toISOString() }));
 }
 
 async function fetchOrderItems(
-  supabase: SupabaseClient,
+  companyId: string,
   orderIds: string[],
 ): Promise<OrderItemRow[]> {
-  return selectIn<OrderItemRow>(
-    supabase,
-    'order_items',
-    'order_id, product_id',
-    'order_id',
-    orderIds,
-  );
+  const rows = await prisma.orderItem.findMany({
+    where: { companyId, orderId: { in: orderIds } },
+    select: { orderId: true, productId: true },
+  });
+  return rows.map((row) => ({ order_id: row.orderId, product_id: row.productId }));
 }
 
-async function fetchProducts(
-  supabase: SupabaseClient,
-  companyId: string,
-): Promise<Map<string, ProductRow>> {
-  const { data, error } = await supabase
-    .from('products')
-    .select('id, category')
-    .eq('company_id', companyId);
-
-  if (error) {
-    throw new Error(`Failed to load products: ${error.message}`);
-  }
-
-  return new Map((data ?? []).map((row) => [row.id, row as ProductRow]));
+async function fetchProducts(companyId: string): Promise<Map<string, ProductRow>> {
+  const rows = await prisma.product.findMany({
+    where: { companyId },
+    select: { id: true, category: true },
+  });
+  return new Map(rows.map((row) => [row.id, row]));
 }
 
 /**
@@ -445,20 +418,20 @@ async function fetchProducts(
  * Runs in three waves because the scoping is hierarchical: customers narrow the
  * customer-keyed tables, and orders narrow order_items.
  */
-async function fetchCompanyDataset(supabase: SupabaseClient, companyId: string) {
-  const customers = await fetchCustomers(supabase, companyId);
+async function fetchCompanyDataset(companyId: string) {
+  const customers = await fetchCustomers(companyId);
   const customerIds = customers.map((c) => c.id);
 
   const [metricsByCustomer, attributesByCustomer, personasByCustomer, orders, productsById] =
     await Promise.all([
-      fetchMetrics(supabase, customerIds),
-      fetchAttributes(supabase, customerIds),
-      fetchPersonas(supabase, companyId),
-      fetchOrders(supabase, customerIds),
-      fetchProducts(supabase, companyId),
+      fetchMetrics(companyId, customerIds),
+      fetchAttributes(companyId, customerIds),
+      fetchPersonas(companyId),
+      fetchOrders(companyId, customerIds),
+      fetchProducts(companyId),
     ]);
 
-  const orderItems = await fetchOrderItems(supabase, orders.map((o) => o.id));
+  const orderItems = await fetchOrderItems(companyId, orders.map((o) => o.id));
 
   return {
     customers,
@@ -916,7 +889,7 @@ async function enrichWithAiSummaries(
 }
 
 async function buildCustomerDetailsByOpportunity(
-  supabase: SupabaseClient,
+  companyId: string,
   opportunities: OpportunityDraft[],
 ): Promise<Map<string, OpportunityCustomerDetail[]>> {
   const details = new Map<string, OpportunityCustomerDetail[]>();
@@ -928,19 +901,17 @@ async function buildCustomerDetailsByOpportunity(
       continue;
     }
 
-    // Audience lists run to hundreds of ids, so these go through the chunked helper —
-    // a raw .in() puts every id in the query string and overflows the URL limit.
     const [customerRows, metricRows, attributeRows, personaRows] = await Promise.all([
-      selectIn<any>(supabase, 'customers', 'id, first_name, last_name', 'id', customerIds),
-      selectIn<any>(supabase, 'customer_metrics', 'customer_id, total_spent, total_orders, avg_order_value, last_order_date, days_since_last_order, engagement_score', 'customer_id', customerIds),
-      selectIn<any>(supabase, 'customer_attributes', 'customer_id, favorite_category, second_favorite_category, preferred_channel, discount_affinity, dominant_price_band, category_diversity_score', 'customer_id', customerIds),
-      selectIn<any>(supabase, 'personas', 'customer_id, persona_name, persona_description, confidence_score', 'customer_id', customerIds),
+      prisma.customer.findMany({ where: { companyId, id: { in: customerIds } } }),
+      prisma.customerMetrics.findMany({ where: { companyId, customerId: { in: customerIds } } }),
+      prisma.customerAttributes.findMany({ where: { companyId, customerId: { in: customerIds } } }),
+      prisma.persona.findMany({ where: { companyId, customerId: { in: customerIds } } }),
     ]);
 
-    const customerById = new Map(customerRows.map((row: any) => [row.id, row]));
-    const metricsById = new Map(metricRows.map((row: any) => [row.customer_id, row]));
-    const attributesById = new Map(attributeRows.map((row: any) => [row.customer_id, row]));
-    const personasById = new Map(personaRows.map((row: any) => [row.customer_id, row]));
+    const customerById = new Map(customerRows.map((row) => [row.id, row]));
+    const metricsById = new Map(metricRows.map((row) => [row.customerId, row]));
+    const attributesById = new Map(attributeRows.map((row) => [row.customerId, row]));
+    const personasById = new Map(personaRows.map((row) => [row.customerId, row]));
 
     const audience = customerIds.map((customerId) => {
       const customer = customerById.get(customerId);
@@ -950,27 +921,25 @@ async function buildCustomerDetailsByOpportunity(
 
       return {
         customer_id: customerId,
-        customer_name: customer ? buildCustomerName(customer) : '',
-        total_spent: roundToTwo(toNumber(metrics?.total_spent)),
-        total_orders: toNumber(metrics?.total_orders),
-        avg_order_value: roundToTwo(toNumber(metrics?.avg_order_value)),
-        last_order_date: metrics?.last_order_date ?? null,
-        days_since_last_order: metrics?.days_since_last_order === null || metrics?.days_since_last_order === undefined
+        customer_name: customer ? buildCustomerName({ id: customer.id, first_name: customer.firstName, last_name: customer.lastName }) : '',
+        total_spent: roundToTwo(metrics ? Number(metrics.totalSpent) : 0),
+        total_orders: metrics?.totalOrders ?? 0,
+        avg_order_value: roundToTwo(metrics ? Number(metrics.avgOrderValue) : 0),
+        last_order_date: metrics?.lastOrderDate?.toISOString() ?? null,
+        days_since_last_order: metrics?.daysSinceLastOrder ?? null,
+        favorite_category: attributes?.favoriteCategory ?? null,
+        second_favorite_category: attributes?.secondFavoriteCategory ?? null,
+        preferred_channel: attributes?.preferredChannel ?? null,
+        discount_affinity: attributes?.discountAffinity ?? null,
+        dominant_price_band: attributes?.dominantPriceBand ?? null,
+        category_diversity_score: attributes?.categoryDiversityScore === null || attributes?.categoryDiversityScore === undefined
           ? null
-          : Math.trunc(toNumber(metrics.days_since_last_order)),
-        favorite_category: attributes?.favorite_category ?? null,
-        second_favorite_category: attributes?.second_favorite_category ?? null,
-        preferred_channel: attributes?.preferred_channel ?? null,
-        discount_affinity: attributes?.discount_affinity ?? null,
-        dominant_price_band: attributes?.dominant_price_band ?? null,
-        category_diversity_score: attributes?.category_diversity_score === null || attributes?.category_diversity_score === undefined
+          : roundToTwo(Number(attributes.categoryDiversityScore)),
+        persona_name: persona?.personaName ?? null,
+        persona_description: persona?.personaDescription ?? null,
+        confidence_score: persona?.confidenceScore === null || persona?.confidenceScore === undefined
           ? null
-          : roundToTwo(toNumber(attributes.category_diversity_score)),
-        persona_name: persona?.persona_name ?? null,
-        persona_description: persona?.persona_description ?? null,
-        confidence_score: persona?.confidence_score === null || persona?.confidence_score === undefined
-          ? null
-          : normalizeConfidence(persona.confidence_score),
+          : normalizeConfidence(Number(persona.confidenceScore)),
       } satisfies OpportunityCustomerDetail;
     });
 
@@ -981,23 +950,17 @@ async function buildCustomerDetailsByOpportunity(
 }
 
 async function countOpportunityAudience(
-  supabase: SupabaseClient,
   opportunityIds: string[],
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (opportunityIds.length === 0) return counts;
 
-  const { data, error } = await supabase
-    .from('opportunity_customers')
-    .select('opportunity_id')
-    .in('opportunity_id', opportunityIds);
-
-  if (error) {
-    throw new Error(`Failed to count opportunity audience: ${error.message}`);
-  }
-
-  for (const row of data ?? []) {
-    const opportunityId = (row as { opportunity_id: string }).opportunity_id;
+  const rows = await prisma.opportunityCustomer.findMany({
+    where: { opportunityId: { in: opportunityIds } },
+    select: { opportunityId: true },
+  });
+  for (const row of rows) {
+    const opportunityId = row.opportunityId;
     counts.set(opportunityId, (counts.get(opportunityId) ?? 0) + 1);
   }
 
@@ -1005,20 +968,14 @@ async function countOpportunityAudience(
 }
 
 async function upsertOpportunities(
-  supabase: SupabaseClient,
   companyId: string,
   opportunities: OpportunityDraft[],
 ): Promise<Array<OpportunityRecord & { id: string }>> {
-  const { data: existing, error: existingError } = await supabase
-    .from('opportunities')
-    .select('id, opportunity_key, status')
-    .eq('company_id', companyId);
-
-  if (existingError) {
-    throw new Error(`Failed to inspect existing opportunities: ${existingError.message}`);
-  }
-
-  const statusByKey = new Map((existing ?? []).map((row: any) => [row.opportunity_key, row.status as OpportunityStatus]));
+  const existing = await prisma.opportunity.findMany({
+    where: { companyId },
+    select: { opportunityKey: true, status: true },
+  });
+  const statusByKey = new Map(existing.map((row) => [row.opportunityKey, row.status as OpportunityStatus]));
 
   const payload: OpportunityRecord[] = opportunities.map((opportunity) => ({
     company_id: companyId,
@@ -1042,62 +999,74 @@ async function upsertOpportunities(
     updated_at: new Date().toISOString(),
   }));
 
-  const { data, error } = await supabase
-    .from('opportunities')
-    .upsert(payload, { onConflict: 'company_id,opportunity_key' })
-    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status');
-
-  if (error) {
-    throw new Error(`Failed to persist opportunities: ${error.message}`);
-  }
-
-  return (data ?? []) as Array<OpportunityRecord & { id: string }>;
+  const rows = await prisma.$transaction(payload.map((row) => prisma.opportunity.upsert({
+    where: { companyId_opportunityKey: { companyId, opportunityKey: row.opportunity_key } },
+    create: {
+      companyId,
+      opportunityKey: row.opportunity_key,
+      opportunityType: row.opportunity_type,
+      title: row.title,
+      description: row.description,
+      audienceSize: row.audience_size,
+      potentialRevenue: row.potential_revenue,
+      confidenceScore: row.confidence_score,
+      priorityScore: row.priority_score,
+      supportingCustomerSegment: row.supporting_customer_segment,
+      recommendedAction: row.recommended_action,
+      audienceDefinition: row.audience_definition,
+      triggerReason: row.trigger_reason,
+      aiSummary: row.ai_summary,
+      predictedConversionRate: row.predicted_conversion_rate,
+      alternativeStrategies: (row.alternative_strategies ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      opportunityPersonas: (row.opportunity_personas ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      status: row.status,
+    },
+    update: {
+      opportunityType: row.opportunity_type,
+      title: row.title,
+      description: row.description,
+      audienceSize: row.audience_size,
+      potentialRevenue: row.potential_revenue,
+      confidenceScore: row.confidence_score,
+      priorityScore: row.priority_score,
+      supportingCustomerSegment: row.supporting_customer_segment,
+      recommendedAction: row.recommended_action,
+      audienceDefinition: row.audience_definition,
+      triggerReason: row.trigger_reason,
+      aiSummary: row.ai_summary,
+      predictedConversionRate: row.predicted_conversion_rate,
+      alternativeStrategies: (row.alternative_strategies ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      opportunityPersonas: (row.opportunity_personas ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      status: row.status,
+    },
+  })));
+  return rows.map(toDashboardRecord);
 }
 
 async function clearAndInsertAudience(
-  supabase: SupabaseClient,
   opportunityId: string,
   customerIds: string[],
 ): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from('opportunity_customers')
-    .delete()
-    .eq('opportunity_id', opportunityId);
-
-  if (deleteError) {
-    throw new Error(`Failed to clear opportunity audience: ${deleteError.message}`);
-  }
-
-  const payload: OpportunityCustomerRecord[] = customerIds.map((customerId) => ({
-    opportunity_id: opportunityId,
-    customer_id: customerId,
-  }));
-
-  if (payload.length === 0) {
-    return;
-  }
-
-  const { error } = await supabase
-    .from('opportunity_customers')
-    .upsert(payload, { onConflict: 'opportunity_id,customer_id' });
-
-  if (error) {
-    throw new Error(`Failed to persist opportunity audience: ${error.message}`);
-  }
+  await prisma.$transaction([
+    prisma.opportunityCustomer.deleteMany({ where: { opportunityId } }),
+    ...(customerIds.length ? [prisma.opportunityCustomer.createMany({
+      data: customerIds.map((customerId) => ({ opportunityId, customerId })),
+      skipDuplicates: true,
+    })] : []),
+  ]);
 }
 
 export async function generateOpportunities(
-  supabase: SupabaseClient,
   options: GenerateOpportunityOptions = {},
 ): Promise<OpportunityReport> {
   const logger = options.logger ?? defaultLogger;
-  const company = await ensureCompanyRow(supabase, options.companyId);
+  const company = await ensureCompanyRow(options.companyId);
   const model = options.model ?? openRouterConfig.defaultModel;
   
   logger.info(`[opportunities] Starting generation for company=${company.company_name} (${company.id})`);
 
   const { customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById } =
-    await fetchCompanyDataset(supabase, company.id);
+    await fetchCompanyDataset(company.id);
 
   const profiles = buildProfiles(
     customers,
@@ -1118,18 +1087,18 @@ export async function generateOpportunities(
     throw new Error('No opportunities could be derived from the current customer intelligence');
   }
 
-  const customerDetailsByOpportunity = await buildCustomerDetailsByOpportunity(supabase, candidateOpportunities);
+  const customerDetailsByOpportunity = await buildCustomerDetailsByOpportunity(company.id, candidateOpportunities);
   const opportunitiesWithAi = await enrichWithAiSummaries(model, candidateOpportunities, customerDetailsByOpportunity, logger);
-  const persistedOpportunities = await upsertOpportunities(supabase, company.id, opportunitiesWithAi);
+  const persistedOpportunities = await upsertOpportunities(company.id, opportunitiesWithAi);
 
   const opportunityIds = persistedOpportunities.map((row) => row.id);
   for (const opportunity of persistedOpportunities) {
     const matchingCandidate = opportunitiesWithAi.find((candidate) => candidate.opportunity_key === opportunity.opportunity_key);
     if (!matchingCandidate) continue;
-    await clearAndInsertAudience(supabase, opportunity.id, matchingCandidate.audience_customer_ids);
+    await clearAndInsertAudience(opportunity.id, matchingCandidate.audience_customer_ids);
   }
 
-  const audienceCounts = await countOpportunityAudience(supabase, opportunityIds);
+  const audienceCounts = await countOpportunityAudience(opportunityIds);
   const totalRevenuePotential = persistedOpportunities.reduce((sum, row) => sum + toNumber(row.potential_revenue), 0);
 
   const distribution = buildDistribution(
@@ -1215,7 +1184,6 @@ function toDashboardRecord(row: {
 }
 
 export async function getOpportunityDashboard(
-  _supabase: SupabaseClient,
   companyId?: string,
 ): Promise<OpportunityReport> {
   if (!companyId) throw new Error('companyId is required');
@@ -1257,7 +1225,6 @@ export async function getOpportunityDashboard(
 }
 
 export async function getOpportunityCustomers(
-  _supabase: SupabaseClient,
   opportunityId: string,
   companyId: string,
 ): Promise<{ opportunity: OpportunityDistributionRow | null; customers: OpportunityCustomerDetail[] }> {
@@ -1354,19 +1321,13 @@ export async function getOpportunityCustomers(
  * Refine an existing opportunity based on a marketer's modifier instruction
  */
 export async function refineOpportunity(
-  supabase: SupabaseClient,
   opportunityId: string,
   modifier: string,
   options: { model?: string } = {},
 ): Promise<OpportunityDistributionRow> {
-  const { data: row, error: fetchError } = await supabase
-    .from('opportunities')
-    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
-    .eq('id', opportunityId)
-    .maybeSingle();
-
-  if (fetchError) throw new Error(`Failed to load opportunity: ${fetchError.message}`);
-  if (!row) throw new Error(`Opportunity ${opportunityId} not found`);
+  const current = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
+  if (!current) throw new Error(`Opportunity ${opportunityId} not found`);
+  const row = toDashboardRecord(current);
 
   const model = options.model ?? openRouterConfig.defaultModel;
   
@@ -1424,23 +1385,18 @@ export async function refineOpportunity(
   const updatedRevenue = typeof aiResponse.potential_revenue === 'number' ? aiResponse.potential_revenue : currentRevenue;
   const updatedAudienceSize = typeof aiResponse.audience_size === 'number' ? aiResponse.audience_size : row.audience_size;
 
-  const { data: updated, error: updateError } = await supabase
-    .from('opportunities')
-    .update({
-      ai_summary: typeof aiResponse.ai_summary === 'string' ? aiResponse.ai_summary : row.ai_summary,
-      predicted_conversion_rate: typeof aiResponse.predicted_conversion_rate === 'number' ? aiResponse.predicted_conversion_rate : row.predicted_conversion_rate,
-      recommended_action: typeof aiResponse.recommended_action === 'string' ? aiResponse.recommended_action : row.recommended_action,
-      alternative_strategies: Array.isArray(aiResponse.alternative_strategies) ? aiResponse.alternative_strategies : row.alternative_strategies,
-      opportunity_personas: Array.isArray(aiResponse.opportunity_personas) ? aiResponse.opportunity_personas : row.opportunity_personas,
-      potential_revenue: updatedRevenue,
-      audience_size: updatedAudienceSize,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', opportunityId)
-    .select('id, company_id, opportunity_key, opportunity_type, title, description, audience_size, potential_revenue, confidence_score, priority_score, supporting_customer_segment, recommended_action, audience_definition, trigger_reason, ai_summary, predicted_conversion_rate, alternative_strategies, opportunity_personas, status')
-    .single();
-
-  if (updateError) throw new Error(`Failed to update opportunity: ${updateError.message}`);
+  const updated = toDashboardRecord(await prisma.opportunity.update({
+    where: { id: opportunityId },
+    data: {
+      aiSummary: typeof aiResponse.ai_summary === 'string' ? aiResponse.ai_summary : row.ai_summary,
+      predictedConversionRate: typeof aiResponse.predicted_conversion_rate === 'number' ? aiResponse.predicted_conversion_rate : row.predicted_conversion_rate,
+      recommendedAction: typeof aiResponse.recommended_action === 'string' ? aiResponse.recommended_action : row.recommended_action,
+      alternativeStrategies: (Array.isArray(aiResponse.alternative_strategies) ? aiResponse.alternative_strategies : row.alternative_strategies ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      opportunityPersonas: (Array.isArray(aiResponse.opportunity_personas) ? aiResponse.opportunity_personas : row.opportunity_personas ?? Prisma.DbNull) as Prisma.InputJsonValue,
+      potentialRevenue: updatedRevenue,
+      audienceSize: updatedAudienceSize,
+    },
+  }));
 
   return {
     opportunity_id: updated.id,
@@ -1461,7 +1417,7 @@ export async function refineOpportunity(
     alternative_strategies: (updated.alternative_strategies ?? null) as Array<{ title: string; conversion_rate: number; note: string }> | null,
     opportunity_personas: (updated.opportunity_personas ?? null) as Array<{ name: string; description: string }> | null,
     status: updated.status,
-    customer_count: row.audience_size,
+    customer_count: updated.audience_size,
     average_spend: 0,
     average_orders: 0,
     revenue_share: 0,
@@ -1472,18 +1428,17 @@ export async function refineOpportunity(
  * Create a custom opportunity from user's marketing goal using AI
  */
 export async function createOpportunityFromGoal(
-  supabase: SupabaseClient,
   goal: string,
   options: { companyId?: string; model?: string } = {},
 ): Promise<OpportunityDistributionRow> {
-  const company = await ensureCompanyRow(supabase, options.companyId);
+  const company = await ensureCompanyRow(options.companyId);
   const model = options.model ?? openRouterConfig.defaultModel;
   
   logger.info({ goal }, '[createOpportunityFromGoal] Analyzing goal');
 
   // Fetch customer data to understand the business context
   const { customers, metricsByCustomer, attributesByCustomer, personasByCustomer, orders, orderItems, productsById } =
-    await fetchCompanyDataset(supabase, company.id);
+    await fetchCompanyDataset(company.id);
 
   const profiles = buildProfiles(
     customers,
@@ -1622,32 +1577,39 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     status: 'Detected',
   };
 
-  // Persist to database
-  const { data: insertedOpportunity, error } = await supabase
-    .from('opportunities')
-    .insert(opportunityRecord)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to create opportunity: ${error.message}`);
-  }
-
-  // Link customers to opportunity
-  if (effectiveProfiles.length > 0) {
-    const opportunityCustomers = effectiveProfiles.map(p => ({
-      opportunity_id: insertedOpportunity.id,
-      customer_id: p.customerId,
-    }));
-
-    const { error: linkError } = await supabase
-      .from('opportunity_customers')
-      .insert(opportunityCustomers);
-
-    if (linkError) {
-      logger.error({ err: linkError }, '[createOpportunityFromGoal] Failed to link customers');
+  const insertedOpportunity = await prisma.$transaction(async (tx) => {
+    const opportunity = await tx.opportunity.create({
+      data: {
+        companyId: company.id,
+        opportunityKey: opportunityRecord.opportunity_key,
+        opportunityType: opportunityRecord.opportunity_type,
+        title: opportunityRecord.title,
+        description: opportunityRecord.description,
+        audienceSize,
+        potentialRevenue: opportunityRecord.potential_revenue,
+        confidenceScore: opportunityRecord.confidence_score,
+        priorityScore: opportunityRecord.priority_score,
+        supportingCustomerSegment: opportunityRecord.supporting_customer_segment,
+        recommendedAction: opportunityRecord.recommended_action,
+        audienceDefinition: opportunityRecord.audience_definition,
+        triggerReason: opportunityRecord.trigger_reason,
+        aiSummary: opportunityRecord.ai_summary,
+        predictedConversionRate: opportunityRecord.predicted_conversion_rate,
+        alternativeStrategies: (opportunityRecord.alternative_strategies ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        opportunityPersonas: (opportunityRecord.opportunity_personas ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        status: opportunityRecord.status,
+      },
+    });
+    if (effectiveProfiles.length) {
+      await tx.opportunityCustomer.createMany({
+        data: effectiveProfiles.map((profile) => ({
+          opportunityId: opportunity.id,
+          customerId: profile.customerId,
+        })),
+      });
     }
-  }
+    return opportunity;
+  });
 
   logger.info({ opportunityId: insertedOpportunity.id, audienceSize }, '[createOpportunityFromGoal] Created opportunity');
 

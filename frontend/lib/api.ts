@@ -1,6 +1,7 @@
 import { getAuthToken, getUserId } from './supabase/client';
 import type {
   AgentGuardrails,
+  InvolvementMode,
   ApiResponse,
   CampaignWithMetrics,
   GeneratedCampaign,
@@ -397,10 +398,14 @@ export async function getCampaignAnalytics(campaignId: string) {
 // AI AGENTS
 // ============================================
 
-export async function createAgent(goal: string, guardrails?: AgentGuardrails) {
+export async function createAgent(
+  goal: string,
+  guardrails?: AgentGuardrails,
+  involvementMode: InvolvementMode = 'manual',
+) {
   const response = await apiFetch(`${API_BASE_URL}/agents`, {
     method: 'POST',
-    body: JSON.stringify({ goal, guardrails }),
+    body: JSON.stringify({ goal, guardrails, involvementMode }),
   });
   if (!response.ok) throw new Error('Failed to create agent');
   return response.json();
@@ -453,7 +458,10 @@ export async function runAgent(agentId: string) {
   return response.json();
 }
 
-export async function updateAgent(agentId: string, updates: { status?: string; guardrails?: AgentGuardrails }) {
+export async function updateAgent(
+  agentId: string,
+  updates: { status?: string; guardrails?: AgentGuardrails; involvementMode?: InvolvementMode },
+) {
   const response = await apiFetch(`${API_BASE_URL}/agents/${encodeURIComponent(agentId)}`, {
     method: 'PATCH',
     body: JSON.stringify(updates),

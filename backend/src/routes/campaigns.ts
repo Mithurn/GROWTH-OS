@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import {
   requireAuth,
@@ -12,7 +11,6 @@ import { validateBody } from '../middleware/validate';
 import {
   generateCampaign,
   saveCampaign,
-  approveCampaign,
   launchCampaign,
   getCampaigns,
   getCampaignById,
@@ -24,7 +22,11 @@ import {
   GenerateCampaignSchema,
   SaveCampaignSchema,
   RefineCampaignSchema,
+  ApproveCampaignSchema,
+  RejectCampaignSchema,
 } from '@growthos/contracts';
+import { CampaignTransitionError, decideCampaign } from '../services/campaign-approval';
+import { ensureCampaignApprovalWorkflow } from '../services/campaign-approval-workflow';
 
 export const campaignsRouter = Router();
 
@@ -38,7 +40,7 @@ campaignsRouter.post(
   async (req: AuthRequest, res) => {
     try {
       const { opportunityId, model } = req.body;
-      const result = await generateCampaign(supabase, {
+      const result = await generateCampaign({
         opportunityId,
         companyId: req.companyId!,
         model,
@@ -61,7 +63,10 @@ campaignsRouter.post(
     try {
       const { opportunityId, campaign } = req.body ?? {};
 
-      const result = await saveCampaign(supabase, opportunityId, campaign, req.companyId!);
+      const result = await saveCampaign(opportunityId, campaign, req.companyId!);
+      if (result.status === 'Draft') {
+        await ensureCampaignApprovalWorkflow({ campaignId: result.id, companyId: req.companyId! });
+      }
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error saving campaign');
@@ -80,7 +85,7 @@ campaignsRouter.get(
     try {
       const page = Math.max(1, parseInt(req.query['page'] as string) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(req.query['limit'] as string) || 20));
-      const { data, total } = await getCampaigns(supabase, req.companyId!, { page, limit });
+      const { data, total } = await getCampaigns(req.companyId!, { page, limit });
       res.json({
         success: true,
         data,
@@ -101,7 +106,7 @@ campaignsRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const campaign = await getCampaignById(supabase, id);
+      const campaign = await getCampaignById(id);
       res.json({ success: true, data: campaign });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching campaign');
@@ -119,7 +124,7 @@ campaignsRouter.get(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const analytics = await getCampaignAnalytics(supabase, id);
+      const analytics = await getCampaignAnalytics(id);
       res.json({ success: true, data: analytics });
     } catch (error) {
       logger.error({ err: error }, 'Error fetching campaign analytics');
@@ -158,7 +163,7 @@ campaignsRouter.post(
       const id = req.params['id'] as string;
       const { modifier, channel } = req.body;
 
-      const result = await refineCampaignMessage(supabase, id, modifier, channel ?? undefined);
+      const result = await refineCampaignMessage(id, modifier, channel ?? undefined);
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error refining campaign message');
@@ -175,14 +180,49 @@ campaignsRouter.post(
   requireAuth,
   resolveCompanyMiddleware,
   requireCompanyOwnership('campaigns'),
+  validateBody(ApproveCampaignSchema),
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const campaign = await approveCampaign(supabase, id);
+      const campaign = await decideCampaign({
+        campaignId: id,
+        companyId: req.companyId!,
+        actorId: req.userId!,
+        decision: 'approved',
+        reason: req.body.reason,
+      });
       res.json({ success: true, data: campaign });
     } catch (error) {
       logger.error({ err: error }, 'Error approving campaign');
-      res.status(500).json({ error: 'Failed to approve campaign' });
+      res.status(error instanceof CampaignTransitionError ? 409 : 500).json({
+        error: error instanceof Error ? error.message : 'Failed to approve campaign',
+      });
+    }
+  },
+);
+
+campaignsRouter.post(
+  '/campaigns/:id/reject',
+  requireAuth,
+  resolveCompanyMiddleware,
+  requireCompanyOwnership('campaigns'),
+  validateBody(RejectCampaignSchema),
+  async (req: AuthRequest, res) => {
+    try {
+      const id = req.params['id'] as string;
+      const campaign = await decideCampaign({
+        campaignId: id,
+        companyId: req.companyId!,
+        actorId: req.userId!,
+        decision: 'rejected',
+        reason: req.body.reason,
+      });
+      res.json({ success: true, data: campaign });
+    } catch (error) {
+      logger.error({ err: error }, 'Error rejecting campaign');
+      res.status(error instanceof CampaignTransitionError ? 409 : 500).json({
+        error: error instanceof Error ? error.message : 'Failed to reject campaign',
+      });
     }
   },
 );
@@ -196,7 +236,7 @@ campaignsRouter.post(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const result = await launchCampaign(supabase, id);
+      const result = await launchCampaign(id);
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error launching campaign');

@@ -30,7 +30,7 @@ agentsRouter.post(
   validateBody(CreateAgentSchema),
   async (req: AuthRequest, res) => {
     try {
-      const { goal, guardrails } = req.body;
+      const { goal, guardrails, involvementMode } = req.body;
 
       const agent = await prisma.agent.create({
         data: {
@@ -38,6 +38,7 @@ agentsRouter.post(
           name: `${goal.substring(0, 30)} Agent`,
           goal,
           status: 'discovering',
+          involvementMode,
           guardrails: guardrails || DEFAULT_GUARDRAILS,
           performance: { revenue: 0, conversion_rate: 0, customers_reached: 0 },
         },
@@ -189,10 +190,14 @@ agentsRouter.patch(
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;
-      const { status, guardrails } = req.body;
+      const { status, guardrails, involvementMode } = req.body;
       const agent = await prisma.agent.update({
         where: { id },
-        data: { status: status || undefined, guardrails: guardrails || undefined },
+        data: {
+          status: status || undefined,
+          involvementMode,
+          guardrails: guardrails || undefined,
+        },
       });
       res.json({ success: true, data: agent });
     } catch (error) {
