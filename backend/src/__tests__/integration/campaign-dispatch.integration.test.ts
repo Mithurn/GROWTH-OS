@@ -37,7 +37,12 @@ describe('campaign dispatch outbox — real Postgres and Redis', () => {
       data: { companyName: `Dispatch ${Date.now()}` },
     });
     const customer = await db.prisma.customer.create({
-      data: { companyId: company.id, firstName: 'Ada', email: 'ada@example.com' },
+      data: {
+        companyId: company.id,
+        firstName: 'Ada',
+        email: 'ada@example.com',
+        emailMarketingConsent: true,
+      },
     });
     const opportunity = await db.prisma.opportunity.create({
       data: {
@@ -71,10 +76,12 @@ describe('campaign dispatch outbox — real Postgres and Redis', () => {
     });
 
     const { launchCampaign } = await import('../../services/campaigns');
+    vi.setSystemTime(new Date('2026-01-01T12:00:00Z'));
     const [first, second] = await Promise.all([
       runWithTenant(company.id, () => launchCampaign(campaign.id)),
       runWithTenant(company.id, () => launchCampaign(campaign.id)),
     ]);
+    vi.useRealTimers();
 
     expect(first.communications_created).toBe(1);
     expect(second.communications_created).toBe(1);

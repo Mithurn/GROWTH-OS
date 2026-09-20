@@ -4,6 +4,7 @@ import {
   requireAuth,
   resolveCompanyMiddleware,
   requireCompanyOwnership,
+  requireOwner,
   type AuthRequest,
 } from '../middleware/auth';
 import { llmLimiter } from '../middleware/rate-limits';
@@ -180,6 +181,7 @@ campaignsRouter.post(
   requireAuth,
   resolveCompanyMiddleware,
   requireCompanyOwnership('campaigns'),
+  requireOwner,
   validateBody(ApproveCampaignSchema),
   async (req: AuthRequest, res) => {
     try {
@@ -206,6 +208,7 @@ campaignsRouter.post(
   requireAuth,
   resolveCompanyMiddleware,
   requireCompanyOwnership('campaigns'),
+  requireOwner,
   validateBody(RejectCampaignSchema),
   async (req: AuthRequest, res) => {
     try {
@@ -233,6 +236,7 @@ campaignsRouter.post(
   requireAuth,
   resolveCompanyMiddleware,
   requireCompanyOwnership('campaigns'),
+  requireOwner,
   async (req: AuthRequest, res) => {
     try {
       const id = req.params['id'] as string;

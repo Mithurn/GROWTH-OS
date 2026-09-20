@@ -51,6 +51,10 @@ export const CONFIG_REGISTRY = {
 
   // ── Campaign approval (backend/src/lib/queues.ts) ─────────────────────────
   'approval.auto_launch_max_value': z.number().nonnegative().default(20000),
+  'campaign.quiet_hours': z.object({
+    startHour: z.number().int().min(0).max(23),
+    endHour: z.number().int().min(0).max(23),
+  }).default({ startHour: 21, endHour: 9 }),
 
   // ── Rate limits & uploads (backend/src/middleware/rate-limits.ts, upload.ts) ─
   // Plan-overridable today via plan_config; becomes plan_limits proper in

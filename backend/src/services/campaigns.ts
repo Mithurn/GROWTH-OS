@@ -3,6 +3,8 @@ import { openRouterConfig, openai } from '../config/openrouter';
 import { logger } from '../lib/logger';
 import { parseWithRetry } from '../lib/ai';
 import { prisma } from '../lib/prisma';
+import { launchPolicyReason } from './campaign-launch-policy';
+import { getConfig } from '../lib/config';
 
 export interface CampaignGenerationRequest {
   opportunityId: string;
@@ -294,7 +296,7 @@ export async function saveCampaign(
   if (existing) return toCampaignRow(existing);
 
   try {
-    return toCampaignRow(await prisma.campaign.create({
+    const created = await prisma.campaign.create({
       data: {
         companyId: company.id,
         opportunityId,
@@ -308,7 +310,11 @@ export async function saveCampaign(
         reasoning: campaign.reasoning,
         status: 'Draft',
       },
-    }));
+    });
+    await prisma.campaignAuditEvent.create({
+      data: { companyId: company.id, campaignId: created.id, eventType: 'PROPOSED' },
+    });
+    return toCampaignRow(created);
   } catch (error) {
     if ((error as { code?: string }).code !== 'P2002') throw error;
     const winner = await prisma.campaign.findFirstOrThrow({
@@ -326,10 +332,24 @@ export async function launchCampaign(
     const campaign = await tx.campaign.findUnique({
       where: { id: campaignId },
       include: {
+        company: { select: { timezone: true } },
+        agent: { select: { guardrails: true } },
         opportunity: {
           select: {
             audienceSize: true,
-            audience: { select: { customerId: true } },
+            audience: {
+              select: {
+                customerId: true,
+                customer: {
+                  select: {
+                    email: true,
+                    phone: true,
+                    emailMarketingConsent: true,
+                    smsMarketingConsent: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -345,7 +365,20 @@ export async function launchCampaign(
     }
 
     const audience = campaign.opportunity.audience.slice(0, campaign.opportunity.audienceSize);
-    if (!audience.length) throw new Error('No customers found in opportunity audience');
+    const quietHours = await getConfig(campaign.companyId, 'campaign.quiet_hours');
+    const policyReason = launchPolicyReason({
+      channel: campaign.channel,
+      timezone: campaign.company.timezone,
+      customers: audience.map(({ customer }) => customer),
+      allowedChannels: (campaign.agent?.guardrails as { channels?: unknown } | null)?.channels,
+      quietHours,
+    });
+    if (policyReason) {
+      await tx.campaignAuditEvent.create({
+        data: { companyId: campaign.companyId, campaignId, eventType: 'POLICY_DENIED', metadata: { reason: policyReason } },
+      });
+      return { campaign, communications: existing, policyReason };
+    }
 
     const claimed = await tx.campaign.updateMany({
       where: { id: campaignId, companyId: campaign.companyId, status: 'Approved' },
@@ -377,11 +410,21 @@ export async function launchCampaign(
       })),
       skipDuplicates: true,
     });
+    await tx.campaignAuditEvent.create({
+      data: {
+        companyId: campaign.companyId,
+        campaignId,
+        eventType: 'LAUNCH_CLAIMED',
+        metadata: { recipients: communications.length, channel: campaign.channel },
+      },
+    });
     return {
       campaign: await tx.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
       communications,
     };
   });
+
+  if ('policyReason' in result) throw new Error(result.policyReason);
 
   const { enqueueCommunicationDispatchBatch } = await import('../lib/queues');
   await enqueueCommunicationDispatchBatch(result.communications.map((communication) => ({
