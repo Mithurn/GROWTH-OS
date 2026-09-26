@@ -321,9 +321,14 @@ after restart, and produces an execution receipt under enforced budgets.
       content hash, and visibility with every embedding — done for the
       campaign-outcomes corpus (`source_type`, `source_version`,
       `model_version`, `content_hash`, `updated_at` columns).
-- [ ] Implement hybrid retrieval: pgvector cosine + PostgreSQL full-text,
-      reciprocal-rank fusion, metadata filters, configurable `top_k`, and a
-      reranker only if evaluation shows improvement.
+- [x] Implement hybrid retrieval: pgvector cosine + PostgreSQL full-text,
+      reciprocal-rank fusion, configurable `top_k` — done for the
+      campaign-outcomes corpus (`searchSimilarCampaigns` in
+      `campaign-embeddings.ts`; `rag.top_k`/`rag.candidate_limit`/`rag.rrf_k`
+      config keys). Proven against real Postgres: an exact rare-term match
+      outranks semantically-unrelated decoys. Metadata filters and a reranker
+      not added — no evaluation yet showing either would help; revisit with
+      Gate 3's eval dataset once it exists.
 - [ ] Require citations from draft claims to retrieved evidence. Unsupported
       numeric or historical claims fail closed.
 - [ ] Add a bounded retrieve → draft → faithfulness → revise loop.

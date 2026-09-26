@@ -88,6 +88,11 @@ export const CONFIG_REGISTRY = {
   'agent.campaign_cases_enabled': z.boolean().default(true),
   'agent.kill_switch': z.boolean().default(false),
   'agent.interval_ms': z.number().int().positive().default(21_600_000),
+
+  // ── RAG retrieval (backend/src/services/campaign-embeddings.ts) ──────────
+  'rag.top_k': z.number().int().positive().default(5),
+  'rag.candidate_limit': z.number().int().positive().default(20),
+  'rag.rrf_k': z.number().int().positive().default(60),
 } as const;
 
 export type ConfigKey = keyof typeof CONFIG_REGISTRY;

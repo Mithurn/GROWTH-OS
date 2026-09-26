@@ -15,7 +15,7 @@ type Evidence = {
     potentialRevenue: number;
     confidenceScore: number;
   };
-  priorCampaigns: Array<{ campaignId: string | null; content: string; similarity: number }>;
+  priorCampaigns: Array<{ campaignId: string | null; content: string; relevanceScore: number }>;
 };
 
 async function addStep(input: {
@@ -90,10 +90,10 @@ export async function completeCampaignCase(input: {
       const startedAt = Date.now();
       let priorCampaigns: Evidence['priorCampaigns'];
       try {
-        priorCampaigns = (await searchSimilarCampaigns(input.companyId, campaign.messageContent, 3)).map((row) => ({
+        priorCampaigns = (await searchSimilarCampaigns(input.companyId, campaign.messageContent)).map((row) => ({
           campaignId: row.campaignId,
           content: row.content.slice(0, 1_500),
-          similarity: Math.round((1 - row.distance / 2) * 100) / 100,
+          relevanceScore: Math.round(row.score * 1000) / 1000,
         }));
       } catch {
         priorCampaigns = [];

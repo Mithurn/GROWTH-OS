@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { prisma, prismaSystem } from '../lib/prisma';
 import { embed, toVectorLiteral } from '../lib/embeddings';
 import { logger } from '../lib/logger';
+import { getConfig } from '../lib/config';
 
 /** Must match `lib/embeddings.ts`'s model — recorded per row so a future model
  * change is visible in the data, not just in code. */
@@ -93,33 +94,69 @@ export async function embedCampaignOutcome(campaignId: string): Promise<void> {
 export interface SimilarCampaign {
   campaignId: string | null;
   content: string;
-  distance: number;
+  /** Reciprocal Rank Fusion score — relative, higher is a better match. Not a
+   * distance or a probability; only meaningful compared against other rows
+   * from the same query. */
+  score: number;
 }
 
 /**
- * Cosine-distance nearest neighbors, scoped to one tenant — this is the
- * real implementation behind `growthos_search_prior_campaigns`, no longer
- * the honest-empty-stub. Returns [] (not an error) if the table has no
- * embedded rows yet for this tenant; callers already treat "no history" as
- * a legitimate, common answer, not a failure.
+ * Hybrid retrieval, scoped to one tenant — this is the real implementation
+ * behind `growthos_search_prior_campaigns`. Combines pgvector cosine
+ * similarity with PostgreSQL full-text search via Reciprocal Rank Fusion
+ * (RRF): each method ranks its own candidates, a row's fused score is the sum
+ * of `1 / (rrfK + rank)` across whichever method(s) it appeared in. A row
+ * that ranks well on both counts more than a row that only ranks well on one.
+ * Runs both queries regardless of the other's result — vector search finds
+ * semantic matches full-text misses (paraphrase, no shared words); full-text
+ * finds exact terms (a specific offer code, a product name) that an embedding
+ * can blur across neighbors.
+ *
+ * Returns [] (not an error) if the table has no embedded rows yet for this
+ * tenant; callers already treat "no history" as a legitimate, common answer,
+ * not a failure.
  */
 export async function searchSimilarCampaigns(
   companyId: string,
   query: string,
-  limit: number,
+  limit?: number,
 ): Promise<SimilarCampaign[]> {
+  const [topK, candidateLimit, rrfK] = await Promise.all([
+    limit !== undefined ? Promise.resolve(limit) : getConfig(companyId, 'rag.top_k'),
+    getConfig(companyId, 'rag.candidate_limit'),
+    getConfig(companyId, 'rag.rrf_k'),
+  ]);
+
   const vector = await embed(query);
   const literal = toVectorLiteral(vector);
 
-  const rows = await prisma.$queryRaw<{ campaign_id: string | null; content: string; distance: number }[]>`
-    SELECT campaign_id, content, (embedding <=> ${literal}::vector) AS distance
-    FROM campaign_embeddings
-    WHERE company_id = ${companyId}
-    ORDER BY embedding <=> ${literal}::vector
-    LIMIT ${limit}
+  const rows = await prisma.$queryRaw<{ campaign_id: string | null; content: string; score: number }[]>`
+    WITH vector_search AS (
+      SELECT campaign_id, content, row_number() OVER (ORDER BY embedding <=> ${literal}::vector) AS rank
+      FROM campaign_embeddings
+      WHERE company_id = ${companyId}
+      ORDER BY embedding <=> ${literal}::vector
+      LIMIT ${candidateLimit}
+    ),
+    text_search AS (
+      SELECT campaign_id, content,
+        row_number() OVER (ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ${query})) DESC) AS rank
+      FROM campaign_embeddings
+      WHERE company_id = ${companyId} AND content_tsv @@ websearch_to_tsquery('english', ${query})
+      ORDER BY ts_rank_cd(content_tsv, websearch_to_tsquery('english', ${query})) DESC
+      LIMIT ${candidateLimit}
+    )
+    SELECT
+      COALESCE(v.campaign_id, t.campaign_id) AS campaign_id,
+      COALESCE(v.content, t.content) AS content,
+      COALESCE(1.0 / (${rrfK} + v.rank), 0) + COALESCE(1.0 / (${rrfK} + t.rank), 0) AS score
+    FROM vector_search v
+    FULL OUTER JOIN text_search t ON v.campaign_id = t.campaign_id
+    ORDER BY score DESC
+    LIMIT ${topK}
   `;
 
-  return rows.map((r) => ({ campaignId: r.campaign_id, content: r.content, distance: Number(r.distance) }));
+  return rows.map((r) => ({ campaignId: r.campaign_id, content: r.content, score: Number(r.score) }));
 }
 
 /** Backfill entry point: every campaign for a tenant (or all tenants) that isn't embedded yet. */

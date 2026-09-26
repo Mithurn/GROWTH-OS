@@ -54,17 +54,17 @@ describe('embedCampaignOutcome', () => {
 describe('searchSimilarCampaigns', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('scopes the query to the given company and returns ranked results', async () => {
+  it('scopes the query to the given company and returns fused, ranked results', async () => {
     vi.mocked(prisma.$queryRaw).mockResolvedValue([
-      { campaign_id: 'camp_1', content: 'VIP reward campaign', distance: 0.2 },
-      { campaign_id: 'camp_2', content: 'churn win-back', distance: 0.6 },
+      { campaign_id: 'camp_1', content: 'VIP reward campaign', score: 0.033 },
+      { campaign_id: 'camp_2', content: 'churn win-back', score: 0.016 },
     ]);
 
     const results = await searchSimilarCampaigns('co_1', 'reward loyal customers', 2);
 
     expect(results).toEqual([
-      { campaignId: 'camp_1', content: 'VIP reward campaign', distance: 0.2 },
-      { campaignId: 'camp_2', content: 'churn win-back', distance: 0.6 },
+      { campaignId: 'camp_1', content: 'VIP reward campaign', score: 0.033 },
+      { campaignId: 'camp_2', content: 'churn win-back', score: 0.016 },
     ]);
   });
 
