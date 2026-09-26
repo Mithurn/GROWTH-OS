@@ -273,9 +273,10 @@ Feature-gating already exists per tenant via config
       graphs (campaign-case for evidence/policy, campaign-approval for the
       human gate) rather than one; "Policy" isn't a distinct node, it's folded
       into the reviewer's risk check.
-- [~] Add bounded reflection: failed evidence/policy returns specific
-      objections to Strategy, with retry and wall-clock budgets. Retry budget
-      exists (`maxRevisions`); no wall-clock budget yet.
+- [x] Add bounded reflection: failed evidence/policy returns specific
+      objections to Strategy, with retry and wall-clock budgets. Both exist now:
+      `agent.max_revisions` and `agent.max_wall_clock_ms`, checked together in
+      the graph's conditional edge (`campaign-case.ts`).
 - [ ] Use parallel discovery only for independent segments, then reduce into a
       deduplicated ranked opportunity set.
 - [ ] Make mutating tools real and idempotent. The launch tool calls the control
