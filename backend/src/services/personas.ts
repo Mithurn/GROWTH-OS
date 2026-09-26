@@ -467,6 +467,27 @@ async function ensureCompanyRow(
   return { id: company.id, company_name: company.companyName, industry: company.industry };
 }
 
+/**
+ * Many customers share one persona (they're clustered), so this embeds each
+ * distinct persona name in the batch once, not once per customer row.
+ * Best-effort: a failed embed must never undo persona generation that
+ * already succeeded and was already persisted.
+ */
+async function embedDistinctPersonas(companyId: string, records: PersonaRecord[]): Promise<void> {
+  const distinct = new Map<string, string>();
+  for (const record of records) {
+    if (!distinct.has(record.persona_name)) distinct.set(record.persona_name, record.persona_description);
+  }
+  for (const [personaName, personaDescription] of distinct) {
+    try {
+      const { embedPersona } = await import('./persona-embeddings');
+      await embedPersona(companyId, personaName, personaDescription);
+    } catch (err) {
+      defaultLogger.warn(`[personas] Failed to embed persona "${personaName}", skipping`, err);
+    }
+  }
+}
+
 async function upsertPersonaRows(records: PersonaRecord[]): Promise<void> {
   await prisma.$transaction(records.map((record) => prisma.persona.upsert({
     where: { customerId: record.customer_id },
@@ -701,6 +722,7 @@ export async function generatePersonas(
   }
 
   await upsertPersonaRows(personaRecords);
+  await embedDistinctPersonas(company.id, personaRecords);
 
   const persistedRows = await fetchPersonaRows(company.id);
   const distribution = buildDistribution(persistedRows, profiles);
