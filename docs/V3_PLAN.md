@@ -279,10 +279,20 @@ Feature-gating already exists per tenant via config
       the graph's conditional edge (`campaign-case.ts`).
 - [ ] Use parallel discovery only for independent segments, then reduce into a
       deduplicated ranked opportunity set.
-- [ ] Make mutating tools real and idempotent. The launch tool calls the control
-      plane; it never talks directly to providers.
-- [ ] Add episodic memory from measured outcomes, with retention and tenant
-      isolation; do not store hidden reasoning.
+- [x] Make mutating tools real and idempotent. The launch tool calls the control
+      plane; it never talks directly to providers — already true: there is no
+      agent "tool" that sends anything. `communication-dispatch.ts` is the only
+      code path that calls the channel service (confirmed by grep), and every
+      graph node calls a plain deterministic service function, never a provider.
+- [~] Add episodic memory from measured outcomes, with retention and tenant
+      isolation; do not store hidden reasoning. Partially exists already:
+      `campaign_embeddings` is real, tenant-scoped, event-driven (embedded once
+      a campaign's delivery completes, `webhooks.ts`), and excludes reasoning
+      (only objective/channel/offer/message/measured outcome). Missing:
+      retention/expiry, and it's campaign-scoped only — personas, opportunity
+      outcomes, and a playbook corpus are still Gate 3 work. Doing full episodic
+      memory properly means doing it as part of Gate 3's corpus/provenance
+      design, not a second bolt-on here — see Gate 3 below.
 - [x] Replace environment-only enablement with per-tenant feature flags and a
       kill switch — already done in `agent-orchestrator.ts` via
       `agent.campaign_cases_enabled` / `agent.kill_switch` config keys.
@@ -295,12 +305,22 @@ after restart, and produces an execution receipt under enforced budgets.
 
 ### Gate 3 — Complete RAG lifecycle
 
-- [ ] Define corpora and provenance: tenant campaign outcomes, personas,
+- [~] Define corpora and provenance: tenant campaign outcomes, personas,
       opportunity outcomes, product/catalog facts, and a curated public playbook.
-- [ ] Add unique/version constraints and event-driven upserts. Deletion and
-      tenant offboarding remove derived vectors.
-- [ ] Store source type/id/version, tenant scope, timestamps, model/version,
-      content hash, and visibility with every embedding.
+      Campaign outcomes done (see below); personas, opportunity outcomes,
+      product facts, and the public playbook are still open.
+- [x] Add unique/version constraints and event-driven upserts (for the
+      campaign-outcomes corpus). `campaign_embeddings` had neither: the write
+      path already read `ON CONFLICT DO NOTHING` assuming a unique constraint
+      that was never created, so a re-embed silently created a duplicate row.
+      Added a partial unique index on `campaign_id` and converted the write to
+      a real upsert (`source_version` bumps only on real content changes).
+      Deletion is already reflected — `campaign_embeddings.campaign_id` cascades
+      on the campaign FK. Still open for the other corpora once they exist.
+- [x] Store source type/id/version, tenant scope, timestamps, model/version,
+      content hash, and visibility with every embedding — done for the
+      campaign-outcomes corpus (`source_type`, `source_version`,
+      `model_version`, `content_hash`, `updated_at` columns).
 - [ ] Implement hybrid retrieval: pgvector cosine + PostgreSQL full-text,
       reciprocal-rank fusion, metadata filters, configurable `top_k`, and a
       reranker only if evaluation shows improvement.

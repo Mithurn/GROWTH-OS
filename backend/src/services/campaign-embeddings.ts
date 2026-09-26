@@ -1,6 +1,11 @@
+import { createHash } from 'crypto';
 import { prisma, prismaSystem } from '../lib/prisma';
 import { embed, toVectorLiteral } from '../lib/embeddings';
 import { logger } from '../lib/logger';
+
+/** Must match `lib/embeddings.ts`'s model — recorded per row so a future model
+ * change is visible in the data, not just in code. */
+const EMBEDDING_MODEL_VERSION = 'Xenova/all-MiniLM-L6-v2';
 
 /**
  * The text actually embedded for one campaign — objective, channel, offer,
@@ -58,13 +63,30 @@ export async function embedCampaignOutcome(campaignId: string): Promise<void> {
   });
 
   const content = campaignOutcomeText({ ...campaign, currency: campaign.company.currency, locale: campaign.company.locale });
+  const contentHash = createHash('sha256').update(content).digest('hex');
   const vector = await embed(content);
   const literal = toVectorLiteral(vector);
 
+  // Real upsert against the partial unique index on campaign_id — a re-embed
+  // (e.g. a manual backfill re-run) updates the existing row instead of
+  // creating a duplicate. source_version only increments when the content
+  // actually changed, so re-running against unchanged outcomes is a no-op
+  // beyond the write itself.
   await prisma.$executeRaw`
-    INSERT INTO campaign_embeddings (id, company_id, campaign_id, content, embedding)
-    VALUES (gen_random_uuid()::text, ${campaign.companyId}, ${campaign.id}, ${content}, ${literal}::vector)
-    ON CONFLICT DO NOTHING
+    INSERT INTO campaign_embeddings
+      (id, company_id, campaign_id, content, embedding, source_type, source_version, model_version, content_hash, updated_at)
+    VALUES
+      (gen_random_uuid()::text, ${campaign.companyId}, ${campaign.id}, ${content}, ${literal}::vector, 'campaign', 1, ${EMBEDDING_MODEL_VERSION}, ${contentHash}, now())
+    ON CONFLICT (campaign_id) WHERE campaign_id IS NOT NULL DO UPDATE SET
+      content = EXCLUDED.content,
+      embedding = EXCLUDED.embedding,
+      model_version = EXCLUDED.model_version,
+      content_hash = EXCLUDED.content_hash,
+      updated_at = now(),
+      source_version = campaign_embeddings.source_version + CASE
+        WHEN campaign_embeddings.content_hash = EXCLUDED.content_hash THEN 0
+        ELSE 1
+      END
   `;
 }
 
