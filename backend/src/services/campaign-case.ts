@@ -87,7 +87,7 @@ export async function completeCampaignCase(input: {
   const graph = buildCampaignCaseGraph({
     scout: async () => {
       const startedAt = Date.now();
-      let priorCampaigns: Evidence['priorCampaigns'] = [];
+      let priorCampaigns: Evidence['priorCampaigns'];
       try {
         priorCampaigns = (await searchSimilarCampaigns(input.companyId, campaign.messageContent, 3)).map((row) => ({
           campaignId: row.campaignId,
