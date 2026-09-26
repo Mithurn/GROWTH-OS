@@ -537,11 +537,18 @@ function getDominantPersona(customers: CustomerProfile[]): string {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Customer Intelligence';
 }
 
+/**
+ * A customer with no recorded preferredChannel must not be able to win this
+ * vote — "Unknown" was being counted as a real channel and then wound up
+ * verbatim in customer-facing message copy ("...via Unknown") whenever it
+ * had the most votes. Only real preferences are counted; the function's own
+ * existing empty-vote fallback ('WhatsApp') already covers "nobody has one".
+ */
 function chooseBestChannel(customers: CustomerProfile[]): string {
   const counts = new Map<string, number>();
   for (const customer of customers) {
-    const channel = customer.preferredChannel ?? 'Unknown';
-    counts.set(channel, (counts.get(channel) ?? 0) + 1);
+    if (!customer.preferredChannel) continue;
+    counts.set(customer.preferredChannel, (counts.get(customer.preferredChannel) ?? 0) + 1);
   }
 
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'WhatsApp';
