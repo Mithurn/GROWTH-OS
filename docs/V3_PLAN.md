@@ -329,9 +329,19 @@ after restart, and produces an execution receipt under enforced budgets.
       outranks semantically-unrelated decoys. Metadata filters and a reranker
       not added — no evaluation yet showing either would help; revisit with
       Gate 3's eval dataset once it exists.
-- [ ] Require citations from draft claims to retrieved evidence. Unsupported
-      numeric or historical claims fail closed.
-- [ ] Add a bounded retrieve → draft → faithfulness → revise loop.
+- [x] Require citations from draft claims to retrieved evidence. Unsupported
+      numeric or historical claims fail closed. `campaign-faithfulness.ts`'s
+      judge now splits a draft into individual claims and cites which
+      retrieved campaign id backs each one, not just an overall pass/fail. A
+      citation to an id that was never actually retrieved (a hallucinated
+      citation) is downgraded to unsupported rather than trusted — validated
+      against the real retrieval set, not the model's own say-so. Still
+      unsupported → `needsRevision` → the graph's existing revise loop, same
+      as before.
+- [x] Add a bounded retrieve → draft → faithfulness → revise loop — this is
+      exactly what `campaign-case.ts`'s scout → strategist → reviewer →
+      revise graph already is (Gate 2), bounded by both revision count and
+      wall-clock time.
 - [ ] Create a real evaluation dataset from reviewed traces: retrieval hit,
       citation correctness, policy compliance, and unsupported-claim rate.
 - [ ] Prove the embedding model on the deployment target for memory, download,
