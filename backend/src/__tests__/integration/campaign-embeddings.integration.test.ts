@@ -100,4 +100,40 @@ describe('campaign embeddings — real Postgres constraint and upsert', () => {
     expect(afterChange[0].source_version).toBe(2);
     expect(afterChange[0].content_hash).not.toBe(afterFirst[0].content_hash);
   }, 30_000);
+
+  it('surfaces an exact rare-term match via full-text search even without close vector similarity', async () => {
+    const { embedCampaignOutcome, searchSimilarCampaigns } = await import('../../services/campaign-embeddings');
+
+    const distinctiveTerm = 'xylophonewidgets9000';
+    const target = await createCampaign('hybrid-exact-term');
+    await db.prisma.campaign.update({
+      where: { id: target.id },
+      data: { objective: `Clear out ${distinctiveTerm} inventory before season end` },
+    });
+    // Unrelated campaigns, so the fused top result isn't just "everything we have".
+    const decoyA = await createCampaign('hybrid-decoy-a');
+    await db.prisma.campaign.update({ where: { id: decoyA.id }, data: { objective: 'Win back dormant high spenders' } });
+    const decoyB = await createCampaign('hybrid-decoy-b');
+    await db.prisma.campaign.update({ where: { id: decoyB.id }, data: { objective: 'Reward loyal repeat buyers' } });
+
+    await embedCampaignOutcome(target.id);
+    await embedCampaignOutcome(decoyA.id);
+    await embedCampaignOutcome(decoyB.id);
+
+    const results = await searchSimilarCampaigns(companyId, distinctiveTerm, 5);
+    expect(results.map((r) => r.campaignId)).toContain(target.id);
+    // The exact-term match should outrank campaigns with no lexical or
+    // semantic relation to a made-up product name.
+    expect(results[0].campaignId).toBe(target.id);
+  }, 30_000);
+
+  it('respects the requested limit', async () => {
+    const { embedCampaignOutcome, searchSimilarCampaigns } = await import('../../services/campaign-embeddings');
+    for (const key of ['limit-a', 'limit-b', 'limit-c']) {
+      const c = await createCampaign(key);
+      await embedCampaignOutcome(c.id);
+    }
+    const results = await searchSimilarCampaigns(companyId, 'campaign', 2);
+    expect(results.length).toBeLessThanOrEqual(2);
+  }, 30_000);
 });

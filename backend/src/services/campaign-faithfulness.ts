@@ -13,7 +13,7 @@ export async function reviewCampaignFaithfulness(companyId: string, draft: strin
   if (!openRouterConfig.configured) {
     return { groundedness_score: null, unsupported_claims: [], reasoning: 'No LLM configured — cannot judge.' };
   }
-  const retrieved = await searchSimilarCampaigns(companyId, draft, 3);
+  const retrieved = await searchSimilarCampaigns(companyId, draft);
   if (!retrieved.length) {
     return { groundedness_score: null, unsupported_claims: [], reasoning: 'No prior campaign history is available for this tenant.' };
   }
