@@ -1,8 +1,7 @@
 # @growthos/agent-core
 
-Single-thread GrowthOS agent. Phase 2 is **shadow mode**: one planner, read +
-control tools, observe and record beside `AgentOrchestrator`. No mutating
-tools. Spec: `DESIGN.md`. Plan: `docs/ARCHITECTURE_V2.md` §3.
+Two LangGraph state machines, both real production paths (not shadow/demo
+code): campaign approval and the campaign case review.
 
 **No `package.json` here, same as `packages/domain` and `packages/contracts`.**
 LangGraph is installed on the backend (`@langchain/langgraph`, `@langchain/core`)
@@ -10,22 +9,25 @@ and resolved through path aliases. Nested `tsconfig.json` maps `@langchain/*`
 into `backend/node_modules` so esbuild can resolve them (same hole contracts
 hit with `zod`).
 
-This package owns the loop, the catalog, and the permission gate. It does not
-know about RFM, campaigns, or Prisma — handlers live in
-`backend/src/services/agent-tool-handlers.ts`.
+Each graph is deterministic, typed state in, typed state out — no LLM picks
+which node runs next. An LLM only appears inside a node's own function (draft
+generation, the faithfulness judge, risk review), never as the router.
 
 ## Layout
 
-- `DESIGN.md` — sourced spec. A later change that violates §3 is a bug.
-- `src/graph/run.ts` — planner → tools → route. Stop in code (finish, step
-  budget, two idles, wall-clock, deny).
-- `src/tools/` — namespaced catalog + deny-first `invokeTool`.
-- `src/planner/scripted.ts` — offline planner so tests need no API key.
-- `src/planner/observe-script.ts` — deterministic observe tape used when
-  there is no LLM key. Reads prior tool results; does not invent rupees.
-- `src/mcp/adapter.ts` — same catalog over list/call. Not a second server.
-- `src/graph/shadow.ts` — leftover observe-only graph; kept for the original
-  thread-isolation tests.
+- `src/graph/campaign-approval.ts` — the human approval gate. Pauses on a real
+  LangGraph `interrupt()`, persisted by `PostgresSaver`; approve/reject resumes
+  the same thread. Backs `backend/src/services/campaign-approval-workflow.ts`.
+- `src/graph/campaign-case.ts` — scout (gather evidence) → strategist (record
+  the drafted campaign) → reviewer (risk + faithfulness) → conditional revise
+  loop, bounded by `maxRevisions`. Backs `backend/src/services/campaign-case.ts`.
+- `src/checkpoint/postgres.ts` — the shared `PostgresSaver` checkpointer both
+  graphs use.
+
+An earlier single-thread ReAct-style agent (planner → tool-calling loop, role-
+scoped tool catalog, `SHADOW_SUPERVISOR`/`SHADOW_AGENT` env gates) lived here
+and was retired once the two deterministic graphs above became the real
+production path — see `docs/breaks.md` if you're looking for why.
 
 ## Running the tests
 
