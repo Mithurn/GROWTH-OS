@@ -82,10 +82,9 @@ export const CONFIG_REGISTRY = {
   'llm.pricing.usd_per_mtok_in': z.number().nonnegative().default(0.3),
   'llm.pricing.usd_per_mtok_out': z.number().nonnegative().default(2.5),
 
-  // ── Agent (packages/agent-core/src/supervisor/run.ts, backend/src/server.ts) ─
-  'agent.max_steps_per_role': z.number().int().positive().default(6),
-  'agent.max_steps_single': z.number().int().positive().default(8),
+  // ── Agent (backend/src/services/campaign-case.ts, agent-orchestrator.ts) ────
   'agent.max_revisions': z.number().int().min(0).max(2).default(1),
+  'agent.max_wall_clock_ms': z.number().int().positive().default(120_000),
   'agent.campaign_cases_enabled': z.boolean().default(true),
   'agent.kill_switch': z.boolean().default(false),
   'agent.interval_ms': z.number().int().positive().default(21_600_000),

@@ -83,6 +83,7 @@ export async function completeCampaignCase(input: {
   });
 
   const maxRevisions = await getConfig(input.companyId, 'agent.max_revisions');
+  const maxWallClockMs = await getConfig(input.companyId, 'agent.max_wall_clock_ms');
   const checkpointer = await getDurableAgentCheckpointer();
   const graph = buildCampaignCaseGraph({
     scout: async () => {
@@ -141,7 +142,10 @@ export async function completeCampaignCase(input: {
   }, checkpointer);
   let result;
   try {
-    result = await graph.invoke({ caseId: campaignCase.id, maxRevisions }, { configurable: { thread_id: campaignCaseThreadId(campaignCase.id) } });
+    result = await graph.invoke(
+      { caseId: campaignCase.id, maxRevisions, deadlineAt: Date.now() + maxWallClockMs },
+      { configurable: { thread_id: campaignCaseThreadId(campaignCase.id) } },
+    );
   } catch (err) {
     await prisma.$transaction([
       prisma.campaignCase.update({ where: { id: campaignCase.id }, data: { status: 'FAILED' } }),

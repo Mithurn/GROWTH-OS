@@ -19,6 +19,8 @@ const CampaignCaseState = Annotation.Root({
   caseId: Annotation<string>,
   revisionCount: Annotation<number>({ reducer: (_previous, next) => next, default: () => 0 }),
   maxRevisions: Annotation<number>,
+  // Date.now()-comparable epoch ms, computed by the caller at invoke time.
+  deadlineAt: Annotation<number>,
   evidence: Annotation<CampaignCaseEvidence>({ reducer: (_previous, next) => next, default: () => ({}) }),
   strategy: Annotation<Record<string, unknown>>({ reducer: (_previous, next) => next, default: () => ({}) }),
   review: Annotation<CampaignCaseReview>({
@@ -49,7 +51,9 @@ export function buildCampaignCaseGraph(nodes: CampaignCaseNodes, checkpointer: B
     .addEdge('strategist', 'reviewer')
     .addConditionalEdges('reviewer', (state) => {
       if (state.review.blocked) return 'complete';
-      if (state.review.needsRevision && state.revisionCount < state.maxRevisions) return 'revise';
+      const withinRevisionBudget = state.revisionCount < state.maxRevisions;
+      const withinWallClockBudget = Date.now() < state.deadlineAt;
+      if (state.review.needsRevision && withinRevisionBudget && withinWallClockBudget) return 'revise';
       return 'complete';
     }, { revise: 'revise', complete: 'complete' })
     .addEdge('revise', 'reviewer')
