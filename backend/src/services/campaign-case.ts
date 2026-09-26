@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { searchSimilarCampaigns } from './campaign-embeddings';
+import { searchSimilarPersonas } from './persona-embeddings';
 import { reviewCampaignFaithfulness } from './campaign-faithfulness';
 import { reviewCampaignRisk } from './campaign-risk-review';
 import { getConfig } from '../lib/config';
@@ -16,6 +17,7 @@ type Evidence = {
     confidenceScore: number;
   };
   priorCampaigns: Array<{ campaignId: string | null; content: string; relevanceScore: number }>;
+  similarPersonas: Array<{ personaName: string; content: string; relevanceScore: number }>;
 };
 
 async function addStep(input: {
@@ -98,6 +100,16 @@ export async function completeCampaignCase(input: {
       } catch {
         priorCampaigns = [];
       }
+      let similarPersonas: Evidence['similarPersonas'];
+      try {
+        similarPersonas = (await searchSimilarPersonas(input.companyId, campaign.objective)).map((row) => ({
+          personaName: row.personaName,
+          content: row.content.slice(0, 1_500),
+          relevanceScore: Math.round(row.score * 1000) / 1000,
+        }));
+      } catch {
+        similarPersonas = [];
+      }
       const evidence: Evidence = {
         opportunity: {
           id: campaign.opportunity.id,
@@ -107,6 +119,7 @@ export async function completeCampaignCase(input: {
           confidenceScore: Number(campaign.opportunity.confidenceScore),
         },
         priorCampaigns,
+        similarPersonas,
       };
       await addStep({ runId: run.id, companyId: input.companyId, node: 'scout', result: evidence, startedAt });
       return evidence;
