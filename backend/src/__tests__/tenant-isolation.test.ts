@@ -142,46 +142,6 @@ describe('SSE event routes', () => {
   });
 });
 
-describe('GET /api/internal/agent/tools', () => {
-  const path = '/api/internal/agent/tools';
-
-  it('rejects a request with no secret', async () => {
-    const res = await request(app).get(path);
-    expect(res.status).toBe(401);
-  });
-
-  it('returns the bound shadow catalog when the secret is present', async () => {
-    const res = await request(app).get(path).set('x-internal-secret', 'test-internal-secret');
-    expect(res.status).toBe(200);
-    expect(res.body.mode).toBe('shadow');
-    const names = (res.body.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toContain('growthos_query_metrics');
-    expect(names).not.toContain('growthos_create_opportunity');
-  });
-});
-
-describe('GET /api/internal/agent/tools', () => {
-  const path = '/api/internal/agent/tools';
-
-  it('rejects a request with no secret', async () => {
-    const res = await request(app).get(path);
-    expect(res.status).toBe(401);
-  });
-
-  it('lists the bound shadow catalog when the secret is present', async () => {
-    const res = await request(app)
-      .get(path)
-      .set('x-internal-secret', 'test-internal-secret');
-
-    expect(res.status).toBe(200);
-    expect(res.body.mode).toBe('shadow');
-    const names = (res.body.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toContain('growthos_query_metrics');
-    expect(names).toContain('growthos_finish');
-    expect(names).not.toContain('growthos_create_opportunity');
-  });
-});
-
 describe('POST /api/internal/agents/run-scheduled', () => {
   const path = '/api/internal/agents/run-scheduled';
 

@@ -65,7 +65,7 @@ Current passing baseline: 197 unit tests and 19 real PostgreSQL integration test
 - `backend/src/services/campaigns.ts`: transactional campaign launch
 - `backend/src/services/communication-dispatch.ts`: recipient dispatch/retry completion
 - `backend/src/services/campaign-approval-workflow.ts`: durable approval interrupt/resume
-- `backend/src/services/agent-graph.ts` and `agent-shadow.ts`: current agent graph foundation
+- `backend/src/services/campaign-case.ts` and `packages/agent-core/src/graph/campaign-case.ts`: scout/strategist/reviewer/revise graph, current agent foundation
 - `backend/src/lib/prisma.ts` and `tenant-context.ts`: tenant/RLS data boundary
 - `backend/src/__tests__/integration/`: real PostgreSQL acceptance tests
 - `.github/workflows/ci.yml` and `SECURITY.md`: CI and security policy

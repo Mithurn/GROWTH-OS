@@ -247,29 +247,44 @@ reflection, approval/restart path, and execution receipt first. Add parallel
 discovery, episodic memory, tenant flags, and the graph/timeline UI after that
 path has passing end-to-end coverage.
 
-**Current slice:** two specialists only: a Strategist with tenant evidence
-tools and a Risk Reviewer with prior-campaign RAG plus deterministic guardrail
-tools. Neither has a provider/send tool. New campaign drafts receive a
-persisted risk review; credential/payment social-engineering terms and offers
-above 50% block launch even after a human approval. The two-agent graph runs
-in shadow mode behind `SHADOW_SUPERVISOR=1` until its real-provider evaluation
-is reviewed.
+**2026-09-27 note:** the old single-thread ReAct supervisor (planner → tool
+loop, `SHADOW_SUPERVISOR`/`SHADOW_AGENT` env gates, role-scoped tool catalog —
+`packages/agent-core/src/{supervisor,tools,planner,mcp}/*`,
+`backend/src/services/{agent-shadow,agent-tool-handlers,agent-planner,agent-graph}.ts`)
+was confirmed dead (only reachable behind an env var, wrapped in a swallow-all
+try/catch, no other file depended on it) and deleted. It ran alongside, not
+inside, the real path below and had fully diverged from it.
 
-- [ ] Replace the supervisor loop with LangGraph nodes/subgraphs over typed
-      state. Specialists remain tool-scoped in code.
-- [ ] Keep deterministic routing first: Discovery → Strategy → Evidence →
-      Policy → Approval → Execution. Introduce model routing only after an eval
-      demonstrates a better outcome.
-- [ ] Add bounded reflection: failed evidence/policy returns specific objections
-      to Strategy, with retry and wall-clock budgets.
+**Current slice:** the real, always-on path is `packages/agent-core/src/graph/campaign-case.ts` —
+a typed LangGraph state machine: scout (gather evidence + prior-campaign RAG)
+→ strategist (record the already-drafted campaign for the trace) → reviewer
+(risk + faithfulness) → conditional revise loop, bounded by
+`agent.max_revisions`. It runs on every real campaign, not in shadow — a
+blocked or unrevisable review stops launch even after human approval.
+Feature-gating already exists per tenant via config
+(`agent.campaign_cases_enabled`, `agent.kill_switch` in
+`agent-orchestrator.ts`), not an env var.
+
+- [x] Replace the supervisor loop with LangGraph nodes/subgraphs over typed
+      state — done by deleting it; the campaign-case graph above is the only
+      path left, and it was already typed-state LangGraph.
+- [~] Keep deterministic routing first: Discovery → Strategy → Evidence →
+      Policy → Approval → Execution. The sequence exists but split across two
+      graphs (campaign-case for evidence/policy, campaign-approval for the
+      human gate) rather than one; "Policy" isn't a distinct node, it's folded
+      into the reviewer's risk check.
+- [~] Add bounded reflection: failed evidence/policy returns specific
+      objections to Strategy, with retry and wall-clock budgets. Retry budget
+      exists (`maxRevisions`); no wall-clock budget yet.
 - [ ] Use parallel discovery only for independent segments, then reduce into a
       deduplicated ranked opportunity set.
 - [ ] Make mutating tools real and idempotent. The launch tool calls the control
       plane; it never talks directly to providers.
 - [ ] Add episodic memory from measured outcomes, with retention and tenant
       isolation; do not store hidden reasoning.
-- [ ] Replace environment-only enablement with per-tenant feature flags and a
-      kill switch. Roll out shadow → approval-required → bounded autonomy.
+- [x] Replace environment-only enablement with per-tenant feature flags and a
+      kill switch — already done in `agent-orchestrator.ts` via
+      `agent.campaign_cases_enabled` / `agent.kill_switch` config keys.
 - [ ] Build the agent graph/timeline UI with tool, retriever, agent, approval,
       and execution nodes.
 
