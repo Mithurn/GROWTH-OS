@@ -1514,17 +1514,22 @@ Create a specific, actionable marketing opportunity that helps achieve this goal
 
 Be realistic - don't promise impossible results. Base estimates on the business context provided.`;
 
-  const response = await openai.chat.completions.create({
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.7,
-    max_tokens: 2000,
-  });
+  let aiResponse: Record<string, any> = {};
+  try {
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 2000,
+    });
 
-  const content = response.choices[0]?.message?.content || '{}';
-  const jsonString = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-  const aiResponse = JSON.parse(jsonString);
-  logger.info({ aiResponse }, '[createOpportunityFromGoal] AI response received');
+    const content = response.choices[0]?.message?.content || '{}';
+    const jsonString = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    aiResponse = JSON.parse(jsonString);
+    logger.info({ aiResponse }, '[createOpportunityFromGoal] AI response received');
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : err }, '[createOpportunityFromGoal] AI unavailable, using deterministic defaults');
+  }
 
   // Apply audience criteria to find matching customers
   const matchingProfiles = profiles.filter((profile) => {
