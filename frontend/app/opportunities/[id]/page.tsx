@@ -18,7 +18,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { getOpportunityCustomers, refineOpportunity } from '@/lib/api';
+import { getOpportunityCustomers, prefetchCampaign, refineOpportunity } from '@/lib/api';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -158,6 +158,10 @@ export default function OpportunityDetailPage() {
   }, [params.id]);
 
   const opp = data?.opportunity ?? null;
+
+  useEffect(() => {
+    if (opp?.opportunity_id) prefetchCampaign(opp.opportunity_id);
+  }, [opp?.opportunity_id]);
   const customers = data?.customers ?? [];
   const whySummary = opp ? (opp.ai_summary || opp.description) : '';
   const typedSummary = useTypewriter(whySummary);

@@ -337,13 +337,29 @@ async function retryOnceOnNetworkError(request: () => Promise<Response>): Promis
   }
 }
 
-export async function generateCampaign(opportunityId: string, model?: string) {
+const campaignDrafts = new Map<string, ReturnType<typeof requestCampaignDraft>>();
+
+async function requestCampaignDraft(opportunityId: string, model?: string) {
   const response = await retryOnceOnNetworkError(() => apiFetch(`${API_BASE_URL}/campaigns/generate`, {
     method: 'POST',
     body: JSON.stringify({ opportunityId, model }),
   }, 90000));
   if (!response.ok) throw new Error('Failed to generate campaign');
   return response.json();
+}
+
+export function prefetchCampaign(opportunityId: string) {
+  if (campaignDrafts.has(opportunityId)) return;
+  const draft = requestCampaignDraft(opportunityId);
+  campaignDrafts.set(opportunityId, draft);
+  draft.catch(() => campaignDrafts.delete(opportunityId));
+}
+
+export function generateCampaign(opportunityId: string, model?: string) {
+  const prefetched = model ? undefined : campaignDrafts.get(opportunityId);
+  campaignDrafts.delete(opportunityId);
+  if (prefetched) return prefetched.catch(() => requestCampaignDraft(opportunityId, model));
+  return requestCampaignDraft(opportunityId, model);
 }
 
 export async function saveCampaign(opportunityId: string, campaign: GeneratedCampaign) {
