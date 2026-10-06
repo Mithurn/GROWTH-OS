@@ -301,10 +301,10 @@ export async function getOpportunityCustomers(opportunityId: string) {
 }
 
 export async function createOpportunityFromGoal(goal: string, model?: string) {
-  const response = await apiFetch(`${API_BASE_URL}/opportunities/create-from-goal`, {
+  const response = await retryOnceOnNetworkError(() => apiFetch(`${API_BASE_URL}/opportunities/create-from-goal`, {
     method: 'POST',
     body: JSON.stringify({ goal, model }),
-  }, 60000);
+  }, 60000));
   if (!response.ok) throw new Error('Failed to create opportunity from goal');
   await bust('opp-dashboard');
   return response.json();
