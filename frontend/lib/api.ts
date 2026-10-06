@@ -341,7 +341,7 @@ export async function saveCampaign(opportunityId: string, campaign: GeneratedCam
   const response = await apiFetch(`${API_BASE_URL}/campaigns`, {
     method: 'POST',
     body: JSON.stringify({ opportunityId, campaign }),
-  });
+  }, 90000);
   if (!response.ok) throw new Error('Failed to save campaign');
   await bust('campaigns-');
   return response.json();

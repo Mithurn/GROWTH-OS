@@ -52,7 +52,7 @@ campaignsRouter.post(
       if (agent) {
         await logAgentAction({
           agentId: agent.id,
-          actionType: 'drafted_campaign',
+          actionType: 'created_campaign',
           description: 'Drafted a campaign for an opportunity',
           details: { opportunityId },
         }).catch((err) => logger.warn({ err }, 'Failed to log drafted campaign activity'));
