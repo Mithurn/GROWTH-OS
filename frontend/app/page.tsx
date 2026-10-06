@@ -36,6 +36,10 @@ const PIPELINE = [
     title: 'Send and measure',
     body: 'Approved campaigns leave through durable recipient jobs and report back over signed webhooks. Duplicate and out-of-order events cannot move the funnel backward.',
   },
+  {
+    title: 'Track results',
+    body: 'Analytics shows sent, delivered, read and clicked events for each campaign, so you can see which messages actually brought customers back.',
+  },
 ];
 
 const BOUNDARY = [
@@ -130,7 +134,7 @@ export default function LandingPage() {
       <section className="border-t border-[#E5E7EB] bg-[#F9FAFB] py-24">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">How it works</h2>
-          <p className="mt-3 max-w-2xl text-[#6B7280]">Five steps from a CSV file to a campaign that has measurable results.</p>
+          <p className="mt-3 max-w-2xl text-[#6B7280]">Six steps from a CSV file to a campaign with measurable results.</p>
           <ol className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-[#E5E7EB] bg-[#E5E7EB] sm:grid-cols-2 lg:grid-cols-3">
             {PIPELINE.map((step, index) => (
               <li key={step.title} className="bg-white p-8">
