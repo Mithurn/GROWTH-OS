@@ -381,7 +381,6 @@ export default function OpportunityDetailPage() {
               <div className="space-y-2.5 mb-4">
                 <PlayRow label="Offer Core" value={`₹${voucherAmount} Voucher`} />
                 <PlayRow label="Expected Conv." value={opp.predicted_conversion_rate != null ? `${opp.predicted_conversion_rate}%` : '—'} />
-                <PlayRow label="Est. Revenue" value={formatCurrency(opp.potential_revenue)} accent />
               </div>
 
               {/* AI quote */}
