@@ -200,6 +200,9 @@ async function fetchOpportunity(opportunityId: string, companyId: string): Promi
   };
 }
 
+const AI_COOLDOWN_MS = 10 * 60_000;
+let aiUnavailableUntil = 0;
+
 export async function generateCampaign(
   request: CampaignGenerationRequest,
 ): Promise<{ campaign: GeneratedCampaign }> {
@@ -207,7 +210,11 @@ export async function generateCampaign(
   const opportunity = await fetchOpportunity(request.opportunityId, company.id);
 
   const model = request.model ?? openRouterConfig.defaultModel;
-  
+
+  if (Date.now() < aiUnavailableUntil) {
+    return { campaign: buildFallbackCampaign(opportunity, company) };
+  }
+
   try {
     const campaign = await parseWithRetry(
       () => openai.chat.completions.create({
@@ -224,6 +231,7 @@ export async function generateCampaign(
     );
     return { campaign };
   } catch (err: any) {
+    aiUnavailableUntil = Date.now() + AI_COOLDOWN_MS;
     logger.warn({ err: err?.message ?? err }, 'Campaign: AI unavailable, using deterministic fallback');
     return { campaign: buildFallbackCampaign(opportunity, company) };
   }
