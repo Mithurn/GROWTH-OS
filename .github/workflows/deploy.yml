@@ -1,0 +1,26 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_HEALTH_URL: https://xeno-crm-backend-n6d8.onrender.com/health
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+      - name: Wait for backend health
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$BACKEND_HEALTH_URL"; then exit 0; fi
+            sleep 20
+          done
+          exit 1
