@@ -29,6 +29,7 @@ import {
 import { CampaignTransitionError, decideCampaign } from '../services/campaign-approval';
 import { ensureCampaignApprovalWorkflow } from '../services/campaign-approval-workflow';
 import { prisma } from '../lib/prisma';
+import { logAgentAction } from '../services/agent-logger';
 
 export const campaignsRouter = Router();
 
@@ -47,6 +48,15 @@ campaignsRouter.post(
         companyId: req.companyId!,
         model,
       });
+      const agent = await prisma.agent.findFirst({ where: { companyId: req.companyId! }, select: { id: true } });
+      if (agent) {
+        await logAgentAction({
+          agentId: agent.id,
+          actionType: 'drafted_campaign',
+          description: 'Drafted a campaign for an opportunity',
+          details: { opportunityId },
+        }).catch((err) => logger.warn({ err }, 'Failed to log drafted campaign activity'));
+      }
       res.json({ success: true, data: result });
     } catch (error) {
       logger.error({ err: error }, 'Error generating campaign');

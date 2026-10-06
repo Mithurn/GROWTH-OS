@@ -30,6 +30,8 @@ import type { Opportunity } from '@/lib/types';
 // Types
 // ─────────────────────────────────────────────────────────────
 
+const ACTIVITY_POLL_MS = 4000;
+
 interface ActivityItem {
   id: string;
   agentId: string;
@@ -291,7 +293,6 @@ export default function HomePage() {
     return () => clearTimeout(wakeTimer);
   }, []);
 
-  // Activity feed — poll every 10s (EventSource can't send auth headers)
   useEffect(() => {
     const poll = async () => {
       try {
@@ -307,7 +308,7 @@ export default function HomePage() {
     };
 
     poll();
-    const interval = setInterval(poll, 10000);
+    const interval = setInterval(poll, ACTIVITY_POLL_MS);
     return () => clearInterval(interval);
   }, []);
 

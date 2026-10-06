@@ -484,15 +484,12 @@ export async function updateAgent(
   return response.json();
 }
 
-export function getActivityStream(limit?: number) {
-  const key = `activity-${limit ?? ''}`;
-  return swr(key, 15_000, async () => {
-    const url = new URL(`${API_BASE_URL}/activity-stream`);
-    if (limit) url.searchParams.set('limit', limit.toString());
-    const response = await apiFetch(url.toString(), {}, 8000);
-    if (!response.ok) throw new Error('Failed to fetch activity stream');
-    return response.json();
-  });
+export async function getActivityStream(limit?: number) {
+  const url = new URL(`${API_BASE_URL}/activity-stream`);
+  if (limit) url.searchParams.set('limit', limit.toString());
+  const response = await apiFetch(url.toString(), {}, 8000);
+  if (!response.ok) throw new Error('Failed to fetch activity stream');
+  return response.json();
 }
 
 export async function refineOpportunity(opportunityId: string, modifier: string) {
