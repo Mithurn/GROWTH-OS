@@ -401,7 +401,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                 className="px-6 py-2.5 bg-[#5B4FFF] hover:bg-[#4B3FE5] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5 uppercase tracking-wider whitespace-nowrap"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                Approve & Launch
+                Approve draft
               </button>
             </div>
 

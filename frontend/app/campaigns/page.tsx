@@ -25,7 +25,6 @@ import {
   getCampaigns,
   approveCampaign,
   rejectCampaign,
-  launchCampaign,
   getOpportunityDashboard,
   refineCampaign,
 } from '@/lib/api';
@@ -91,6 +90,9 @@ const CHANNEL_META: Record<Channel, { icon: React.ElementType; color: string; de
 
 const REFINE_CHIPS = ['Make it more urgent', 'Make it shorter', 'More premium tone'];
 
+const LAUNCH_REQUEST_EMAIL = 'mithurnjeromme172@gmail.com';
+const LAUNCH_REQUEST_HREF = `mailto:${LAUNCH_REQUEST_EMAIL}?subject=${encodeURIComponent('GrowthOS launch access')}`;
+
 const formatCurrency = (v: number) => {
   if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
   if (v >= 1000) return `₹${(v / 1000).toFixed(0)}K`;
@@ -120,7 +122,6 @@ function CampaignsContent() {
   const [modifier, setModifier] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-  const [isLaunching, setIsLaunching] = useState(false);
 
   // List mode state
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
@@ -130,8 +131,6 @@ function CampaignsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [alreadyLaunchedId, setAlreadyLaunchedId] = useState<string | null>(null);
-  const [isLaunched, setIsLaunched] = useState(false);
-  const [launchBarWidth, setLaunchBarWidth] = useState(0);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
 
 
@@ -236,25 +235,6 @@ function CampaignsContent() {
     }
   }
 
-  async function handleApproveAndLaunch() {
-    if (!savedCampaign || isLaunching) return;
-    setIsLaunching(true);
-    setError(null);
-    try {
-      // The backend warms the channel service itself before fanning out sends, so no
-      // client-side wake-up delay is needed here.
-      await approveCampaign(savedCampaign.id);
-      await launchCampaign(savedCampaign.id);
-      setIsLaunching(false);
-      setIsLaunched(true);
-      setTimeout(() => setLaunchBarWidth(100), 50);
-      setTimeout(() => router.push(`/analytics?campaignId=${savedCampaign.id}`), 2300);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to launch campaign');
-      setIsLaunching(false);
-    }
-  }
-
   // ── Render: already launched — redirect to analytics ──
   if (alreadyLaunchedId) {
     return (
@@ -270,32 +250,6 @@ function CampaignsContent() {
           <div className="h-1 w-full bg-[#1E2545] rounded-full overflow-hidden">
             <div className="h-1 bg-emerald-500 rounded-full animate-[width_2.5s_ease-in-out_forwards]" style={{ width: '100%', transition: 'width 2.5s ease-in-out' }} />
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render: launch success overlay ──
-  if (isLaunched) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E1A]">
-        <div className="bg-[#141929] border border-[#1E2545] rounded-2xl p-10 text-center max-w-md w-full mx-6 shadow-2xl">
-          <div className="relative h-20 w-20 mx-auto mb-6">
-            <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
-            <div className="relative h-20 w-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center">
-              <Rocket className="h-9 w-9 text-emerald-400" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-extrabold text-white mb-2">Campaign Launched!</h2>
-          <p className="text-[#8B92A5] text-sm mb-1 font-medium">{savedCampaign?.name}</p>
-          <p className="text-[#4B5069] text-xs mb-8">Messages are being dispatched to your audience</p>
-          <div className="h-1 w-full bg-[#1E2545] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-indigo-500 rounded-full transition-all ease-linear"
-              style={{ width: `${launchBarWidth}%`, transitionDuration: '2.2s' }}
-            />
-          </div>
-          <p className="text-[#4B5069] text-xs mt-3">Redirecting to Analytics…</p>
         </div>
       </div>
     );
@@ -461,7 +415,7 @@ function CampaignsContent() {
                 <button
                   key={chip}
                   onClick={() => handleRefine(chip)}
-                  disabled={isRefining || isLaunching}
+                  disabled={isRefining}
                   className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-full hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 transition-all"
                 >
                   {chip}
@@ -481,7 +435,7 @@ function CampaignsContent() {
                   value={modifier}
                   onChange={e => setModifier(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleRefine()}
-                  disabled={isRefining || isLaunching}
+                  disabled={isRefining}
                   placeholder={isRefining ? 'AI is rewriting your copy…' : 'Tell GrowthOS how you\'d like to improve this campaign…'}
                   className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none disabled:cursor-not-allowed"
                 />
@@ -498,7 +452,6 @@ function CampaignsContent() {
 
               <button
                 onClick={() => router.push('/opportunities')}
-                disabled={isLaunching}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-500 border border-gray-200 rounded-xl hover:text-red-500 hover:border-red-200 disabled:opacity-40 transition-all shrink-0"
               >
                 <X className="h-4 w-4" /> Discard
@@ -510,7 +463,7 @@ function CampaignsContent() {
                 className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl disabled:opacity-50 transition-all shrink-0"
                 style={{ boxShadow: '0 4px 14px 0 rgba(99,102,241,0.4)' }}
               >
-                <Rocket className="h-4 w-4" /> Approve &amp; Launch
+                <Sparkles className="h-4 w-4" /> Approve draft
               </button>
             </div>
           </div>
@@ -521,7 +474,7 @@ function CampaignsContent() {
       {showLaunchModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-          onClick={() => !isLaunching && setShowLaunchModal(false)}
+          onClick={() => setShowLaunchModal(false)}
         >
           <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
@@ -530,33 +483,25 @@ function CampaignsContent() {
             <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-5">
               <Rocket className="h-7 w-7 text-indigo-600" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Ready to go live?</h2>
-            <p className="text-sm text-gray-500 mb-1">
-              This will send
-            </p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Your campaign is ready</h2>
             <p className="text-sm font-semibold text-gray-800 mb-4">
               {savedCampaign?.name ?? 'your campaign'}
-              {savedCampaign?.audience_size ? ` to ${savedCampaign.audience_size.toLocaleString()} customers` : ''}
+              {savedCampaign?.audience_size ? ` for ${savedCampaign.audience_size.toLocaleString()} customers` : ''}
             </p>
             <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-              Messages go to the delivery simulator, not to real customers. You&apos;ll see
-              sent, delivered, read and clicked events stream in as the provider acknowledges them.
+              Launching campaigns is available on request. Email us and we will set up your account to send it.
             </p>
-            <button
-              onClick={handleApproveAndLaunch}
-              disabled={isLaunching}
-              className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3 disabled:opacity-60"
+            <a
+              href={LAUNCH_REQUEST_HREF}
+              className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3"
             >
-              {isLaunching
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Launching…</>
-                : <><Rocket className="h-4 w-4" /> Launch campaign</>}
-            </button>
+              <Mail className="h-4 w-4" /> Request launch access
+            </a>
             <button
               onClick={() => setShowLaunchModal(false)}
-              disabled={isLaunching}
-              className="w-full py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
+              className="w-full py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
             >
-              Not now
+              Keep exploring
             </button>
           </div>
         </div>
@@ -703,17 +648,12 @@ function CampaignsContent() {
                   )}
                   {selectedCampaign.status === 'Approved' && (
                     <div className="flex gap-3 mt-5">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await launchCampaign(selectedCampaign.id);
-                            loadCampaigns();
-                          } catch {}
-                        }}
+                      <a
+                        href={LAUNCH_REQUEST_HREF}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all"
                       >
-                        <Rocket className="h-4 w-4" /> Launch
-                      </button>
+                        <Mail className="h-4 w-4" /> Request launch access
+                      </a>
                     </div>
                   )}
                   {selectedCampaign.status === 'Launched' && (
