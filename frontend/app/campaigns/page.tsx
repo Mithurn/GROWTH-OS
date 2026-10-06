@@ -90,7 +90,8 @@ const CHANNEL_META: Record<Channel, { icon: React.ElementType; color: string; de
 
 const REFINE_CHIPS = ['Make it more urgent', 'Make it shorter', 'More premium tone'];
 
-const LAUNCH_REQUEST_EMAIL = 'mithurnjeromme172@gmail.com';
+const LAUNCH_REQUEST_EMAIL = 'openlogtech@gmail.com';
+const LAUNCH_REQUEST_PHONE = '8056687515';
 const LAUNCH_REQUEST_HREF = `mailto:${LAUNCH_REQUEST_EMAIL}?subject=${encodeURIComponent('GrowthOS launch access')}`;
 
 const formatCurrency = (v: number) => {
@@ -489,13 +490,19 @@ function CampaignsContent() {
               {savedCampaign?.audience_size ? ` for ${savedCampaign.audience_size.toLocaleString()} customers` : ''}
             </p>
             <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-              Launching campaigns is available on request. Email us and we will set up your account to send it.
+              Launching campaigns is available on request. Email or call us and we will set up your account to send it.
             </p>
             <a
               href={LAUNCH_REQUEST_HREF}
               className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3"
             >
               <Mail className="h-4 w-4" /> Request launch access
+            </a>
+            <a
+              href={`tel:${LAUNCH_REQUEST_PHONE}`}
+              className="block w-full py-2.5 mb-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+            >
+              Or call {LAUNCH_REQUEST_PHONE}
             </a>
             <button
               onClick={() => setShowLaunchModal(false)}
