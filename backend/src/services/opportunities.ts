@@ -1391,8 +1391,8 @@ export async function refineOpportunity(
     throw new Error('Refine model returned invalid JSON');
   }
 
-  const updatedRevenue = typeof aiResponse.potential_revenue === 'number' ? aiResponse.potential_revenue : currentRevenue;
-  const updatedAudienceSize = typeof aiResponse.audience_size === 'number' ? aiResponse.audience_size : row.audience_size;
+  const updatedRevenue = typeof aiResponse.potential_revenue === 'number' && aiResponse.potential_revenue > 0 ? aiResponse.potential_revenue : currentRevenue;
+  const updatedAudienceSize = typeof aiResponse.audience_size === 'number' && aiResponse.audience_size >= 1 ? Math.round(aiResponse.audience_size) : row.audience_size;
 
   const updated = toDashboardRecord(await prisma.opportunity.update({
     where: { id: opportunityId },
@@ -1436,6 +1436,8 @@ export async function refineOpportunity(
 /**
  * Create a custom opportunity from user's marketing goal using AI
  */
+const CHURN_FALLBACK_MIN_SHARE = 0.2;
+
 const CHURN_GOAL_FALLBACK = {
   opportunity_type: 'Churn Risk Customers',
   title: 'Prevent Churn Among High-Frequency Buyers',
@@ -1546,7 +1548,12 @@ Be realistic - don't promise impossible results. Base estimates on the business 
   }
 
   // Apply audience criteria to find matching customers
-  const matchingProfiles = aiUnavailable ? profiles.filter(isChurnRiskCustomer) : profiles.filter((profile) => {
+  const churnMatches = profiles.filter(isChurnRiskCustomer);
+  const minChurnAudience = Math.max(1, Math.round(profiles.length * CHURN_FALLBACK_MIN_SHARE));
+  const churnAudience = churnMatches.length >= minChurnAudience
+    ? churnMatches
+    : [...profiles].sort((a, b) => (b.daysSinceLastOrder ?? 0) - (a.daysSinceLastOrder ?? 0)).slice(0, minChurnAudience);
+  const matchingProfiles = aiUnavailable ? churnAudience : profiles.filter((profile) => {
     const criteria = aiResponse.audience_criteria || {};
 
     if (criteria.min_total_spent && profile.totalSpent < criteria.min_total_spent) return false;
