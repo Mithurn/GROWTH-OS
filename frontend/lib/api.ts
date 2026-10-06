@@ -328,20 +328,29 @@ export async function getPersonaCustomers(personaName: string) {
 // CAMPAIGNS
 // ============================================
 
+async function retryOnceOnNetworkError(request: () => Promise<Response>): Promise<Response> {
+  try {
+    return await request();
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    return request();
+  }
+}
+
 export async function generateCampaign(opportunityId: string, model?: string) {
-  const response = await apiFetch(`${API_BASE_URL}/campaigns/generate`, {
+  const response = await retryOnceOnNetworkError(() => apiFetch(`${API_BASE_URL}/campaigns/generate`, {
     method: 'POST',
     body: JSON.stringify({ opportunityId, model }),
-  }, 90000);
+  }, 90000));
   if (!response.ok) throw new Error('Failed to generate campaign');
   return response.json();
 }
 
 export async function saveCampaign(opportunityId: string, campaign: GeneratedCampaign) {
-  const response = await apiFetch(`${API_BASE_URL}/campaigns`, {
+  const response = await retryOnceOnNetworkError(() => apiFetch(`${API_BASE_URL}/campaigns`, {
     method: 'POST',
     body: JSON.stringify({ opportunityId, campaign }),
-  }, 90000);
+  }, 90000));
   if (!response.ok) throw new Error('Failed to save campaign');
   await bust('campaigns-');
   return response.json();
