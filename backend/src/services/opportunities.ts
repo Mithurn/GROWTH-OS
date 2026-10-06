@@ -589,13 +589,15 @@ function buildDormantVipOpportunity(customers: CustomerProfile[]): OpportunityDr
   };
 }
 
+function isChurnRiskCustomer(customer: CustomerProfile): boolean {
+  if (customer.totalOrders < 3) return false;
+  if (customer.daysSinceLastOrder === null || customer.avgDaysBetweenOrders === null) return false;
+  const threshold = Math.max(45, customer.avgDaysBetweenOrders * 2);
+  return customer.daysSinceLastOrder >= threshold && customer.totalSpent >= 5000;
+}
+
 function buildChurnRiskOpportunity(customers: CustomerProfile[]): OpportunityDraft | null {
-  const audience = customers.filter((customer) => {
-    if (customer.totalOrders < 3) return false;
-    if (customer.daysSinceLastOrder === null || customer.avgDaysBetweenOrders === null) return false;
-    const threshold = Math.max(45, customer.avgDaysBetweenOrders * 2);
-    return customer.daysSinceLastOrder >= threshold && customer.totalSpent >= 5000;
-  });
+  const audience = customers.filter(isChurnRiskCustomer);
 
   if (audience.length === 0) return null;
 
@@ -1434,6 +1436,15 @@ export async function refineOpportunity(
 /**
  * Create a custom opportunity from user's marketing goal using AI
  */
+const CHURN_GOAL_FALLBACK = {
+  opportunity_type: 'Churn Risk Customers',
+  title: 'Prevent Churn Among High-Frequency Buyers',
+  description: 'Customers whose purchase cadence has slowed significantly compared with their historical pattern.',
+  recommended_action: 'Send a retention message before the next expected reorder window.',
+  trigger_reason: 'Customers are significantly overdue versus their historical reorder cadence.',
+  ai_summary: 'Customers whose purchase cadence has slowed significantly compared with their historical pattern.',
+};
+
 export async function createOpportunityFromGoal(
   goal: string,
   options: { companyId?: string; model?: string } = {},
@@ -1515,6 +1526,7 @@ Create a specific, actionable marketing opportunity that helps achieve this goal
 Be realistic - don't promise impossible results. Base estimates on the business context provided.`;
 
   let aiResponse: Record<string, any> = {};
+  let aiUnavailable = false;
   try {
     const response = await openai.chat.completions.create({
       model,
@@ -1528,11 +1540,13 @@ Be realistic - don't promise impossible results. Base estimates on the business 
     aiResponse = JSON.parse(jsonString);
     logger.info({ aiResponse }, '[createOpportunityFromGoal] AI response received');
   } catch (err) {
-    logger.warn({ err: err instanceof Error ? err.message : err }, '[createOpportunityFromGoal] AI unavailable, using deterministic defaults');
+    logger.warn({ err: err instanceof Error ? err.message : err }, '[createOpportunityFromGoal] AI unavailable, using churn fallback');
+    aiUnavailable = true;
+    aiResponse = CHURN_GOAL_FALLBACK;
   }
 
   // Apply audience criteria to find matching customers
-  const matchingProfiles = profiles.filter((profile) => {
+  const matchingProfiles = aiUnavailable ? profiles.filter(isChurnRiskCustomer) : profiles.filter((profile) => {
     const criteria = aiResponse.audience_criteria || {};
 
     if (criteria.min_total_spent && profile.totalSpent < criteria.min_total_spent) return false;
