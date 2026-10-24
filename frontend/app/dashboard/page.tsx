@@ -22,7 +22,6 @@ import {
   getOpportunityDashboard,
   getActivityStream,
   createOpportunityFromGoal,
-  BACKEND_ORIGIN,
 } from '@/lib/api';
 import type { Opportunity } from '@/lib/types';
 
@@ -253,14 +252,6 @@ export default function HomePage() {
     }, 3000);
     return () => clearInterval(interval);
   }, []);
-
-  // Wake the backend on homepage load. Not the channel service — Render's 750 free
-  // instance-hours are shared across the workspace, so waking it on every page view
-  // would burn the budget for a service only campaign launch actually needs.
-  useEffect(() => {
-    fetch(`${BACKEND_ORIGIN}/health`).catch(() => {});
-  }, []);
-
 
   // Fetch opportunities with cold-start retry
   useEffect(() => {

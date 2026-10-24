@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { NavHeader } from './nav-header';
+import { DemoBanner } from './demo-banner';
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -12,6 +13,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     pathname === '/' ||
     pathname.startsWith('/onboarding') ||
     pathname.startsWith('/login') ||
+    pathname.startsWith('/demo') ||
     pathname.startsWith('/auth');
 
   if (isStandalone) {
@@ -20,6 +22,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
+      <DemoBanner />
       <NavHeader />
       <main className="flex-1 flex flex-col">{children}</main>
     </div>

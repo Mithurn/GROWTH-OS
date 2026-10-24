@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/PostgreSQL-RLS_enforced-3ECF8E?style=flat-square&logo=postgresql" alt="PostgreSQL RLS">
   <img src="https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=flat-square&logo=github-actions" alt="CI">
-  <img src="https://img.shields.io/badge/Deployed-Vercel_+_Render-000000?style=flat-square&logo=vercel" alt="Deployed">
+  <img src="https://img.shields.io/badge/Deployed-Vercel_+_AWS-000000?style=flat-square&logo=vercel" alt="Deployed">
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
   <a href="#getting-started">Getting Started</a>
 </p>
 
-**Live:** https://growos-ai.vercel.app — upload your own CSV and the agent runs in ~60 seconds.
+**Live:** https://growos-ai.vercel.app — open the demo with no sign-up. When the AWS backend is switched on, upload your own CSV and the agent runs in ~60 seconds. See [DEPLOYMENT.md](DEPLOYMENT.md) for how the always-on demo and the on-demand backend fit together.
 
 ---
 

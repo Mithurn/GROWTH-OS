@@ -14,13 +14,16 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 
 import { logger } from './lib/logger';
+import { sendAlert } from './lib/alerts';
+import { startCreditMonitor } from './lib/llm-watch';
+import { openRouterConfig } from './config/openrouter';
 import { tracingMiddleware } from './lib/tracing-middleware';
 import { startWorkers, closeWorkers } from './lib/queues';
 import { agentOrchestrator } from './services/agent-orchestrator';
 import { generalLimiter } from './middleware/rate-limits';
 import { errorHandler } from './middleware/errorHandler';
 
-import { healthRouter } from './routes/health';
+import { healthRouter, livenessHandler } from './routes/health';
 import { companiesRouter } from './routes/companies';
 import { onboardingRouter } from './routes/onboarding';
 import { ingestionRouter } from './routes/ingestion';
@@ -71,8 +74,11 @@ app.use(
 // the global JSON parser rewrites it — mounted here, ahead of express.json().
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json());
-app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' || req.url === '/api/health' } }));
 app.use(tracingMiddleware);
+// The AWS switch (`awsstart`) and the Vercel frontend poll this to learn whether the
+// backend is awake. It is registered ahead of the limiter so polling can never 429.
+app.get('/api/health', livenessHandler);
 app.use('/api', generalLimiter);
 app.use('/api', unsubscribeRouter);
 
@@ -103,6 +109,15 @@ app.use(errorHandler);
 export { app };
 
 if (require.main === module) {
+  // Node already crashes on these; this makes the crash reach a human before the process goes.
+  const crash = (kind: string) => async (err: unknown) => {
+    logger.fatal({ err }, kind);
+    await sendAlert({ key: `crash:${kind}`, severity: 'critical', title: `Backend crashed: ${kind}`, detail: err instanceof Error ? err.message : String(err) });
+    process.exit(1);
+  };
+  process.on('uncaughtException', crash('uncaught exception'));
+  process.on('unhandledRejection', crash('unhandled rejection'));
+
   assertRedisReachable()
     .then(() => assertConfigDefaultsSeeded())
     .then(
@@ -112,6 +127,7 @@ if (require.main === module) {
       attachAgentSteer(server);
       server.listen(Number(PORT), '0.0.0.0', async () => {
         logger.info({ port: PORT }, 'Backend server started');
+        startCreditMonitor(openRouterConfig.apiKey, openRouterConfig.baseUrl);
 
         // BullMQ workers belong in their own process (npm run dev:worker locally, the
         // "xeno-crm-worker" Render service once enabled) — see docs/V3_PLAN.md Phase
@@ -162,8 +178,9 @@ if (require.main === module) {
       process.on('SIGTERM', () => shutdown('SIGTERM'));
       process.on('SIGINT', () => shutdown('SIGINT'));
     },
-    (err) => {
+    async (err) => {
       logger.fatal({ err }, 'Startup check failed (Redis unreachable or config_defaults not seeded).');
+      await sendAlert({ key: 'boot-failed', severity: 'critical', title: 'Backend failed to start', detail: err instanceof Error ? err.message : String(err) });
       process.exit(1);
     },
   );

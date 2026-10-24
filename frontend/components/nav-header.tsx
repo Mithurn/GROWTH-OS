@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { clearApiCache } from '@/lib/api';
+import { exitDemo, isDemo } from '@/lib/demo/mode';
+import { useIsDemo } from '@/lib/demo/use-demo';
 import type { User } from '@supabase/supabase-js';
 
 const NAV_ITEMS = [
@@ -19,13 +21,20 @@ export function NavHeader() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const demo = useIsDemo();
 
   useEffect(() => {
+    if (isDemo()) return;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
 
   const handleSignOut = async () => {
+    if (isDemo()) {
+      clearApiCache();
+      exitDemo();
+      return;
+    }
     const supabase = createClient();
     await supabase.auth.signOut();
     clearApiCache();
@@ -33,7 +42,8 @@ export function NavHeader() {
     router.refresh();
   };
 
-  const initials = user?.email?.slice(0, 2).toUpperCase() ?? '?';
+  const email = demo ? 'demo@growthos.app' : user?.email;
+  const initials = demo ? 'DM' : (user?.email?.slice(0, 2).toUpperCase() ?? '?');
 
   const dark = pathname.startsWith('/analytics');
 
@@ -88,7 +98,7 @@ export function NavHeader() {
 
         {/* Right: User menu */}
         <div className="flex justify-end">
-          {user && (
+          {(user || demo) && (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(o => !o)}
@@ -104,7 +114,7 @@ export function NavHeader() {
                 >
                   {initials}
                 </span>
-                <span className="max-w-[120px] truncate hidden sm:block">{user.email}</span>
+                <span className="max-w-[120px] truncate hidden sm:block">{email}</span>
               </button>
 
               {menuOpen && (
@@ -112,14 +122,14 @@ export function NavHeader() {
                   <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-10 z-50 w-52 bg-white border border-[#E5E7EB] rounded-xl shadow-lg py-1 overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-[#E5E7EB]">
-                      <p className="text-xs font-medium text-[#1A1A1A] truncate">{user.email}</p>
+                      <p className="text-xs font-medium text-[#1A1A1A] truncate">{email}</p>
                       <p className="text-[11px] text-[#9CA3AF] mt-0.5">GrowthOS Workspace</p>
                     </div>
                     <button
                       onClick={handleSignOut}
                       className="w-full text-left px-4 py-2.5 text-sm text-[#EF4444] hover:bg-red-50 transition-colors"
                     >
-                      Sign out
+                      {demo ? 'Exit demo' : 'Sign out'}
                     </button>
                   </div>
                 </>

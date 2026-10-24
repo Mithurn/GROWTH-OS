@@ -1,4 +1,6 @@
 import { getAuthToken, getUserId } from './supabase/client';
+import { isDemo } from './demo/mode';
+import { demoFetch } from './demo/router';
 import type {
   AgentGuardrails,
   InvolvementMode,
@@ -53,7 +55,7 @@ function persistCache() {
 hydrateCache();
 
 async function scopedKey(key: string): Promise<string> {
-  return `${(await getUserId()) ?? 'anon'}:${key}`;
+  return `${isDemo() ? 'demo' : ((await getUserId()) ?? 'anon')}:${key}`;
 }
 
 async function swr<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
@@ -96,10 +98,15 @@ export function clearApiCache() {
   }
 }
 
+/** Every network call goes through here so demo mode can answer it with sample data. */
+function transport(url: string, options: RequestInit): Promise<Response> {
+  return isDemo() ? demoFetch(url, options) : fetch(url, options);
+}
+
 function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
+  return transport(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
 async function authHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
@@ -164,7 +171,7 @@ export async function uploadCustomerCSV(file: File) {
   formData.append('file', file);
 
   const token = await getAuthToken();
-  const response = await fetch(`${API_BASE_URL}/upload/customers`, {
+  const response = await transport(`${API_BASE_URL}/upload/customers`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
@@ -182,7 +189,7 @@ export async function uploadOrderCSV(file: File) {
   formData.append('file', file);
 
   const token = await getAuthToken();
-  const response = await fetch(`${API_BASE_URL}/upload/orders`, {
+  const response = await transport(`${API_BASE_URL}/upload/orders`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
@@ -594,6 +601,8 @@ export async function openAuthedSse(
   path: string,
   onEvent: (event: string, data: unknown) => void,
 ): Promise<() => void> {
+  // No live event stream in demo mode; pages fall back to what they already loaded.
+  if (isDemo()) return () => undefined;
   const controller = new AbortController();
   let lastId = '';
 

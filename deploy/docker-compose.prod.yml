@@ -1,0 +1,57 @@
+# Runs on the on-demand AWS server (see deploy/aws and DEPLOYMENT.md). Secrets come from
+# deploy/.env, which release.sh writes from SSM and which never enters git.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+      FRONTEND_URL: ${FRONTEND_URL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      REDIS_URL: redis://redis:6379
+      CHANNEL_SERVICE_URL: http://channel:5001
+      # One process keeps the box small. Split the worker out only for real traffic.
+      WORKERS_IN_API_PROCESS: "true"
+    depends_on:
+      redis: { condition: service_healthy }
+      channel: { condition: service_started }
+
+  channel:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.channel
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "5001"
+      CRM_WEBHOOK_URL: http://api:3001/api/webhooks/channel-status
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  caddy_data:
+  caddy_config:
+  redis_data:

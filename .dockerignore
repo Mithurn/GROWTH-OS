@@ -1,0 +1,13 @@
+.git
+.github
+**/node_modules
+**/dist
+**/.next
+**/.env
+**/.env.*
+!**/.env.example
+backend/generated
+backend/generated-data
+frontend
+docs
+packages/evals

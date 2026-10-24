@@ -1,12 +1,14 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { prismaSystem } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
 export const healthRouter = Router();
 
-healthRouter.get('/health', (_req, res) => {
+export const livenessHandler: RequestHandler = (_req, res) => {
   res.json({ status: 'ok' });
-});
+};
+
+healthRouter.get('/health', livenessHandler);
 
 healthRouter.get('/health/ready', async (_req, res) => {
   try {

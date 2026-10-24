@@ -43,6 +43,10 @@ Current passing baseline: 197 unit tests and 19 real PostgreSQL integration test
 - `render.yaml` currently runs BullMQ workers in the API process because the free-tier budget cannot support a separate always-on worker. Before production traffic, enable the worker service and set `WORKERS_IN_API_PROCESS=false` on the API.
 - CI runs on `main`, so the hosted workflow still needs confirmation after this branch is merged or its trigger scope is deliberately expanded.
 
+## Hosting
+
+The frontend (landing, `/demo`, app) is always on Vercel. The backend runs on an on-demand AWS server switched with `awsstart` / `awsstop`; when it sleeps the frontend falls back to a browser-only demo. Details, commands and alerts are in `DEPLOYMENT.md`. Render config remains until the cutover is verified.
+
 ## Known risks and external blocker
 
 - A human must rotate the Supabase database password, Upstash token, and Stripe test secret, then record only the rotation date. No secret values belong in Git, logs, or this document.

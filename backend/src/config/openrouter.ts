@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { tracer } from '../lib/tracing';
+import { reportLlmFailure } from '../lib/llm-watch';
 import { schemaDefault } from '@growthos/contracts/config/registry';
 
 /**
@@ -78,6 +79,7 @@ openai.chat.completions.create = (async (...args: Parameters<typeof originalCrea
     } catch (err) {
       span.recordException(err as Error);
       span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message });
+      reportLlmFailure(err);
       throw err;
     } finally {
       span.end();
