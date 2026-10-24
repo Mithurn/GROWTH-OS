@@ -144,6 +144,20 @@ jobs:
       - name: Build
         run: npm run build
 
+  # The AWS server builds these images on every release, so a broken Dockerfile would only
+  # show up when the demo box next wakes. Catch it here instead.
+  docker-images:
+    name: Docker images (AWS deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build API image
+        run: docker build -f deploy/Dockerfile.backend -t growthos-api:ci .
+
+      - name: Build channel service image
+        run: docker build -f deploy/Dockerfile.channel -t growthos-channel:ci .
+
   dependency-audit:
     name: Dependency audit — ${{ matrix.service }}
     runs-on: ubuntu-latest

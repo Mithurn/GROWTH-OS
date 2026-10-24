@@ -1,13 +1,21 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/keep-alive', '/privacy', '/terms'];
+import { DEMO_COOKIE_NAME } from '@/lib/demo/mode';
+
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/keep-alive', '/privacy', '/terms', '/demo'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Always let public paths through
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
+  // Demo mode runs on sample data with no account, so there is no session to check.
+  // The landing page still falls through so "/" keeps rendering the marketing page.
+  if (pathname !== '/' && request.cookies.get(DEMO_COOKIE_NAME)?.value === '1') {
     return NextResponse.next();
   }
 

@@ -1,19 +1,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { DM_Sans } from 'next/font/google';
-import { BackendWarmup } from '@/components/backend-warmup';
+import { BackendStatusPill } from '@/components/landing/backend-status-pill';
+import { BrowserFrame } from '@/components/landing/browser-frame';
+import { HeroActions } from '@/components/landing/hero-actions';
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], display: 'swap' });
 
 const GITHUB_URL = 'https://github.com/Mithurn/GROWTH-OS';
-
-function GithubIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
-      <path d="M12 .5C5.73.5.5 5.73.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.09 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.49 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z" />
-    </svg>
-  );
-}
 
 const PIPELINE = [
   {
@@ -63,24 +57,58 @@ const ARCHITECTURE = [
     body: 'Every database transaction carries the authenticated tenant into PostgreSQL. Row-level security and ownership checks both reject cross-tenant access.',
   },
   {
-    title: 'Built for a free tier that sleeps',
-    body: 'The agent loop runs from an authenticated external scheduler, ingestion resumes after interruption, and durable jobs retry provider startup and transient failures.',
+    title: 'Built to sleep, ready to wake',
+    body: 'The site and this demo live on Vercel and never go down. The API, worker and channel service run on AWS only when switched on, and the app detects that and falls back to the demo.',
   },
 ];
+
+const FEATURES = [
+  {
+    eyebrow: 'Locate revenue',
+    title: 'See exactly where revenue is leaking',
+    body: 'Opportunities arrive sized and ranked: who they are, how many, and what recovering them is worth. Ask for a goal in plain language and the agent builds one on demand.',
+    shot: '/shots/opportunity.jpg',
+    alt: 'Opportunity detail showing audience intelligence, key signals and the recommended campaign',
+  },
+  {
+    eyebrow: 'Draft the campaign',
+    title: 'A campaign written for the audience, not a template',
+    body: 'Copy, channel and offer come from the data. Preview it as the customer will see it, then steer it with a sentence: shorter, more urgent, more premium.',
+    shot: '/shots/campaign.jpg',
+    alt: 'Campaign builder with a WhatsApp preview and refinement controls',
+  },
+  {
+    eyebrow: 'Track results',
+    title: 'Watch the funnel move in real time',
+    body: 'Sent, delivered, read and clicked, by persona and by hour. Duplicate and out-of-order provider events cannot push a number backward.',
+    shot: '/shots/analytics.jpg',
+    alt: 'Campaign analytics with conversion flow, audience mix and channel performance',
+  },
+  {
+    eyebrow: 'Know the customer',
+    title: 'Personas that come from your data',
+    body: 'A model names the clusters that actually exist in your customers, with the spend, recency and category behaviour behind each one.',
+    shot: '/shots/personas.jpg',
+    alt: 'Customer personas with spend, orders and favourite category',
+  },
+];
+
+const TRUST = ['Every send needs your approval', 'Tenant isolation in PostgreSQL', 'Signed, idempotent webhooks', 'Durable, retried delivery'];
 
 const STACK = 'Next.js 16 · React 19 · TypeScript · Tailwind 4 · Express 5 · PostgreSQL · Prisma 7 · Supabase Auth · BullMQ · Redis · Zod · OpenRouter';
 
 export default function LandingPage() {
   return (
     <div className={`${dmSans.className} min-h-screen bg-white text-[#111827]`}>
-      <BackendWarmup />
-
-      <header className="border-b border-[#E5E7EB]">
+      <header className="sticky top-0 z-40 border-b border-[#E5E7EB] bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" aria-label="GrowthOS home">
             <Image src="/logo.png" alt="GrowthOS" width={104} height={29} className="object-contain" priority />
           </Link>
           <nav className="flex items-center gap-6 text-sm font-medium">
+            <a href="#how" className="hidden text-[#6B7280] transition-colors hover:text-[#111827] md:block">
+              How it works
+            </a>
             <a
               href={GITHUB_URL}
               target="_blank"
@@ -93,45 +121,65 @@ export default function LandingPage() {
               Sign in
             </Link>
             <Link
-              href="/login?mode=signup"
+              href="/demo"
               className="rounded-lg bg-[#5B4FFF] px-4 py-2 text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF]"
             >
-              Create account
+              Try the demo
             </Link>
           </nav>
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 pb-24 pt-24 text-center sm:pt-32">
-        <p className="mb-6 inline-block rounded-full border border-[#E5E7EB] px-3 py-1 text-xs font-medium text-[#5B4FFF]">
-          AI growth agent for retail
-        </p>
-        <h1 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-          Find the revenue you&rsquo;re losing. Win it back.
-        </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[#6B7280]">
-          Upload your customer data and GrowthOS finds where revenue is leaking, writes the campaign to recover it, and tracks what converted. You approve the decisions. It does the work.
-        </p>
-        <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link
-            href="/login?mode=signup"
-            className="w-full rounded-lg bg-[#5B4FFF] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#4B3FE5] sm:w-auto"
-          >
-            Create account
-          </Link>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] px-6 py-3 text-base font-semibold text-[#111827] transition-colors hover:bg-[#F9FAFB] sm:w-auto"
-          >
-            <GithubIcon className="h-4 w-4" />
-            View source
-          </a>
+      <section className="relative overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(91,79,255,0.12),transparent)]"
+        />
+        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-20 text-center sm:pt-28">
+          <BackendStatusPill />
+          <h1 className="mx-auto mt-8 max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+            Find the revenue you&rsquo;re losing. Win it back.
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[#6B7280]">
+            Upload your customer data and GrowthOS finds where revenue is leaking, writes the campaign to recover it, and tracks what converted. You approve the decisions. It does the work.
+          </p>
+          <div className="mt-10">
+            <HeroActions />
+          </div>
+          <p className="mt-4 text-xs text-[#9CA3AF]">The demo runs in your browser on sample data. No sign-up, nothing is sent.</p>
+          <div className="mx-auto mt-16 max-w-5xl text-left">
+            <BrowserFrame src="/shots/dashboard.jpg" alt="GrowthOS dashboard showing the highest impact opportunity and live agent activity" priority />
+          </div>
         </div>
       </section>
 
-      <section className="border-t border-[#E5E7EB] bg-[#F9FAFB] py-24">
+      <section className="border-y border-[#E5E7EB] bg-[#F9FAFB]">
+        <ul className="mx-auto grid max-w-6xl gap-4 px-6 py-8 text-sm font-medium text-[#374151] sm:grid-cols-2 lg:grid-cols-4">
+          {TRUST.map((item) => (
+            <li key={item} className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#5B4FFF]" aria-hidden />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {FEATURES.map((feature, index) => (
+        <section key={feature.title} className={index % 2 === 0 ? 'bg-white' : 'bg-[#F9FAFB]'}>
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-24 lg:grid-cols-[1fr_1.4fr]">
+            <div className={index % 2 === 1 ? 'lg:order-2' : ''}>
+              <p className="text-sm font-semibold text-[#5B4FFF]">{feature.eyebrow}</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">{feature.title}</h2>
+              <p className="mt-4 leading-relaxed text-[#6B7280]">{feature.body}</p>
+            </div>
+            <div className={index % 2 === 1 ? 'lg:order-1' : ''}>
+              <BrowserFrame src={feature.shot} alt={feature.alt} />
+            </div>
+          </div>
+        </section>
+      ))}
+
+      <section id="how" className="border-t border-[#E5E7EB] py-24">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">How it works</h2>
           <p className="mt-3 max-w-2xl text-[#6B7280]">Six steps from a CSV file to a campaign with measurable results.</p>
@@ -183,14 +231,13 @@ export default function LandingPage() {
 
       <section className="bg-[#111827] py-24 text-white">
         <div className="mx-auto max-w-3xl px-6 text-center">
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Start with your own customer data</h2>
-          <p className="mx-auto mt-4 max-w-xl text-[#9CA3AF]">Create an account and upload a CSV to see your first opportunities.</p>
-          <Link
-            href="/login?mode=signup"
-            className="mt-10 inline-block rounded-lg bg-white px-6 py-3 text-base font-semibold text-[#111827] transition-colors hover:bg-[#F3F4F6]"
-          >
-            Create account
-          </Link>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">See it work before you bring your data</h2>
+          <p className="mx-auto mt-4 max-w-xl text-[#9CA3AF]">
+            Open the demo to walk the whole flow, from opportunity to campaign to results.
+          </p>
+          <div className="mt-10">
+            <HeroActions light />
+          </div>
         </div>
       </section>
 

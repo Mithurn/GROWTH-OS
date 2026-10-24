@@ -54,6 +54,12 @@ describe('GET /health', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ status: 'ok' });
   });
+
+  it('answers on /api/health too, which the AWS switch and the frontend poll', async () => {
+    const res = await request(app).get('/api/health');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'ok' });
+  });
 });
 
 describe('Auth guard', () => {

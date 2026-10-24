@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { MulterError } from 'multer';
 import { logger } from '../lib/logger';
 import { captureException } from '../lib/sentry';
+import { sendAlert } from '../lib/alerts';
 
 export function errorHandler(
   err: unknown,
@@ -37,6 +38,7 @@ export function errorHandler(
   if (err instanceof Error) {
     logger.error({ err, reqId, path: req.path, method: req.method }, 'Unhandled error');
     captureException(err, { reqId, path: req.path, method: req.method });
+    void sendAlert({ key: `http500:${req.method} ${req.path}`, severity: 'warning', title: `500 on ${req.method} ${req.path}`, detail: err.message });
     res.status(500).json({ error: 'Internal server error', reqId });
   } else {
     logger.error({ err, reqId, path: req.path, method: req.method }, 'Unhandled non-Error throw');
