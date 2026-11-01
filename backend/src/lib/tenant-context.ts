@@ -51,14 +51,24 @@ export function installTenantRls(pool: Pool): void {
     const p = rawConnect().then(async (client) => {
       if (!companyId) return client;
       const origQuery = client.query.bind(client);
+      // Postgres requires SET TRANSACTION ISOLATION LEVEL to be the very first
+      // statement after BEGIN — nothing else may run before it, not even ours.
+      // Prisma issues that statement itself right after BEGIN for a
+      // Serializable (or any explicitly-isolated) transaction, so binding the
+      // tenant eagerly on BEGIN landed between the two and broke every such
+      // transaction with "SET TRANSACTION ISOLATION LEVEL must be called
+      // before any query". Bound lazily instead, right before whichever query
+      // is actually the first real one, so it never matters how many
+      // transaction-setup statements Prisma issues first.
+      let tenantBound = false;
       client.query = ((...args: unknown[]) => {
         const text = typeof args[0] === 'string' ? args[0] : (args[0] as { text?: string })?.text ?? '';
-        const out = (origQuery as (...a: unknown[]) => unknown)(...args);
-        if (!/^\s*BEGIN\b/i.test(text)) return out;
-        return Promise.resolve(out).then(async (result) => {
-          await bindTenant(client, companyId);
-          return result;
-        });
+        const isSetupStatement = /^\s*(BEGIN\b|SET\s+TRANSACTION\b)/i.test(text);
+        if (tenantBound || isSetupStatement) {
+          return (origQuery as (...a: unknown[]) => unknown)(...args);
+        }
+        tenantBound = true;
+        return bindTenant(client, companyId).then(() => (origQuery as (...a: unknown[]) => unknown)(...args));
       }) as PoolClient['query'];
       return client;
     });
