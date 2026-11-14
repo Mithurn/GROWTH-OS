@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { DEMO_COOKIE_NAME } from '@/lib/demo/mode';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/keep-alive', '/privacy', '/terms', '/demo'];
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/privacy', '/terms', '/demo'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

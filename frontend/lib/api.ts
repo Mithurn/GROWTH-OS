@@ -11,7 +11,7 @@ import type {
   PaginatedResponse,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://xeno-crm-backend-n6d8.onrender.com/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://growthos-crm.duckdns.org/api';
 
 // Origin without the /api suffix — for unauthenticated infra routes like /health.
 export const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
