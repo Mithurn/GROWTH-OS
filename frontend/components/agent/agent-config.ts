@@ -1,6 +1,6 @@
 export const AGENT_NAME = 'GrowthOS Agent';
 
-export const AGENT_AVATAR_LOOK = { type: 'circle', shading: 'plastic', color: '#6a5cff', face: 'mouth' } as const;
+export const AGENT_AVATAR_LOOK = { type: 'hexagon', shading: 'plastic', color: '#14b8a6', face: 'mouth' } as const;
 
 export const AGENT_AVATAR_SIZES = { sm: 32, md: 32, lg: 64 } as const;
 
