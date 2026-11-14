@@ -1,63 +1,37 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { ArrowLeft, ArrowRight, Gem, X } from 'lucide-react';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 import { AiLoader } from '@/components/ui/ai-loader';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  BarChart2,
-  Calendar,
-  ChevronRight,
-  Clock,
-  Gem,
-  Loader2,
-  Send,
-  Sparkles,
-  TrendingDown,
-  TrendingUp,
-  Users,
-  X,
-  Zap,
-} from 'lucide-react';
+import { AgentAvatar } from '@/components/agent/agent-avatar';
+import { AgentPromptInput } from '@/components/agent/agent-prompt-input';
+import { ConfidenceMeter } from '@/components/agent/confidence-meter';
+import { PrimaryAction } from '@/components/agent/primary-action';
+import { StatusPill } from '@/components/agent/status-pill';
 import { getOpportunityCustomers, prefetchCampaign, refineOpportunity } from '@/lib/api';
-
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
-interface AltStrategy {
-  title: string;
-  conversion_rate: number;
-  note: string;
-}
-
-interface OpportunityPersona {
-  name: string;
-  description: string;
-}
-
-interface Opportunity {
-  opportunity_id: string;
-  title: string;
-  description: string;
-  opportunity_type: string;
-  audience_size: number;
-  potential_revenue: number;
-  confidence_score: number;
-  priority_score: number;
-  supporting_customer_segment: string;
-  recommended_action: string;
-  audience_definition: Record<string, unknown>;
-  trigger_reason: string;
-  ai_summary: string;
-  predicted_conversion_rate?: number | null;
-  alternative_strategies?: AltStrategy[] | null;
-  opportunity_personas?: OpportunityPersona[] | null;
-  status: string;
-  customer_count: number;
-  average_spend: number;
-  average_orders: number;
-}
+import { formatCurrency } from '@/lib/format';
+import type { Opportunity } from '@/lib/types';
+import {
+  CHURN_HIGH_DAYS,
+  DEFAULT_LTV,
+  DEFAULT_RECENCY_DAYS,
+  DEFAULT_SEGMENT,
+  DEFAULT_VOUCHER,
+  FALLBACK_SIGNALS,
+  LTV_MULTIPLE,
+  MAX_PERSONAS,
+  REFINE_PLACEHOLDERS,
+  REFINE_SUGGESTIONS,
+  SIGNAL_ICONS,
+  VOUCHER_SHARE,
+  VOUCHER_STEP,
+  parseChannel,
+  parseSignals,
+  playName,
+} from './detail-config';
 
 interface Customer {
   customer_id: string;
@@ -74,70 +48,34 @@ interface Customer {
   persona_description: string | null;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────────
-const formatCurrency = (amount: number) => {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(0)}K`;
-  return `₹${Math.round(amount)}`;
-};
+const rupees = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`;
 
-const parseChannel = (action: string): string => {
-  if (!action) return 'WhatsApp';
-  const a = action.toLowerCase();
-  if (a.includes('whatsapp')) return 'WhatsApp';
-  if (a.includes('email')) return 'Email';
-  if (a.includes('sms')) return 'SMS';
-  return 'WhatsApp';
-};
-
-const parseSignals = (triggerReason: string): string[] => {
-  if (!triggerReason) return [];
-  return triggerReason
-    .split(/[.;]/)
-    .map(s => s.trim())
-    .filter(s => s.length > 10)
-    .slice(0, 4);
-};
-
-const SIGNAL_ICONS = [Clock, TrendingUp, TrendingDown, Calendar];
-
-function useTypewriter(text: string, speed = 18) {
-  const [displayed, setDisplayed] = useState('');
-  const prev = useRef('');
-  useEffect(() => {
-    if (!text || text === prev.current) return;
-    prev.current = text;
-    setDisplayed('');
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      setDisplayed(text.slice(0, i));
-      if (i >= text.length) clearInterval(id);
-    }, speed);
-    return () => clearInterval(id);
-  }, [text, speed]);
-  return displayed;
+function Card({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-2xl border border-[#E5E7EB] bg-white p-5 ${className ?? ''}`}>
+      <h2 className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{title}</h2>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
 }
 
-const MODIFIER_CHIPS = [
-  'Focus only on VIP customers',
-  'Increase projected revenue',
-  'Use Email instead',
-];
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-[#6B7280]">{label}</span>
+      <span className="font-medium text-[#1A1A1A]">{value}</span>
+    </div>
+  );
+}
 
-// ─────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────
 export default function OpportunityDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const [data, setData] = useState<{ opportunity: Opportunity | null; customers: Customer[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modifier, setModifier] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
@@ -146,17 +84,17 @@ export default function OpportunityDetailPage() {
       try {
         setLoading(true);
         const res = await getOpportunityCustomers(params.id);
-        if (!mounted) return;
-        setData(res.data);
+        if (mounted) setData(res.data);
       } catch (e) {
-        if (!mounted) return;
-        setError(e instanceof Error ? e.message : 'Failed to load opportunity');
+        if (mounted) setError(e instanceof Error ? e.message : 'Failed to load opportunity');
       } finally {
         if (mounted) setLoading(false);
       }
     }
     load();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [params.id]);
 
   const opp = data?.opportunity ?? null;
@@ -164,44 +102,34 @@ export default function OpportunityDetailPage() {
   useEffect(() => {
     if (opp?.opportunity_id) prefetchCampaign(opp.opportunity_id);
   }, [opp?.opportunity_id]);
-  const customers = data?.customers ?? [];
-  const whySummary = opp ? (opp.ai_summary || opp.description) : '';
-  const typedSummary = useTypewriter(whySummary);
 
-  // Prefer the AI-assigned personas; fall back to deriving them from the audience.
-  // Depends on `data` rather than the derived `opp`/`customers`, which get a fresh
-  // identity on every render and so would defeat the memo.
   const personas = useMemo(() => {
     const aiPersonas = data?.opportunity?.opportunity_personas;
     if (aiPersonas && aiPersonas.length > 0) {
-      return aiPersonas.slice(0, 3).map(p => ({ name: p.name, description: p.description, count: null as number | null }));
+      return aiPersonas.slice(0, MAX_PERSONAS).map((p) => ({ name: p.name, description: p.description, count: null as number | null }));
     }
     const map = new Map<string, { name: string; description: string; count: number }>();
-    (data?.customers ?? []).forEach(c => {
+    (data?.customers ?? []).forEach((c) => {
       if (!c.persona_name) return;
-      if (!map.has(c.persona_name)) {
-        map.set(c.persona_name, { name: c.persona_name, description: c.persona_description ?? '', count: 0 });
-      }
-      map.get(c.persona_name)!.count++;
+      const entry = map.get(c.persona_name) ?? { name: c.persona_name, description: c.persona_description ?? '', count: 0 };
+      entry.count++;
+      map.set(c.persona_name, entry);
     });
-    return Array.from(map.values()).slice(0, 3);
+    return Array.from(map.values()).slice(0, MAX_PERSONAS);
   }, [data]);
 
-  async function handleRefine(text?: string) {
-    const query = (text ?? modifier).trim();
-    if (!query || !opp || isRefining) return;
+  async function refine(text: string) {
+    if (!opp || isRefining) return;
     setIsRefining(true);
+    setRefineError(null);
     try {
-      const res = await refineOpportunity(opp.opportunity_id, query);
+      const res = await refineOpportunity(opp.opportunity_id, text);
       if (res.data) {
-        setData(prev => prev ? {
-          ...prev,
-          opportunity: prev.opportunity ? { ...prev.opportunity, ...res.data } : null,
-        } : null);
+        setData((prev) => (prev ? { ...prev, opportunity: prev.opportunity ? { ...prev.opportunity, ...res.data } : null } : null));
       }
       setModifier('');
-    } catch (e) {
-      console.error('[refine]', e);
+    } catch {
+      setRefineError('The agent could not apply that change. Try rephrasing it.');
     } finally {
       setIsRefining(false);
     }
@@ -209,7 +137,7 @@ export default function OpportunityDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FAFAFA]">
+      <div className="flex flex-1 items-center justify-center py-24">
         <AiLoader size="md" title="Loading opportunity" />
       </div>
     );
@@ -217,345 +145,228 @@ export default function OpportunityDetailPage() {
 
   if (error || !opp) {
     return (
-      <div className="min-h-screen bg-[#FAFAFA] p-8">
-        <button onClick={() => router.push('/opportunities')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 mb-6">
-          <ArrowLeft className="h-4 w-4" /> Back to Opportunities
-        </button>
+      <div className="mx-auto w-full max-w-[1100px] px-4 py-8 sm:px-8">
+        <Link href="/opportunities" className="inline-flex items-center gap-1.5 text-sm text-[#6B7280] hover:text-[#4B3FE5]">
+          <ArrowLeft className="size-4" aria-hidden /> Opportunities
+        </Link>
         <StatePanel
           tone="error"
           title={error ? 'We could not load this opportunity' : 'Opportunity not found'}
           message={error ?? 'It may have been removed, or the link is out of date.'}
         >
-          <button type="button" onClick={() => window.location.reload()} className={statePanelActionClass}>Try again</button>
+          <button type="button" onClick={() => window.location.reload()} className={statePanelActionClass}>
+            Try again
+          </button>
         </StatePanel>
       </div>
     );
   }
 
+  const customers = data?.customers ?? [];
   const channel = parseChannel(opp.recommended_action);
   const signals = parseSignals(opp.trigger_reason);
   const audienceCount = opp.customer_count || opp.audience_size;
-  const voucherAmount = opp.average_spend ? Math.round(opp.average_spend * 0.05 / 50) * 50 : 500;
+  const voucher = opp.average_spend ? Math.round((opp.average_spend * VOUCHER_SHARE) / VOUCHER_STEP) * VOUCHER_STEP : DEFAULT_VOUCHER;
+  const conversion = opp.predicted_conversion_rate != null ? `${opp.predicted_conversion_rate}%` : '-';
+  const reasons = signals.length > 0 ? signals : FALLBACK_SIGNALS(formatCurrency(opp.average_spend * LTV_MULTIPLE || DEFAULT_LTV));
+  const recency = opp.audience_definition?.max_days_since_last_order;
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pb-28">
-      <div className="max-w-6xl mx-auto px-6 py-6">
+    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
+      <Link href="/opportunities" className="inline-flex items-center gap-1.5 text-sm text-[#6B7280] transition-colors hover:text-[#4B3FE5]">
+        <ArrowLeft className="size-4" aria-hidden /> Opportunities
+      </Link>
 
-        {/* ── Top bar ── */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={() => router.push('/opportunities')}
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Opportunities
-          </button>
-          <span className="px-3 py-1 text-xs font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200">
-            Ready For Action
-          </span>
-        </div>
-
-        {/* ── Title ── */}
-        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-6">{opp.title}</h1>
-
-        {/* ── Stat pills ── */}
-        <div className="flex items-center gap-3 flex-wrap mb-8">
-          <StatPill icon={BarChart2} label={`${formatCurrency(opp.potential_revenue)} Potential Revenue`} />
-          <StatPill icon={Users} label={`${audienceCount} Customers`} />
-          <StatPill icon={Zap} label={`Recommended: ${channel}`} />
-        </div>
-
-        {/* ── Why GrowthOS Found This ── */}
-        <div className="mb-8">
-          <div className="flex items-center gap-1.5 mb-3">
-            <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-            <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-500">Why GrowthOS Found This</span>
+      <header className="mt-4 flex items-start gap-4">
+        <AgentAvatar state={isRefining ? 'working' : 'idle'} size="md" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone="live">{isRefining ? 'Agent is refining' : 'Ready for action'}</StatusPill>
+            <StatusPill>{channel}</StatusPill>
           </div>
-          <p className="text-sm text-gray-600 leading-relaxed max-w-3xl min-h-[3rem]">
-            {typedSummary}
-            {typedSummary.length < whySummary.length && (
-              <span className="inline-block w-0.5 h-3.5 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
-            )}
-            {typedSummary === whySummary && opp.potential_revenue > 0 && (
-              <> The estimated recovery value of this audience is{' '}
-                <span className="font-bold text-indigo-600">{formatCurrency(opp.potential_revenue)}</span>.
-              </>
-            )}
-          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-3xl">{opp.title}</h1>
         </div>
+      </header>
 
-        {/* ── 2-column layout ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: 'Recoverable', value: formatCurrency(opp.potential_revenue), accent: true },
+          { label: 'Audience', value: audienceCount.toLocaleString(), accent: false },
+          { label: 'Predicted conversion', value: conversion, accent: false },
+        ].map(({ label, value, accent }) => (
+          <div key={label} className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
+            <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</dt>
+            <dd className={`mt-1 font-mono text-xl font-semibold tabular-nums ${accent ? 'text-[#5B4FFF]' : 'text-[#1A1A1A]'}`}>{value}</dd>
+          </div>
+        ))}
+        <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
+          <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Agent confidence</dt>
+          <dd className="mt-3">
+            <ConfidenceMeter value={opp.confidence_score} />
+          </dd>
+        </div>
+      </dl>
 
-          {/* ── LEFT: 2/3 width ── */}
-          <div className="lg:col-span-2 space-y-6">
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card title="Agent reasoning">
+            <p className="text-sm leading-relaxed text-[#4B5563]">{opp.ai_summary || opp.description}</p>
+            <ul className="mt-4 space-y-2.5 border-t border-[#F0F0F2] pt-4">
+              {reasons.map((signal, i) => {
+                const Icon = SIGNAL_ICONS[i % SIGNAL_ICONS.length];
+                return (
+                  <li key={signal} className="flex items-start gap-2.5 text-sm text-[#4B5563]">
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-[#EEF2FF] text-[#5B4FFF]">
+                      <Icon className="size-3" aria-hidden />
+                    </span>
+                    {signal}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
 
-            {/* Audience Intel + Key Signals */}
-            <div className="grid grid-cols-2 gap-5">
-
-              {/* Audience Intelligence */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="text-sm font-bold text-gray-900 mb-4">Audience Intelligence</h3>
-                <div className="space-y-3">
-                  <AudienceRow label="Segment" value={opp.supporting_customer_segment || 'Dormant VIPs'} />
-                  <AudienceRow label="Avg. LTV" value={opp.average_spend ? formatCurrency(opp.average_spend) : '—'} />
-                  <AudienceRow
-                    label="Last Purchase"
-                    value={
-                      opp.audience_definition?.max_days_since_last_order
-                        ? `${opp.audience_definition.max_days_since_last_order} Days Ago`
-                        : '60+ Days Ago'
-                    }
-                  />
-                  <AudienceRow label="Predicted Conv." value={opp.predicted_conversion_rate != null ? `${opp.predicted_conversion_rate}%` : '—'} />
-                </div>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Card title="Audience">
+              <div className="space-y-2.5">
+                <Row label="Segment" value={opp.supporting_customer_segment || DEFAULT_SEGMENT} />
+                <Row label="Average spend" value={opp.average_spend ? formatCurrency(opp.average_spend) : '-'} />
+                <Row label="Last purchase" value={`${recency ?? DEFAULT_RECENCY_DAYS} days ago`} />
+              </div>
+              {customers.length > 0 && (
                 <button
-                  onClick={() => customers.length > 0 && setSelectedCustomer(customers[0])}
-                  className="mt-4 text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1 transition-colors"
+                  type="button"
+                  onClick={() => setSelectedCustomer(customers[0])}
+                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-[#5B4FFF] hover:underline"
                 >
-                  View Customer Intelligence <ChevronRight className="h-3 w-3" />
+                  Inspect a customer <ArrowRight className="size-3" aria-hidden />
                 </button>
-              </div>
+              )}
+            </Card>
 
-              {/* Key Customer Signals */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="text-sm font-bold text-gray-900 mb-4">Key Customer Signals</h3>
-                <div className="space-y-3">
-                  {(signals.length > 0 ? signals : [
-                    `Purchase inactivity > 60 days`,
-                    `Lifetime value above ${formatCurrency(opp.average_spend * 3 || 12000)}`,
-                    'Declining overall engagement',
-                    'Missed seasonal purchase cycle',
-                  ]).map((signal, i) => {
-                    const Icon = SIGNAL_ICONS[i % SIGNAL_ICONS.length];
-                    return (
-                      <div key={i} className="flex items-start gap-2.5">
-                        <div className="mt-0.5 h-5 w-5 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
-                          <Icon className="h-3 w-3 text-indigo-500" />
-                        </div>
-                        <span className="text-sm text-gray-600 leading-snug">{signal}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Personas Discovered */}
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 mb-3">Personas Discovered</h3>
-              <div className="grid grid-cols-3 gap-4">
-                {personas.map((p, i) => (
-                  <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm font-bold text-gray-900 leading-snug">{p.name}</span>
-                      {p.count != null && (
-                        <span className="ml-2 shrink-0 text-xs font-bold text-indigo-500 bg-indigo-50 rounded-full px-2 py-0.5">{p.count}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 leading-relaxed">{p.description}</p>
-                  </div>
-                ))}
-              </div>
-
-            </div>
-          </div>
-
-          {/* ── RIGHT sidebar: 1/3 width ── */}
-          <div className="lg:col-span-1 space-y-4">
-
-            {/* Recommended Play */}
-            <div className="bg-white rounded-xl border-2 border-indigo-300 p-5 shadow-md hover:shadow-indigo-200 hover:shadow-lg hover:border-indigo-500 transition-all duration-300" style={{ boxShadow: '0 4px 24px 0 rgba(99,102,241,0.10)' }}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">Recommended Play</span>
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-3">
-                {opp.title.toLowerCase().includes('recovery') || opp.title.toLowerCase().includes('dormant')
-                  ? 'Win-Back Campaign'
-                  : opp.title.toLowerCase().includes('loyalty')
-                  ? 'Loyalty Upsell'
-                  : 'Targeted Campaign'}
-              </h3>
-
-              {/* Channel badge */}
-              <div className="flex items-center gap-1.5 mb-4">
-                <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-xs font-semibold text-gray-600">{channel} Channel</span>
-              </div>
-
-              {/* Stats table */}
-              <div className="space-y-2.5 mb-4">
-                <PlayRow label="Offer Core" value={`₹${voucherAmount} Voucher`} />
-                <PlayRow label="Expected Conv." value={opp.predicted_conversion_rate != null ? `${opp.predicted_conversion_rate}%` : '—'} />
-              </div>
-
-              {/* AI quote */}
-              <p className="text-xs text-gray-400 italic leading-relaxed mb-5 border-l-2 border-indigo-100 pl-3">
-                &ldquo;Historically this audience responds best to urgency-driven {channel} campaigns with limited-time incentives.&rdquo;
-              </p>
-
-              <button
-                onClick={() => router.push(`/campaigns?opportunityId=${opp.opportunity_id}`)}
-                className="w-full bg-indigo-700 hover:bg-indigo-800 text-white text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-200"
-                style={{ boxShadow: '0 4px 16px 0 rgba(99,102,241,0.4)' }}
-              >
-                Review Campaign <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Alternative Strategies */}
-            {opp.alternative_strategies && opp.alternative_strategies.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <div className="flex items-center gap-1.5 mb-3">
-                  <BarChart2 className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Alternative Strategies</span>
-                </div>
-                <div className="space-y-3">
-                  {opp.alternative_strategies.map((alt, i) => (
-                    <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-gray-800">{alt.title}</span>
-                        <span className="text-xs font-bold text-gray-500">{alt.conversion_rate}%</span>
-                      </div>
-                      <p className="text-[11px] text-gray-400 leading-relaxed">{alt.note}</p>
-                    </div>
+            <Card title="Personas the agent found">
+              {personas.length === 0 ? (
+                <p className="text-sm text-[#9CA3AF]">No personas yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {personas.map((p) => (
+                    <li key={p.name}>
+                      <p className="flex items-center justify-between text-sm font-medium text-[#1A1A1A]">
+                        {p.name}
+                        {p.count != null && <span className="font-mono text-xs text-[#9CA3AF]">{p.count}</span>}
+                      </p>
+                      <p className="text-xs leading-relaxed text-[#6B7280]">{p.description}</p>
+                    </li>
                   ))}
-                </div>
-              </div>
-            )}
-
+                </ul>
+              )}
+            </Card>
           </div>
         </div>
+
+        <aside className="space-y-6">
+          <section className="rounded-2xl border border-[#C7D2FE] bg-[#FCFBFF] p-5">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-[#5B4FFF]">Recommended play</p>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-[#1A1A1A]">{playName(opp.title)}</h2>
+            <div className="mt-4 space-y-2.5">
+              <Row label="Channel" value={channel} />
+              <Row label="Offer" value={`₹${voucher} voucher`} />
+              <Row label="Expected conversion" value={conversion} />
+            </div>
+            <PrimaryAction href={`/campaigns?opportunityId=${opp.opportunity_id}`} className="mt-5 w-full">
+              Review campaign
+              <ArrowRight className="size-4" aria-hidden />
+            </PrimaryAction>
+          </section>
+
+          {opp.alternative_strategies && opp.alternative_strategies.length > 0 && (
+            <Card title="Alternatives considered">
+              <ul className="space-y-3">
+                {opp.alternative_strategies.map((alt) => (
+                  <li key={alt.title} className="rounded-xl bg-[#F9FAFB] p-3">
+                    <p className="flex items-center justify-between text-xs font-medium text-[#1A1A1A]">
+                      {alt.title}
+                      <span className="font-mono text-[#6B7280]">{alt.conversion_rate}%</span>
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-[#6B7280]">{alt.note}</p>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </aside>
       </div>
 
-      {/* ── Floating bottom modifier bar ── */}
-      <div className="fixed bottom-6 left-0 right-0 z-40 pointer-events-none">
-        <div className="max-w-2xl mx-auto px-6 pointer-events-auto">
-          {/* Suggestion chips */}
-          <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
-            {MODIFIER_CHIPS.map(chip => (
-              <button
-                key={chip}
-                onClick={() => handleRefine(chip)}
-                disabled={isRefining}
-                className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-full shadow-sm hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 transition-all"
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-          {/* Floating input */}
-          <div className={`flex items-center gap-3 bg-white border rounded-2xl px-5 py-3.5 shadow-xl transition-all ${isRefining ? 'border-indigo-300 opacity-80' : 'border-gray-200 focus-within:border-indigo-400'}`}>
-            {isRefining
-              ? <Loader2 className="h-4 w-4 text-indigo-400 shrink-0 animate-spin" />
-              : <Sparkles className="h-4 w-4 text-indigo-400 shrink-0" />}
-            <input
-              value={modifier}
-              onChange={e => setModifier(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleRefine()}
-              disabled={isRefining}
-              placeholder={isRefining ? 'AI is refining your strategy…' : 'How would you like to modify this opportunity?'}
-              className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none disabled:cursor-not-allowed"
-            />
-            <button
-              onClick={() => handleRefine()}
-              disabled={!modifier.trim() || isRefining}
-              className="h-8 w-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center disabled:opacity-30 transition-all shrink-0"
-            >
-              {isRefining
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Send className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        </div>
+      <div className="sticky bottom-4 z-30 mt-8 rounded-2xl bg-[#FAFAFA]/90 p-1 backdrop-blur">
+        <AgentPromptInput
+          value={modifier}
+          onChange={setModifier}
+          onSubmit={refine}
+          busy={isRefining}
+          placeholders={REFINE_PLACEHOLDERS}
+          suggestions={REFINE_SUGGESTIONS}
+          error={refineError}
+          label="Change this opportunity"
+        />
       </div>
 
-      {/* ── Customer drawer ── */}
-      {selectedCustomer && (
-        <CustomerDrawer customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
-      )}
+      {selectedCustomer && <CustomerDrawer customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />}
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────
-// Sub-components
-// ─────────────────────────────────────────────────────────────
-function StatPill({ icon: Icon, label, accent }: { icon: React.ElementType; label: string; accent?: boolean }) {
-  return (
-    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium shadow-sm ${
-      accent
-        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-        : 'bg-white border-gray-200 text-gray-700'
-    }`}>
-      <Icon className={`h-4 w-4 ${accent ? 'text-indigo-500' : 'text-gray-400'}`} />
-      {label}
-    </div>
-  );
-}
-
-function AudienceRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-gray-400">{label}</span>
-      <span className="font-semibold text-gray-900">{value}</span>
-    </div>
-  );
-}
-
-function PlayRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-gray-400">{label}</span>
-      <span className={`font-bold ${accent ? 'text-indigo-600' : 'text-gray-900'}`}>{value}</span>
-    </div>
-  );
-}
-
 
 function CustomerDrawer({ customer, onClose }: { customer: Customer; onClose: () => void }) {
-  const formatCurr = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const stats = [
+    { label: 'Lifetime spend', value: rupees(customer.total_spent) },
+    { label: 'Orders', value: String(customer.total_orders) },
+    { label: 'Last purchase', value: customer.days_since_last_order != null ? `${customer.days_since_last_order}d ago` : '-' },
+    { label: 'Average order', value: rupees(customer.avg_order_value) },
+  ];
+  const traits = [
+    { label: 'Favorite category', value: customer.favorite_category ?? '-' },
+    { label: 'Preferred channel', value: customer.preferred_channel ?? 'WhatsApp' },
+    { label: 'Discount affinity', value: customer.discount_affinity ?? 'Low' },
+    { label: 'Churn risk', value: (customer.days_since_last_order ?? 0) > CHURN_HIGH_DAYS ? 'High' : 'Medium' },
+  ];
+
   return (
-    <div className="fixed inset-0 z-50">
-      <button className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl overflow-y-auto p-6">
-        <div className="flex items-start justify-between mb-6">
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={customer.customer_name}>
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <aside className="absolute right-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between">
           <div>
-            <div className="h-12 w-12 rounded-xl bg-indigo-50 flex items-center justify-center mb-3">
-              <Gem className="h-5 w-5 text-indigo-500" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">{customer.customer_name}</h2>
-            <p className="text-sm text-indigo-500 font-medium">{customer.persona_name ?? 'Premium Customer'}</p>
+            <span className="flex size-10 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
+              <Gem className="size-5" aria-hidden />
+            </span>
+            <h2 className="mt-3 text-lg font-semibold text-[#1A1A1A]">{customer.customer_name}</h2>
+            <p className="text-sm font-medium text-[#5B4FFF]">{customer.persona_name ?? 'Premium customer'}</p>
           </div>
-          <button onClick={onClose} className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
-            <X className="h-4 w-4 text-gray-500" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex size-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]"
+          >
+            <X className="size-4" aria-hidden />
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          {[
-            { label: 'Lifetime Spend', value: formatCurr(customer.total_spent) },
-            { label: 'Orders', value: String(customer.total_orders) },
-            { label: 'Last Purchase', value: customer.days_since_last_order != null ? `${customer.days_since_last_order}d ago` : '—' },
-            { label: 'Avg Order', value: formatCurr(customer.avg_order_value) },
-          ].map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</p>
-              <p className="text-base font-bold text-gray-900">{value}</p>
+        <dl className="mt-6 grid grid-cols-2 gap-3">
+          {stats.map(({ label, value }) => (
+            <div key={label} className="rounded-xl border border-[#E5E7EB] p-3">
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</dt>
+              <dd className="mt-1 font-mono text-base font-semibold tabular-nums text-[#1A1A1A]">{value}</dd>
             </div>
           ))}
-        </div>
-        <div className="rounded-xl border border-gray-200 p-4 space-y-3">
-          {[
-            { label: 'Favorite Category', value: customer.favorite_category ?? '—' },
-            { label: 'Preferred Channel', value: customer.preferred_channel ?? 'WhatsApp' },
-            { label: 'Discount Affinity', value: customer.discount_affinity ?? 'Low' },
-            { label: 'Churn Risk', value: (customer.days_since_last_order ?? 0) > 90 ? 'High' : 'Medium' },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">{label}</span>
-              <span className="font-semibold text-gray-900">{value}</span>
-            </div>
+        </dl>
+        <div className="mt-4 space-y-3 rounded-xl border border-[#E5E7EB] p-4">
+          {traits.map(({ label, value }) => (
+            <Row key={label} label={label} value={value} />
           ))}
         </div>
       </aside>
