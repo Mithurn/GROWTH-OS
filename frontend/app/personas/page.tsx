@@ -1,5 +1,6 @@
 'use client';
 
+import { AiLoader } from '@/components/ui/ai-loader';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -169,7 +170,7 @@ export default function PersonasPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <p className="text-[#6B7280]">Loading personas...</p>
+        <AiLoader size="md" title="Loading personas" />
       </div>
     );
   }
