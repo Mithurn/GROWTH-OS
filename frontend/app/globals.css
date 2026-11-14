@@ -523,3 +523,42 @@
     scroll-behavior: auto;
   }
 }
+
+:root {
+  --agent-step-delay: 0.9s;
+  --agent-start-delay: 0.4s;
+}
+
+.agent-reveal {
+  animation: step-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--agent-start-delay) + var(--i, 0) * var(--agent-step-delay));
+}
+
+.ai-shimmer {
+  background: linear-gradient(90deg, #6b7280 0%, #6b7280 35%, #5b4fff 50%, #6b7280 65%, #6b7280 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: ai-shimmer 2.4s linear infinite;
+}
+
+@keyframes ai-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-reveal {
+    animation: none;
+  }
+  .ai-shimmer {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
