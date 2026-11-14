@@ -358,8 +358,8 @@ export async function generateSyntheticData() {
   console.log('💾 Saving CSV files...');
 
   saveCSV('customers.csv',
-    ['customer_id', 'first_name', 'last_name', 'email', 'phone', 'gender', 'city', 'state', 'signup_date'],
-    customers.map(c => [c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.gender, c.city, c.state, c.signup_date])
+    ['customer_id', 'first_name', 'last_name', 'email', 'phone', 'gender', 'city', 'state', 'signup_date', 'email_marketing_consent', 'sms_marketing_consent'],
+    customers.map(c => [c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.gender, c.city, c.state, c.signup_date, 'true', 'true'])
   );
 
   saveCSV('orders.csv',
