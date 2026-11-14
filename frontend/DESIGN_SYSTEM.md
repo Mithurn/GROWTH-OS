@@ -122,7 +122,26 @@ states always point at the next step.
 
 **Motion.** Every animation sits behind `prefers-reduced-motion`. Orb, shimmer and the
 landing agent card reveal are CSS keyframes in `globals.css`; the reveal timing is the
-`--agent-step-delay` variable. No animation library is installed.
+`--agent-step-delay` variable. The libraries.dev packages (`thinking-orbs`, `border-beam`,
+`bot-avatars`, `metal-fx`) honour reduced motion themselves or are gated by `useReducedMotion`.
+
+---
+
+## Agent UI kit
+
+The app is operated like an agent, not filled in like a form. Shared pieces live in
+`components/agent/`; tunable values (sizes, tones, intervals) sit in `agent-config.ts`.
+
+- **AgentAvatar** wraps `bot-avatars` (`idle`, `working`, `sleeping`). It is the agent's identity in the sidebar and dashboard.
+- **AgentPromptInput** is the command bar. `border-beam` runs while focused or busy and stops under reduced motion.
+- **AgentActivityFeed** is the live timeline: a `thinking-orbs` orb in the header, one row per agent action.
+- **StatusPill** is the only status chip: `live`, `success`, `warning`, `danger`, `neutral`.
+- **ConfidenceMeter** shows a 0 to 100 score as ten segments.
+- **PrimaryAction** is the one `metal-fx` button allowed per screen, the main call to action.
+
+**Shell.** A 240px left sidebar (agent card, grouped navigation, account) on large screens; a top bar with a drawer below `lg`.
+
+**Density.** Cards are `rounded-2xl` with a 1px border and no shadow. Labels are 11px uppercase, numbers are mono and tabular.
 
 **Responsive.** Multi-column layouts collapse below `lg` (`grid-cols-1 lg:grid-cols-3`,
 `flex-col lg:flex-row`). Fixed side panels stack; page padding is `p-4 sm:p-8`.
