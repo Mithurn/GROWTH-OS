@@ -3,23 +3,25 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { BotAvatar } from 'bot-avatars';
+import { BorderBeam } from 'border-beam';
 import { ArrowRight, Check, Mail, Target, X } from 'lucide-react';
 import { approveCampaign, getCampaigns, rejectCampaign } from '@/lib/api';
 import type { CampaignWithMetrics } from '@/lib/types';
+import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { PrimaryAction } from '@/components/agent/primary-action';
-import { ConsoleCard } from '@/components/campaign/console';
 import { CampaignBuilder } from '@/components/campaign/campaign-builder';
-import { CHANNEL_META, LAUNCH_REQUEST, formatNumber, type Channel } from '@/components/campaign/config';
+import { ChannelTabs } from '@/components/campaign/channel-tabs';
+import { CHANNEL_META, LAUNCH_REQUEST, PHONE, formatNumber, type Channel } from '@/components/campaign/config';
 import { LiveFunnel } from '@/components/campaign/live-funnel';
 import { MessagePreview } from '@/components/campaign/message-preview';
+import { Panel, PanelLabel, Stat, alertClass, outlineButtonClass } from '@/components/campaign/panel';
 import { StatusBadge } from '@/components/campaign/status-badge';
 import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
 import { cn } from '@/lib/utils';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'PendingApproval', label: 'Awaiting approval' },
+  { key: 'PendingApproval', label: 'Pending' },
   { key: 'Approved', label: 'Approved' },
   { key: 'Launched', label: 'Live' },
 ] as const;
@@ -28,44 +30,53 @@ const SKELETON_ROWS = 4;
 
 function ListSkeleton() {
   return (
-    <div className="grid animate-pulse gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+    <div className="grid animate-pulse gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
       <div className="space-y-2">
         {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-          <div key={i} className="h-[72px] rounded-xl bg-muted" />
+          <div key={i} className="h-[76px] rounded-xl bg-[#F3F4F6]" />
         ))}
       </div>
-      <div className="h-96 rounded-2xl bg-muted" />
+      <div className="h-[520px] rounded-2xl bg-[#F3F4F6]" />
     </div>
   );
 }
 
 function CampaignRow({ c, selected, onSelect }: { c: CampaignWithMetrics; selected: boolean; onSelect: () => void }) {
   const Icon = CHANNEL_META[c.channel as Channel]?.icon ?? Target;
-  return (
+  const row = (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        'w-full rounded-xl border bg-card p-3.5 text-left transition-colors',
-        selected ? 'border-primary/50 bg-accent/50 ring-1 ring-primary/20' : 'border-border hover:border-primary/30',
+        'w-full rounded-xl border bg-white p-3.5 text-left transition-all',
+        selected ? 'border-[#5B4FFF]/40 shadow-[0_6px_20px_-10px_rgba(91,79,255,0.45)] ring-1 ring-[#5B4FFF]/15' : 'border-[#E5E7EB] hover:border-[#5B4FFF]/30 hover:shadow-sm',
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="line-clamp-2 text-sm font-medium leading-snug">{c.name}</span>
+      <span className="line-clamp-2 text-sm font-medium leading-snug text-[#1A1A1A]">{c.name}</span>
+      <span className="mt-2.5 flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-[#6B7280]">
+          <Icon className="size-3.5 shrink-0" aria-hidden />
+          <span className="truncate">
+            {c.channel} · {formatNumber(c.audience_size ?? 0)}
+          </span>
+        </span>
         <StatusBadge status={c.status} />
-      </div>
-      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Icon className="size-3.5" aria-hidden />
-        {c.channel} · {formatNumber(c.audience_size ?? 0)} customers
-      </p>
+      </span>
     </button>
+  );
+  if (c.status !== 'Launched') return row;
+  return (
+    <BorderBeam size="sm" theme="light" colorVariant="ocean" strength={0.7}>
+      {row}
+    </BorderBeam>
   );
 }
 
 function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewChannel, setPreviewChannel] = useState<Channel>(c.channel as Channel);
   const live = c.status === 'Launched' || c.status === 'Completed';
   const canDecide = c.status === 'PendingApproval' && c.case_status === 'READY_FOR_APPROVAL';
 
@@ -89,33 +100,29 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
   };
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <ConsoleCard glow>
-        <section className="min-w-0 p-5 sm:p-6">
+    <div className="grid items-start gap-6 min-[1360px]:grid-cols-[minmax(0,1fr)_372px]">
+      <Panel className="min-w-0">
+        <section className="p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold tracking-tight text-white">{c.name}</h2>
-              <p className="mt-0.5 text-sm text-zinc-400">{c.objective}</p>
+              <h2 className="text-xl font-semibold tracking-tight text-[#1A1A1A]">{c.name}</h2>
+              <p className="mt-1 text-sm leading-relaxed text-[#6B7280]">{c.objective}</p>
             </div>
-            <StatusBadge dark status={c.status} />
+            <StatusBadge status={c.status} />
           </div>
 
           <dl className="mt-5 grid grid-cols-3 gap-3">
-            {[
-              ['Channel', c.channel],
-              ['Audience', formatNumber(c.audience_size ?? 0)],
-              ['Sent', formatNumber(c.communications_sent ?? 0)],
-            ].map(([k, v]) => (
-              <div key={k} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-                <dt className="text-[11px] uppercase tracking-wider text-zinc-500">{k}</dt>
-                <dd className="mt-0.5 text-sm font-semibold text-white">{v}</dd>
-              </div>
-            ))}
+            <Stat label="Channel">
+              <span className="text-base">{c.channel}</span>
+            </Stat>
+            <Stat label="Audience">{formatNumber(c.audience_size ?? 0)}</Stat>
+            <Stat label="Sent">{formatNumber(c.communications_sent ?? 0)}</Stat>
           </dl>
 
-          {live && (
+          {live ? (
             <LiveFunnel
-              className="mt-6"
+              light
+              className="mt-7"
               live={c.status === 'Launched'}
               counts={{
                 targeted: c.audience_size ?? 0,
@@ -126,67 +133,61 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
                 failed: c.communications_failed ?? 0,
               }}
             />
+          ) : (
+            <div className="mt-7">
+              <PanelLabel className="mb-2">Message</PanelLabel>
+              <p className="whitespace-pre-wrap rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4 text-[15px] leading-relaxed text-[#1A1A1A]">{c.message_content}</p>
+            </div>
           )}
 
           {c.reasoning && (
-            <div className="mt-6 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
-              <BotAvatar shading="plastic" type="pill" state="default" size={32} interactive={false} />
-              <p className="text-sm leading-relaxed text-zinc-400">{c.reasoning}</p>
+            <div className="mt-6 flex items-start gap-3 rounded-xl bg-[#F5F6FF] p-4">
+              <AgentAvatar size="md" className="shrink-0" />
+              <p className="text-sm leading-relaxed text-[#4B5563]">{c.reasoning}</p>
             </div>
           )}
 
           {c.case_status === 'BLOCKED' && (
-            <p role="alert" className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p role="alert" className={cn('mt-4', alertClass)}>
               The reviewer agent blocked this draft. Edit it to start a new review.
             </p>
           )}
           {error && (
-            <p role="alert" className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p role="alert" className={cn('mt-4', alertClass)}>
               {error}
             </p>
           )}
 
-          <div className="mt-6 flex flex-wrap items-center gap-2">
+          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[#F0F1F4] pt-5">
             {canDecide && (
               <>
                 <PrimaryAction disabled={busy} onClick={() => void act(() => approveCampaign(c.id))}>
                   <Check className="size-4" aria-hidden /> Approve
                 </PrimaryAction>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={reject}
-                  className="inline-flex h-10 items-center gap-2 rounded-full border border-white/10 px-5 text-sm font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-                >
+                <button type="button" disabled={busy} onClick={reject} className={outlineButtonClass}>
                   <X className="size-4" aria-hidden /> Reject
                 </button>
               </>
             )}
             {c.status === 'Approved' && (
-              <a
-                href={LAUNCH_REQUEST.href}
-                className="inline-flex h-10 items-center gap-2 rounded-full bg-indigo-500 px-5 text-sm font-medium text-white hover:bg-indigo-400"
-              >
+              <PrimaryAction href={LAUNCH_REQUEST.href}>
                 <Mail className="size-4" aria-hidden /> Request launch access
-              </a>
+              </PrimaryAction>
             )}
             {live && (
-              <Link
-                href={`/analytics?campaignId=${c.id}`}
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-white/10 px-5 text-sm font-medium text-zinc-200 hover:bg-white/5"
-              >
+              <PrimaryAction href={`/analytics?campaignId=${c.id}`}>
                 View analytics <ArrowRight className="size-4" aria-hidden />
-              </Link>
+              </PrimaryAction>
             )}
+            {!canDecide && !live && c.status !== 'Approved' && <p className="text-sm text-[#9CA3AF]">No actions available for this campaign.</p>}
           </div>
         </section>
-      </ConsoleCard>
+      </Panel>
 
-      <ConsoleCard glow>
-        <div className="flex justify-center px-3 py-6">
-          <MessagePreview channel={c.channel as Channel} message={c.message_content} subject={c.name} offer={c.offer} />
-        </div>
-      </ConsoleCard>
+      <aside className={cn('flex flex-col items-center gap-4 min-[1360px]:sticky', PHONE.stickyTop)} aria-label="Phone preview">
+        <ChannelTabs value={previewChannel} onChange={setPreviewChannel} />
+        <MessagePreview channel={previewChannel} message={c.message_content} subject={c.name} offer={c.offer} />
+      </aside>
     </div>
   );
 }
@@ -248,41 +249,47 @@ function CampaignList() {
     );
   } else {
     body = (
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-2">
+      <div className="space-y-6">
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-border bg-card px-4 py-3">
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-            </div>
+            <Panel key={label} className="px-4 py-3.5">
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</dt>
+              <dd className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[#1A1A1A]">{value}</dd>
+            </Panel>
           ))}
-        </div>
-        <div className="space-y-3">
-          <div role="tablist" aria-label="Filter campaigns" className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-0.5">
-            {FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={filter === key}
-                onClick={() => setFilter(key)}
-                className={cn(
-                  'shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                  filter === key ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {label}
-              </button>
-            ))}
+        </dl>
+        <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="space-y-3">
+            <div role="tablist" aria-label="Filter campaigns" className="flex gap-1 overflow-x-auto rounded-xl bg-[#F3F4F6] p-1">
+              {FILTERS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === key}
+                  onClick={() => setFilter(key)}
+                  className={cn(
+                    'shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
+                    filter === key ? 'bg-white text-[#1A1A1A] shadow-sm ring-1 ring-black/5' : 'text-[#6B7280] hover:text-[#1A1A1A]',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              {visible.map((c) => (
+                <CampaignRow key={c.id} c={c} selected={c.id === selected?.id} onSelect={() => setSelectedId(c.id)} />
+              ))}
+              {visible.length === 0 && <p className="rounded-xl border border-dashed border-[#E5E7EB] px-3 py-8 text-center text-sm text-[#9CA3AF]">Nothing in this view.</p>}
+            </div>
           </div>
-          <div className="space-y-2">
-            {visible.map((c) => (
-              <CampaignRow key={c.id} c={c} selected={c.id === selected?.id} onSelect={() => setSelectedId(c.id)} />
-            ))}
-            {visible.length === 0 && <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing in this view.</p>}
-          </div>
+          {selected ? (
+            <CampaignDetail key={selected.id} c={selected} onChanged={() => void load()} />
+          ) : (
+            <Panel className="px-6 py-16 text-center text-sm text-[#9CA3AF]">Pick a campaign to see its message and results.</Panel>
+          )}
         </div>
-        {selected && <CampaignDetail key={selected.id} c={selected} onChanged={() => void load()} />}
       </div>
     );
   }
@@ -291,8 +298,8 @@ function CampaignList() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Campaigns</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Drafted by the agent, sent only after you approve.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-3xl">Campaigns</h1>
+          <p className="mt-1 text-sm text-[#6B7280]">Drafted by the agent, sent only after you approve.</p>
         </div>
         <Link href="/opportunities" className={statePanelSecondaryClass}>
           <Target className="size-4" aria-hidden /> Opportunities
