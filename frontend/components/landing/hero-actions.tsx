@@ -7,7 +7,7 @@ import { useBackendStatus } from '@/lib/use-backend-status';
 const PRIMARY =
   'w-full rounded-lg bg-[#5B4FFF] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF] sm:w-auto';
 const SECONDARY =
-  'w-full rounded-lg border border-[#E5E7EB] bg-white px-6 py-3 text-base font-semibold text-[#111827] transition-colors hover:bg-[#F9FAFB] sm:w-auto';
+  'w-full rounded-lg border border-[#E5E7EB] bg-white px-6 py-3 text-base font-semibold text-[#111827] transition-colors hover:bg-[#F9FAFB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF] sm:w-auto';
 
 /**
  * The real app needs the AWS backend, which is only up on request. While it is asleep the

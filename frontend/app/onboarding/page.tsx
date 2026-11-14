@@ -1,5 +1,6 @@
 'use client';
 
+import { AiOrb } from '@/components/ui/ai-orb';
 import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Image from 'next/image';
@@ -21,7 +22,6 @@ import {
   HeartHandshake,
   BadgeIndianRupee,
   Users,
-  Bot,
   ShieldCheck,
 } from 'lucide-react';
 import {
@@ -273,7 +273,7 @@ export default function OnboardingPage() {
         </header>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="max-w-md w-full text-center">
-          <Image src="/favicon.png" alt="GrowthOS" width={56} height={55} className="mx-auto mb-8 rounded-2xl" />
+            <Image src="/favicon.png" alt="GrowthOS" width={56} height={55} className="mx-auto mb-8 rounded-2xl" />
             <h1 className="text-4xl font-black text-[#1A1A1A] mb-4 tracking-tight leading-tight">
               Welcome to GrowthOS
             </h1>
@@ -302,9 +302,7 @@ export default function OnboardingPage() {
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="max-w-md w-full">
             <div className="text-center mb-10">
-              <div className="w-14 h-14 rounded-2xl bg-[#5B4FFF] flex items-center justify-center mx-auto mb-6">
-                <Bot className="h-7 w-7 text-white" />
-              </div>
+              <AiOrb size="lg" className="mx-auto mb-8" />
               <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">Setting up your AI Revenue Team</h2>
               <p className="text-sm text-[#6B7280]">Analysing your data. This takes about 30–60 seconds.</p>
             </div>

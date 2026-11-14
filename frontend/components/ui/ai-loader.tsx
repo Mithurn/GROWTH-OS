@@ -19,7 +19,7 @@ export function AiLoader({ title, steps = [], stepIntervalMs, size = 'lg', class
     <div role="status" aria-live="polite" className={cn('flex flex-col items-center gap-5 text-center', className)}>
       <AiOrb size={size} />
       <div className="space-y-1.5">
-        <p className="text-base font-semibold text-foreground">{title}</p>
+        <p className="ai-shimmer text-base font-semibold">{title}</p>
         {steps.length > 0 && (
           <p key={stepIndex} className="ai-step-in text-sm text-muted-foreground">
             {steps[stepIndex]}

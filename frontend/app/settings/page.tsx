@@ -1,5 +1,6 @@
 'use client';
 
+import { AiLoader } from '@/components/ui/ai-loader';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Save } from 'lucide-react';
@@ -162,10 +163,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#E4E4E7] border-t-[#5B4FFF]"></div>
-          <p className="mt-4 text-sm text-[#71717A]">Loading settings...</p>
-        </div>
+        <AiLoader size="md" title="Loading settings" />
       </div>
     );
   }
@@ -192,7 +190,7 @@ export default function SettingsPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex h-10 items-center gap-2 rounded-lg bg-[#5B4FFF] px-5 text-sm font-semibold text-white transition hover:bg-[#4B3FE5] disabled:opacity-50"
+            className="flex h-10 shrink-0 items-center whitespace-nowrap gap-2 rounded-lg bg-[#5B4FFF] px-5 text-sm font-semibold text-white transition hover:bg-[#4B3FE5] disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
             {saving ? 'Saving...' : 'Save Changes'}

@@ -4,6 +4,8 @@ import { DM_Sans } from 'next/font/google';
 import { BackendStatusPill } from '@/components/landing/backend-status-pill';
 import { BrowserFrame } from '@/components/landing/browser-frame';
 import { HeroActions } from '@/components/landing/hero-actions';
+import { HeroAgent } from '@/components/landing/hero-agent';
+import { AiOrb } from '@/components/ui/ai-orb';
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], display: 'swap' });
 
@@ -133,12 +135,13 @@ export default function LandingPage() {
       <section className="relative overflow-hidden">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(91,79,255,0.12),transparent)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(91,79,255,0.14),transparent),radial-gradient(40%_40%_at_90%_10%,rgba(56,189,248,0.10),transparent),linear-gradient(to_right,rgba(17,24,39,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(17,24,39,0.035)_1px,transparent_1px)] bg-[size:auto,auto,48px_48px,48px_48px] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]"
         />
-        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-20 text-center sm:pt-28">
+        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-16 text-center sm:pt-24">
           <BackendStatusPill />
           <h1 className="mx-auto mt-8 max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-            Find the revenue you&rsquo;re losing. Win it back.
+            Find the revenue you&rsquo;re losing.{' '}
+            <span className="font-serif text-[1.08em] font-normal italic text-[#5B4FFF]">Win it back.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[#6B7280]">
             Upload your customer data and GrowthOS finds where revenue is leaking, writes the campaign to recover it, and tracks what converted. You approve the decisions. It does the work.
@@ -147,7 +150,10 @@ export default function LandingPage() {
             <HeroActions />
           </div>
           <p className="mt-4 text-xs text-[#9CA3AF]">The demo runs in your browser on sample data. No sign-up, nothing is sent.</p>
-          <div className="mx-auto mt-16 max-w-5xl text-left">
+          <div className="mt-16">
+            <HeroAgent />
+          </div>
+          <div className="mx-auto mt-24 max-w-5xl text-left">
             <BrowserFrame src="/shots/dashboard.jpg" alt="GrowthOS dashboard showing the highest impact opportunity and live agent activity" priority />
           </div>
         </div>
@@ -230,7 +236,8 @@ export default function LandingPage() {
       </section>
 
       <section className="bg-[#111827] py-24 text-white">
-        <div className="mx-auto max-w-3xl px-6 text-center">
+        <div className="mx-auto flex max-w-3xl flex-col items-center px-6 text-center">
+          <AiOrb size="lg" className="mb-10" />
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">See it work before you bring your data</h2>
           <p className="mx-auto mt-4 max-w-xl text-[#9CA3AF]">
             Open the demo to walk the whole flow, from opportunity to campaign to results.
