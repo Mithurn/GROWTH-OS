@@ -15,6 +15,7 @@ import { LiveFunnel, type FunnelCounts } from '@/components/campaign/live-funnel
 import { ConsoleCard, ConsoleLabel } from '@/components/campaign/console';
 import { PrimaryAction } from '@/components/agent/primary-action';
 import { StatusBadge } from '@/components/campaign/status-badge';
+import { PageHeader } from '@/components/agent/page-header';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 
 type AnalyticsData = {
@@ -79,23 +80,29 @@ function CampaignPicker() {
     );
   }
   return (
-    <ul className="grid gap-3 sm:grid-cols-2">
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {list.map((c) => {
         const Icon = CHANNEL_META[c.channel as Channel]?.icon;
+        const sent = c.communications_sent ?? 0;
+        const rate = sent ? Math.round(((c.communications_clicked ?? 0) / sent) * 100) : 0;
         return (
           <li key={c.id}>
             <Link
               href={`/analytics?campaignId=${c.id}`}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40"
+              className="group flex h-full flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:border-[#C7D2FE]"
             >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{c.name}</span>
-                <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  {Icon && <Icon className="size-3.5" aria-hidden />}
-                  {formatNumber(c.communications_clicked)} clicks from {formatNumber(c.communications_sent)} sent
-                </span>
+              <span className="flex items-center justify-between gap-3">
+                <span className="truncate text-sm font-semibold text-[#111827]">{c.name}</span>
+                <ArrowRight className="size-4 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" aria-hidden />
               </span>
-              <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="mt-4 flex items-baseline gap-2">
+                <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-[#5B4FFF]">{rate}%</span>
+                <span className="text-[13px] text-[#6B7280]">click rate</span>
+              </span>
+              <span className="mt-3 flex items-center gap-1.5 text-[13px] text-[#6B7280]">
+                {Icon && <Icon className="size-3.5" aria-hidden />}
+                {formatNumber(c.communications_clicked)} clicks from {formatNumber(sent)} sent
+              </span>
             </Link>
           </li>
         );
@@ -142,7 +149,7 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
             <ConsoleLabel>Revenue generated</ConsoleLabel>
             <p className="mt-3 text-5xl font-semibold tabular-nums tracking-tight text-white sm:text-6xl">{formatCurrency(animated)}</p>
             <div className="mt-4">
-              <div className="mb-1.5 flex justify-between font-mono text-[11px] text-zinc-500">
+              <div className="mb-1.5 flex justify-between text-xs text-zinc-500">
                 <span>{reached}% of potential</span>
                 <span>{formatCurrency(campaign.potential_revenue)}</span>
               </div>
@@ -156,9 +163,9 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
             <dl className="mt-6 grid grid-cols-3 gap-2 pt-1">
               {rates.map((r) => (
                 <div key={r.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-                  <dt className="text-[11px] uppercase tracking-wider text-zinc-500">{r.label}</dt>
+                  <dt className="text-xs uppercase tracking-wider text-zinc-500">{r.label}</dt>
                   <dd className="mt-1 text-xl font-semibold tabular-nums text-white">{r.value}%</dd>
-                  <p className="mt-0.5 truncate text-[11px] text-zinc-500">{r.hint}</p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">{r.hint}</p>
                 </div>
               ))}
             </dl>
@@ -207,7 +214,7 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
                 <ConsoleLabel className="text-indigo-300">Suggested next move</ConsoleLabel>
                 <h3 className="mt-2 text-lg font-semibold leading-snug tracking-tight text-white">{next.title}</h3>
                 <p className="mt-1.5 text-sm text-zinc-400">{next.description}</p>
-                <p className="mt-3 font-mono text-xs text-zinc-500">
+                <p className="mt-3 text-xs text-zinc-500">
                   Worth about <span className="text-white">{formatCurrency(next.potentialRevenue)}</span> at {next.confidence}% confidence
                 </p>
                 <PrimaryAction href="/opportunities" className="mt-5 self-start">
@@ -274,12 +281,11 @@ function AnalyticsContent() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
       {!campaignId && (
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Analytics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Choose a launched campaign to see how it performed.</p>
-        </header>
+        <div className="mb-6">
+          <PageHeader title="Analytics" description="Choose a launched campaign to see how it performed." />
+        </div>
       )}
       {body}
     </div>
