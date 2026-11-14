@@ -168,21 +168,21 @@ export default function PersonasPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-white flex items-center justify-center">
-        <p className="text-stone-600">Loading personas...</p>
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <p className="text-[#6B7280]">Loading personas...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-white">
+    <div className="min-h-screen bg-[#FAFAFA]">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-6 py-10 lg:px-8">
-        <div className="rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-100 via-white to-white p-8 shadow-sm">
+        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <p className="mb-2 text-sm font-medium uppercase tracking-[0.24em] text-amber-700">AI Persona Layer</p>
-              <h1 className="text-4xl font-semibold tracking-tight text-stone-950">Customer Personas</h1>
-              <p className="mt-3 text-base text-stone-600">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#5B4FFF]">AI Persona Layer</p>
+              <h1 className="text-4xl font-semibold tracking-tight text-[#1A1A1A]">Customer Personas</h1>
+              <p className="mt-3 text-base text-[#6B7280]">
                 AI interprets customer metrics and attributes into marketer-friendly personas you can review, edit, and activate.
               </p>
             </div>
@@ -213,7 +213,7 @@ export default function PersonasPage() {
                   <CardDescription>Distinct persona groups generated</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-semibold text-stone-950">{report.totalPersonas}</div>
+                  <div className="text-3xl font-semibold text-[#1A1A1A]">{report.totalPersonas}</div>
                 </CardContent>
               </Card>
 
@@ -223,7 +223,7 @@ export default function PersonasPage() {
                   <CardDescription>Customers assigned to personas</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-semibold text-stone-950">{report.totalCustomers}</div>
+                  <div className="text-3xl font-semibold text-[#1A1A1A]">{report.totalCustomers}</div>
                 </CardContent>
               </Card>
 
@@ -233,7 +233,7 @@ export default function PersonasPage() {
                   <CardDescription>Weighted average revenue per persona</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-semibold text-stone-950">
+                  <div className="text-3xl font-semibold text-[#1A1A1A]">
                     {formatCurrency(totals?.averageSpendPerPersona ?? 0)}
                   </div>
                 </CardContent>
@@ -245,7 +245,7 @@ export default function PersonasPage() {
                   <CardDescription>Contribution from all persona groups</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-semibold text-stone-950">
+                  <div className="text-3xl font-semibold text-[#1A1A1A]">
                     {formatCurrency(totals?.revenueContribution ?? 0)}
                   </div>
                 </CardContent>
@@ -267,29 +267,29 @@ export default function PersonasPage() {
                         onClick={() => setSelectedPersona(persona)}
                         className={`w-full rounded-2xl border p-4 text-left transition ${
                           isSelected
-                            ? 'border-amber-400 bg-amber-50 shadow-sm'
-                            : 'border-stone-200 bg-white hover:border-amber-200 hover:bg-amber-50/60'
+                            ? 'border-[#5B4FFF] bg-[#EEF2FF]'
+                            : 'border-[#E5E7EB] bg-white hover:border-[#5B4FFF]/40 hover:bg-[#F8F7FF]'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="font-semibold text-stone-950">{persona.persona_name}</div>
-                            <div className="mt-1 text-sm text-stone-600">{persona.persona_description}</div>
+                            <div className="font-semibold text-[#1A1A1A]">{persona.persona_name}</div>
+                            <div className="mt-1 text-sm text-[#6B7280]">{persona.persona_description}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-semibold text-stone-950">{persona.customer_count}</div>
-                            <div className="text-xs text-stone-500">customers</div>
+                            <div className="text-lg font-semibold text-[#1A1A1A]">{persona.customer_count}</div>
+                            <div className="text-xs text-[#6B7280]">customers</div>
                           </div>
                         </div>
-                        <div className="mt-3 h-2 rounded-full bg-stone-100">
+                        <div className="mt-3 h-2 rounded-full bg-[#F3F4F6]">
                           <div
-                            className="h-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                            className="h-2 rounded-full bg-[#5B4FFF]"
                             style={{
                               width: `${Math.max(8, persona.revenue_share)}%`,
                             }}
                           />
                         </div>
-                        <div className="mt-2 flex items-center justify-between text-xs text-stone-500">
+                        <div className="mt-2 flex items-center justify-between text-xs text-[#6B7280]">
                           <span>{formatCurrency(persona.average_spend)} avg spend</span>
                           <span>{formatScore(persona.revenue_share)} of revenue</span>
                         </div>
@@ -308,11 +308,11 @@ export default function PersonasPage() {
                 </CardHeader>
                 <CardContent>
                   {customerLoading ? (
-                    <p className="text-sm text-stone-500">Loading customers...</p>
+                    <p className="text-sm text-[#6B7280]">Loading customers...</p>
                   ) : selectedCustomers.length > 0 ? (
-                    <div className="overflow-hidden rounded-2xl border border-stone-200">
-                      <table className="min-w-full divide-y divide-stone-200 text-sm">
-                        <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+                    <div className="overflow-hidden rounded-2xl border border-[#E5E7EB]">
+                      <table className="min-w-full divide-y divide-[#E5E7EB] text-sm">
+                        <thead className="bg-[#F9FAFB] text-left text-xs uppercase tracking-wide text-[#6B7280]">
                           <tr>
                             <th className="px-4 py-3">Customer</th>
                             <th className="px-4 py-3">Spend</th>
@@ -321,23 +321,23 @@ export default function PersonasPage() {
                             <th className="px-4 py-3">Last Purchase</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-stone-200 bg-white">
+                        <tbody className="divide-y divide-[#E5E7EB] bg-white">
                           {selectedCustomers.map((customer) => (
                             <tr key={customer.customer_id} className="align-top">
                               <td className="px-4 py-3">
-                                <div className="font-medium text-stone-950">{customer.customer_name}</div>
-                                <div className="text-xs text-stone-500">
+                                <div className="font-medium text-[#1A1A1A]">{customer.customer_name}</div>
+                                <div className="text-xs text-[#6B7280]">
                                   {customer.preferred_channel ?? 'Unknown channel'} · {customer.discount_affinity ?? 'Unknown'} affinity
                                 </div>
                               </td>
-                              <td className="px-4 py-3 font-medium text-stone-950">
+                              <td className="px-4 py-3 font-medium text-[#1A1A1A]">
                                 {formatCurrency(customer.total_spent)}
                               </td>
-                              <td className="px-4 py-3 text-stone-700">{customer.total_orders}</td>
-                              <td className="px-4 py-3 text-stone-700">
+                              <td className="px-4 py-3 text-[#374151]">{customer.total_orders}</td>
+                              <td className="px-4 py-3 text-[#374151]">
                                 {customer.favorite_category ?? 'No orders yet'}
                               </td>
-                              <td className="px-4 py-3 text-stone-700">
+                              <td className="px-4 py-3 text-[#374151]">
                                 {customer.days_since_last_order === null ? 'No orders yet' : `${customer.days_since_last_order} days ago`}
                               </td>
                             </tr>
@@ -346,7 +346,7 @@ export default function PersonasPage() {
                       </table>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-8 text-sm text-stone-500">
+                    <div className="rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F9FAFB] p-8 text-sm text-[#6B7280]">
                       No customers found for this persona.
                     </div>
                   )}

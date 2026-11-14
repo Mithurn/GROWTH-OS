@@ -45,7 +45,7 @@ export default function IntelligencePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
         <p className="text-gray-600">Loading customer intelligence...</p>
       </div>
     );
@@ -53,14 +53,14 @@ export default function IntelligencePage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
         <p className="text-gray-600">No data available. Please complete onboarding first.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-8">
+    <div className="min-h-screen bg-[#FAFAFA] p-8">
       <div className="container mx-auto max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Customer Intelligence Preview</h1>
