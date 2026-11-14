@@ -1,5 +1,5 @@
 NAME=GrowthOS
-DOMAIN_NAME=growthos
+DOMAIN_NAME=growthos-crm
 export AWS_DEFAULT_REGION=${AWS_REGION:-ap-south-1}
 REGION=$AWS_DEFAULT_REGION
 iid() {
@@ -14,7 +14,7 @@ upload_release() {
   local tmp; tmp=$(mktemp -d)
   tar czf "$tmp/growthos.tgz" -C "$(dirname "$0")/../.." \
     --exclude=node_modules --exclude=dist --exclude=.git --exclude='.env' --exclude='.env.*' \
-    --exclude=generated --exclude=generated-data --exclude=frontend --exclude=docs --exclude=.next \
+    --exclude=backend/generated --exclude=frontend --exclude=docs --exclude=.next \
     backend channel-service packages deploy
   aws s3 cp "$tmp/growthos.tgz" "s3://$(bucket)/growthos.tgz" --only-show-errors
   rm -rf "$tmp"
