@@ -1,18 +1,19 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { SURFACE_CLASS } from '@/components/ui/surface';
 
 export function Panel({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]', className)}>{children}</div>;
+  return <div className={cn(SURFACE_CLASS, className)}>{children}</div>;
 }
 
 export function PanelLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]', className)}>{children}</p>;
+  return <p className={cn('text-[13px] font-medium tracking-tight text-[#6B7280]', className)}>{children}</p>;
 }
 
 export function Stat({ icon: Icon, label, children }: { icon?: React.ComponentType<{ className?: string }>; label: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-[#F9FAFB] px-3.5 py-3">
-      <dt className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+    <div className="rounded-xl bg-[#F7F7F9] px-3.5 py-3 ring-1 ring-inset ring-black/[0.04]">
+      <dt className="flex items-center gap-1.5 text-[13px] font-medium text-[#6B7280]">
         {Icon && <Icon className="size-3.5" />} {label}
       </dt>
       <dd className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-[#1A1A1A]">{children}</dd>

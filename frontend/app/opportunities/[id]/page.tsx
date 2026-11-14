@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Gem, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Gauge, Gem, Target, Users, Wallet, X } from 'lucide-react';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 import { AiLoader } from '@/components/ui/ai-loader';
-import { MetricTile } from '@/components/agent/metric-tile';
+import { MetricStrip } from '@/components/ui/metric-strip';
+import { SECTION_LABEL_CLASS, SURFACE_CLASS } from '@/components/ui/surface';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AgentPromptInput } from '@/components/agent/agent-prompt-input';
 import { ConfidenceMeter } from '@/components/agent/confidence-meter';
@@ -53,8 +54,8 @@ const rupees = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`;
 
 function Card({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`rounded-2xl border border-[#E5E7EB] bg-white p-5 ${className ?? ''}`}>
-      <h2 className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">{title}</h2>
+    <section className={`${SURFACE_CLASS} p-5 ${className ?? ''}`}>
+      <h2 className={SECTION_LABEL_CLASS}>{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -189,12 +190,15 @@ export default function OpportunityDetailPage() {
         </div>
       </header>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricTile accent label="Recoverable" value={formatCurrency(opp.potential_revenue)} hint="Estimated revenue at stake" />
-        <MetricTile label="Audience" value={audienceCount.toLocaleString()} hint="Customers in the target group" />
-        <MetricTile label="Predicted conversion" value={conversion} hint="Of the audience expected to buy" />
-        <MetricTile label="Agent confidence" value={`${Math.round(opp.confidence_score)}%`} hint={`Based on ${reasons.length} signals`} />
-      </div>
+      <MetricStrip
+        className="mt-6"
+        items={[
+          { label: 'Recoverable', value: opp.potential_revenue, format: formatCurrency, icon: Wallet, accent: true, hint: 'Estimated revenue at stake' },
+          { label: 'Audience', value: audienceCount, icon: Users, hint: 'Customers in the target group' },
+          { label: 'Predicted conversion', value: opp.predicted_conversion_rate ?? 0, format: (n) => (opp.predicted_conversion_rate != null ? `${n}%` : '-'), icon: Target, hint: 'Of the audience expected to buy' },
+          { label: 'Agent confidence', value: Math.round(opp.confidence_score), format: (n) => `${n}%`, icon: Gauge, progress: opp.confidence_score, hint: `Based on ${reasons.length} signals` },
+        ]}
+      />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -348,7 +352,7 @@ function CustomerDrawer({ customer, onClose }: { customer: Customer; onClose: ()
         <dl className="mt-6 grid grid-cols-2 gap-3">
           {stats.map(({ label, value }) => (
             <div key={label} className="rounded-xl border border-[#E5E7EB] p-3">
-              <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">{label}</dt>
+              <dt className="text-[13px] font-medium text-[#6B7280]">{label}</dt>
               <dd className="mt-1 text-base font-semibold tabular-nums text-[#1A1A1A]">{value}</dd>
             </div>
           ))}

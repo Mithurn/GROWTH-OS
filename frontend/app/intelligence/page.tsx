@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { ArrowRight, Crown, DollarSign, ShoppingCart, TrendingUp, Users } from 'lucide-react';
 import { AiLoader } from '@/components/ui/ai-loader';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
-import { MetricTile } from '@/components/agent/metric-tile';
+import { MetricStrip } from '@/components/ui/metric-strip';
+import { SECTION_LABEL_CLASS, SURFACE_CLASS } from '@/components/ui/surface';
 import { PageHeader } from '@/components/agent/page-header';
 import { PrimaryAction } from '@/components/agent/primary-action';
 import { getIntelligencePreview } from '@/lib/api';
@@ -76,21 +77,25 @@ export default function IntelligencePage() {
 
   const health = data.customerHealth;
   const healthTotal = health ? health.active + health.dormant + health.atRisk : 0;
+  const activePct = health && data.totalCustomers ? Math.round((health.active / data.totalCustomers) * 100) : 0;
 
   return (
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
       <PageHeader title="Customer intelligence" description="What the agent learned from your customer data" />
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricTile label="Customers" value={(data.totalCustomers ?? 0).toLocaleString()} icon={Users} hint={health && data.totalCustomers ? `${Math.round((health.active / data.totalCustomers) * 100)}% active right now` : undefined} />
-        <MetricTile label="Orders" value={(data.totalOrders ?? 0).toLocaleString()} icon={ShoppingCart} hint={data.totalCustomers ? `${((data.totalOrders ?? 0) / data.totalCustomers).toFixed(1)} orders per customer` : undefined} />
-        <MetricTile label="Revenue" value={formatCurrency(data.revenue ?? 0)} icon={DollarSign} accent hint="Lifetime, all channels" />
-        <MetricTile label="Average order" value={formatCurrency(data.avgOrderValue ?? 0)} icon={TrendingUp} hint="Spend per order" />
-      </div>
+      <MetricStrip
+        className="mt-6"
+        items={[
+          { label: 'Customers', value: data.totalCustomers ?? 0, icon: Users, hint: health && data.totalCustomers ? `${activePct}% active right now` : undefined, progress: health && data.totalCustomers ? activePct : undefined },
+          { label: 'Orders', value: data.totalOrders ?? 0, icon: ShoppingCart, hint: data.totalCustomers ? `${((data.totalOrders ?? 0) / data.totalCustomers).toFixed(1)} orders per customer` : undefined },
+          { label: 'Revenue', value: data.revenue ?? 0, format: formatCurrency, icon: DollarSign, accent: true, hint: 'Lifetime, all channels' },
+          { label: 'Average order', value: data.avgOrderValue ?? 0, format: formatCurrency, icon: TrendingUp, hint: 'Spend per order' },
+        ]}
+      />
 
       {health && (
-        <section className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white p-5" aria-label="Customer health">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Customer health</h2>
+        <section className={cn(SURFACE_CLASS, 'mt-6 p-5')} aria-label="Customer health">
+          <h2 className={SECTION_LABEL_CLASS}>Customer health</h2>
           <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-[#F3F4F6]" aria-hidden>
             {HEALTH_SEGMENTS.map(({ key, bar }) => (
               <span key={key} className={bar} style={{ width: `${healthTotal ? (health[key] / healthTotal) * 100 : 0}%` }} />
@@ -112,8 +117,8 @@ export default function IntelligencePage() {
       )}
 
       {data.topCustomers && data.topCustomers.length > 0 && (
-        <section className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white" aria-label="Top customers">
-          <h2 className="border-b border-[#F0F0F2] px-5 py-3 text-xs font-medium uppercase tracking-wider text-[#6B7280]">Top customers</h2>
+        <section className={cn(SURFACE_CLASS, 'mt-6')} aria-label="Top customers">
+          <h2 className={cn(SECTION_LABEL_CLASS, 'border-b border-[#F0F0F2] px-5 py-3')}>Top customers</h2>
           <ul className="divide-y divide-[#F0F0F2]">
             {data.topCustomers.map((customer, index) => (
               <li key={customer.name} className="flex items-center justify-between px-5 py-3">
