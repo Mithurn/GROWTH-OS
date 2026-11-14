@@ -1,29 +1,12 @@
 'use client';
 
-import { AiOrb } from '@/components/ui/ai-orb';
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, Loader2, ShieldCheck, UploadCloud, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import Image from 'next/image';
-import Link from 'next/link';
-import {
-  ArrowRight,
-  ArrowLeft,
-  Sparkles,
-  ShoppingBag,
-  Zap,
-  Coffee,
-  Cpu,
-  Home,
-  Store,
-  UploadCloud,
-  Check,
-  TrendingUp,
-  RefreshCcw,
-  HeartHandshake,
-  BadgeIndianRupee,
-  Users,
-  ShieldCheck,
-} from 'lucide-react';
+import { AiOrb } from '@/components/ui/ai-orb';
+import { PrimaryAction } from '@/components/agent/primary-action';
+import { cn } from '@/lib/utils';
 import {
   saveBusinessInfo,
   uploadCustomerCSV,
@@ -35,117 +18,114 @@ import {
   createAgent,
   generateOpportunities,
 } from '@/lib/api';
+import {
+  AGENT_CHANNELS,
+  AGENT_FREQUENCY_CAP,
+  AGENT_LINES,
+  AGENT_MAX_BUDGET,
+  DEMO_CUSTOMERS,
+  DEMO_ORDERS,
+  FORM_STEPS,
+  GOALS,
+  GOAL_LABELS,
+  INDUSTRIES,
+  MAX_POLLS,
+  POLL_INTERVAL_MS,
+  SETUP_ITEMS,
+  STEP_ORDER,
+  getDoneCount,
+  type Step,
+} from './onboarding-config';
+import { OnboardingShell } from './onboarding-shell';
 
-function Logo() {
+const primaryButton =
+  'flex w-full items-center justify-center gap-2 rounded-xl bg-[#5B4FFF] py-3 text-sm font-medium text-white transition-colors hover:bg-[#4B3FE5] disabled:cursor-not-allowed disabled:opacity-40';
+
+function Choice({
+  selected,
+  onClick,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  icon: LucideIcon;
+  label: string;
+  hint?: string;
+}) {
   return (
-    <Link href="/">
-      <Image src="/logo.png" alt="GrowthOS" width={120} height={33} className="object-contain" />
-    </Link>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        'flex items-center gap-3 rounded-xl border p-4 text-left transition-colors',
+        selected ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C7D2FE]',
+      )}
+    >
+      <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', selected ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F3F4F6] text-[#6B7280]')}>
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-[#1A1A1A]">{label}</span>
+        {hint && <span className="block text-xs text-[#9CA3AF]">{hint}</span>}
+      </span>
+      {selected && <Check className="size-4 text-[#5B4FFF]" aria-hidden />}
+    </button>
   );
 }
 
-type Step = 'welcome' | 'company' | 'data' | 'goal' | 'mode' | 'setup';
-
-const INDUSTRIES = [
-  { value: 'fashion', label: 'Fashion', icon: ShoppingBag, color: '#8B5CF6' },
-  { value: 'beauty', label: 'Beauty', icon: Sparkles, color: '#EC4899' },
-  { value: 'food', label: 'Food & Beverage', icon: Coffee, color: '#F59E0B' },
-  { value: 'electronics', label: 'Electronics', icon: Cpu, color: '#3B82F6' },
-  { value: 'home', label: 'Home & Living', icon: Home, color: '#10B981' },
-  { value: 'other', label: 'Other Retail', icon: Store, color: '#6B7280' },
-];
-
-const GOALS = [
-  { value: 'repeat', label: 'Increase Repeat Purchases', icon: RefreshCcw, color: '#8B5CF6' },
-  { value: 'churn', label: 'Reduce Churn', icon: TrendingUp, color: '#EF4444' },
-  { value: 'loyalty', label: 'Grow Loyalty', icon: HeartHandshake, color: '#EC4899' },
-  { value: 'aov', label: 'Increase Average Order Value', icon: BadgeIndianRupee, color: '#F59E0B' },
-  { value: 'acquire', label: 'Acquire New Customers', icon: Users, color: '#10B981' },
-];
-
-const GOAL_LABELS: Record<string, string> = {
-  repeat: 'Increase Repeat Purchases',
-  churn: 'Reduce Churn',
-  loyalty: 'Grow Loyalty',
-  aov: 'Increase Average Order Value',
-  acquire: 'Acquire New Customers',
-};
-
-const SETUP_ITEMS = [
-  'Validating your data',
-  'Importing customer & order history',
-  'Building customer profiles',
-  'Generating AI personas',
-  'Setting up your AI growth team',
-  'Ready to grow',
-];
-
-// Maps backend ingestion step → how many checklist items are done
-function getDoneCount(step: string): number {
-  const map: Record<string, number> = {
-    validating: 0,
-    parsing: 0,
-    seeding_products: 0,
-    importing_customers: 1,
-    importing_orders: 1,
-    calculating_metrics: 2,
-    validating_metrics: 2,
-    calculating_attributes: 2,
-    validating_attributes: 2,
-    generating_personas: 3,
-    personas_complete: 3,
-    personas_skipped: 3,
-    completed: 4,
-  };
-  return map[step] ?? 0;
+function FileDrop({ file, label, hint, onPick }: { file: File | null; label: string; hint: string; onPick: (file: File | null) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input ref={ref} type="file" accept=".csv" className="hidden" onChange={(e) => onPick(e.target.files?.[0] ?? null)} />
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        className={cn(
+          'flex w-full items-center gap-4 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-[#5B4FFF] hover:bg-[#F8F7FF]',
+          file ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#D1D5DB]',
+        )}
+      >
+        <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', file ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F3F4F6] text-[#9CA3AF]')}>
+          {file ? <Check className="size-5" aria-hidden /> : <UploadCloud className="size-5" aria-hidden />}
+        </span>
+        <span>
+          <span className="block text-sm font-medium text-[#1A1A1A]">{label}</span>
+          <span className="block text-xs text-[#9CA3AF]">{file ? file.name : hint}</span>
+        </span>
+      </button>
+    </>
+  );
 }
 
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>('welcome');
-
-  // Company + industry
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
   const [creatingCompany, setCreatingCompany] = useState(false);
   const [companyError, setCompanyError] = useState('');
-
-  // Data files — kept in state so we can send them during setup
   const [customerFile, setCustomerFile] = useState<File | null>(null);
   const [orderFile, setOrderFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [useDemoData, setUseDemoData] = useState(false);
-
-  // Goal + mode
   const [goal, setGoal] = useState('');
   const [mode, setMode] = useState<'operator' | 'autonomous'>('operator');
-
-  // Setup animation
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [doneItems, setDoneItems] = useState<number[]>([]);
   const [ingestionMessage, setIngestionMessage] = useState('');
   const [setupError, setSetupError] = useState('');
 
-  const customerInputRef = useRef<HTMLInputElement>(null);
-  const orderInputRef = useRef<HTMLInputElement>(null);
+  const move = (delta: number) => {
+    const i = STEP_ORDER.indexOf(step) + delta;
+    if (i >= 0 && i < STEP_ORDER.length) setStep(STEP_ORDER[i]);
+  };
+  const next = () => move(1);
+  const back = () => move(-1);
 
-  // For progress bar (setup is not in the bar)
-  const STEPS: Step[] = ['welcome', 'company', 'data', 'goal', 'mode'];
-  const stepIndex = STEPS.indexOf(step);
-
-  function next() {
-    const order: Step[] = ['welcome', 'company', 'data', 'goal', 'mode', 'setup'];
-    const i = order.indexOf(step);
-    if (i < order.length - 1) setStep(order[i + 1]);
-  }
-
-  function back() {
-    const order: Step[] = ['welcome', 'company', 'data', 'goal', 'mode', 'setup'];
-    const i = order.indexOf(step);
-    if (i > 0) setStep(order[i - 1]);
-  }
-
-  // ── Step 1: Create company in DB, store companyId ──────────────────────────
   async function handleCompanyContinue() {
     if (!companyName.trim() || !industry) return;
     setCreatingCompany(true);
@@ -161,7 +141,6 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── Step 2: Validate files only — actual ingestion happens in setup ─────────
   async function handleDataUpload() {
     if (!customerFile || !orderFile) {
       setUploadError('Please select both files.');
@@ -170,7 +149,6 @@ export default function OnboardingPage() {
     setUploading(true);
     setUploadError('');
     try {
-      // Preview calls validate CSV format without writing to DB
       await uploadCustomerCSV(customerFile);
       await uploadOrderCSV(orderFile);
       next();
@@ -181,9 +159,7 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── Final step: real pipeline with polling ─────────────────────────────────
   async function handleFinish() {
-    // Double-click guard
     if (isSettingUp) return;
 
     if (!useDemoData && (!customerFile || !orderFile)) {
@@ -198,61 +174,49 @@ export default function OnboardingPage() {
     setSetupError('');
 
     try {
-      // Demo and upload differ only in where the rows come from. Both run the same
-      // server-side pipeline against this user's own company, so both show real
-      // progress and both end with real personas and opportunities.
-      const { sessionId } = useDemoData
-        ? await seedDemoData()
-        : await startIngestion(customerFile!, orderFile!);
+      const { sessionId } = useDemoData ? await seedDemoData() : await startIngestion(customerFile!, orderFile!);
 
       let ingestionDone = false;
-      let retries = 0;
-      const MAX_RETRIES = 200; // 200 × 1.5s = 5 min — covers AI persona generation
+      let polls = 0;
 
-      while (!ingestionDone && retries < MAX_RETRIES) {
-        retries++;
-        await new Promise(r => setTimeout(r, 1500));
+      while (!ingestionDone && polls < MAX_POLLS) {
+        polls++;
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         let status: { step: string; message?: string } | null = null;
         try {
           status = await getIngestionStatus(sessionId);
         } catch {
-          // Polling hiccup — keep retrying, data is likely still processing
           continue;
         }
 
         if (!status) continue;
 
         setIngestionMessage(status.message || '');
-        const count = getDoneCount(status.step);
-        setDoneItems(Array.from({ length: count }, (_, i) => i));
+        setDoneItems(Array.from({ length: getDoneCount(status.step) }, (_, i) => i));
 
         if (status.step === 'completed') {
           setDoneItems([0, 1, 2, 3]);
           ingestionDone = true;
         } else if (status.step === 'error') {
-          throw new Error('Something went wrong processing your data. Your upload was saved — please contact support.');
+          throw new Error('Something went wrong processing your data. Your upload was saved, please contact support.');
         }
       }
 
       if (!ingestionDone) {
-        throw new Error('This is taking longer than expected. Your data is still being processed — please refresh in a minute.');
+        throw new Error('This is taking longer than expected. Your data is still being processed, please refresh in a minute.');
       }
 
-      // Tick all steps done visually
-      setDoneItems([0, 1, 2, 3, 4, 5]);
+      setDoneItems(SETUP_ITEMS.map((_, i) => i));
 
       const goalLabel = GOAL_LABELS[goal] || goal;
-      // Fire these in the background — don't block the redirect
       saveOnboardingProfile({ companyName, industry, primaryGoal: goalLabel, operatingMode: mode }).catch(() => {});
-      createAgent(goalLabel, {
-        channels: ['WhatsApp', 'Email'],
-        max_budget: 100000,
-        frequency_cap: 3,
-      }, mode === 'autonomous' ? 'autonomous_within_policy' : 'manual').catch(() => {});
-      // Wait for at least one opportunity so the dashboard isn't empty on arrival
+      createAgent(
+        goalLabel,
+        { channels: AGENT_CHANNELS, max_budget: AGENT_MAX_BUDGET, frequency_cap: AGENT_FREQUENCY_CAP },
+        mode === 'autonomous' ? 'autonomous_within_policy' : 'manual',
+      ).catch(() => {});
       await generateOpportunities().catch(() => {});
 
-      // Mark onboarding complete — refresh session so the proxy sees the new metadata
       const supabase = createClient();
       await supabase.auth.updateUser({ data: { onboarding_complete: true } });
       await supabase.auth.refreshSession();
@@ -264,415 +228,214 @@ export default function OnboardingPage() {
     }
   }
 
-  // ── WELCOME ────────────────────────────────────────────────────────────────
-  if (step === 'welcome') {
-    return (
-      <div className="min-h-screen bg-white flex flex-col">
-        <header className="px-6 py-5">
-          <Logo />
-        </header>
-        <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="max-w-md w-full text-center">
-            <Image src="/favicon.png" alt="GrowthOS" width={56} height={55} className="mx-auto mb-8 rounded-2xl" />
-            <h1 className="text-4xl font-black text-[#1A1A1A] mb-4 tracking-tight leading-tight">
-              Welcome to GrowthOS
-            </h1>
-            <p className="text-base text-[#6B7280] mb-10 leading-relaxed">
-              An AI-native platform that finds growth opportunities, builds customer audiences, and runs personalised campaigns for your brand.
-            </p>
-            <button
-              onClick={next}
-              className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors"
-            >
-              Get Started <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── SETUP ANIMATION ────────────────────────────────────────────────────────
   if (step === 'setup') {
     return (
-      <div className="min-h-screen bg-white flex flex-col">
-        <header className="px-6 py-5">
-          <Logo />
-        </header>
-        <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="max-w-md w-full">
-            <div className="text-center mb-10">
-              <AiOrb size="lg" state="connecting" className="mx-auto mb-8" />
-              <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">Setting up your AI Revenue Team</h2>
-              <p className="text-sm text-[#6B7280]">Analysing your data. This takes about 30–60 seconds.</p>
-            </div>
-
-            <div className="space-y-2 mb-4">
-              {SETUP_ITEMS.map((label, i) => {
-                const isDone = doneItems.includes(i);
-                const isActive = !isDone && i === doneItems.length;
-                return (
-                  <div
-                    key={label}
-                    className={`flex items-center gap-3 p-4 rounded-xl border transition-all duration-500 ${
-                      isDone
-                        ? 'bg-[#F0FDF4] border-[#86EFAC]'
-                        : isActive
-                        ? 'bg-[#F8F7FF] border-[#C4BFFF]'
-                        : 'bg-[#FAFAFA] border-[#E5E7EB] opacity-40'
-                    }`}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                        isDone
-                          ? 'bg-[#22C55E]'
-                          : isActive
-                          ? 'bg-[#5B4FFF] animate-pulse'
-                          : 'bg-[#E5E7EB]'
-                      }`}
-                    >
-                      {isDone && <Check className="h-3 w-3 text-white" />}
-                    </div>
-                    <span className={`text-sm font-medium ${isDone ? 'text-[#166534]' : 'text-[#374151]'}`}>
-                      {label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {ingestionMessage && !setupError && (
-              <p className="text-xs text-[#9CA3AF] text-center mt-3">{ingestionMessage}</p>
-            )}
-
-            {setupError && (
-              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-center">
-                <p className="text-sm font-medium text-red-700 mb-3">{setupError}</p>
-                <button
-                  onClick={() => { setStep('mode'); setIsSettingUp(false); setSetupError(''); }}
-                  className="text-sm font-semibold text-red-600 underline underline-offset-2"
-                >
-                  Go back and try again
-                </button>
-              </div>
-            )}
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A0E1A] bg-[radial-gradient(circle_at_50%_0%,rgba(91,79,255,0.28),transparent_55%)] px-6 py-10 text-white">
+        <div className="w-full max-w-md">
+          <div className="text-center">
+            <AiOrb size="lg" state="connecting" theme="dark" className="mx-auto" />
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight">Your agent is learning your business</h1>
+            <p className="mt-1.5 text-sm text-[#8B92A5]">This takes about 30 to 60 seconds.</p>
           </div>
+
+          <ol className="mt-8 space-y-2">
+            {SETUP_ITEMS.map((label, i) => {
+              const isDone = doneItems.includes(i);
+              const isActive = !isDone && i === doneItems.length;
+              return (
+                <li
+                  key={label}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-500',
+                    isDone && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+                    isActive && 'border-[#5B4FFF]/50 bg-[#5B4FFF]/10 text-white',
+                    !isDone && !isActive && 'border-[#1E2545] text-[#5E6680]',
+                  )}
+                >
+                  {isDone ? (
+                    <Check className="size-4 text-emerald-400" aria-hidden />
+                  ) : isActive ? (
+                    <Loader2 className="size-4 text-[#A89DFF] motion-safe:animate-spin" aria-hidden />
+                  ) : (
+                    <span className="size-4 rounded-full border border-[#1E2545]" aria-hidden />
+                  )}
+                  {label}
+                </li>
+              );
+            })}
+          </ol>
+
+          {ingestionMessage && !setupError && <p className="mt-4 text-center text-xs text-[#8B92A5]">{ingestionMessage}</p>}
+
+          {setupError && (
+            <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-center">
+              <p className="text-sm text-red-200">{setupError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('mode');
+                  setIsSettingUp(false);
+                  setSetupError('');
+                }}
+                className="mt-3 text-sm font-medium text-red-300 underline underline-offset-2"
+              >
+                Go back and try again
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // ── STEP WRAPPER (company / data / goal / mode) ────────────────────────────
+  const copy = AGENT_LINES[step];
+  const formIndex = FORM_STEPS.indexOf(step);
+  const progress = formIndex >= 0 ? { index: formIndex, total: FORM_STEPS.length } : undefined;
+
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <header className="px-6 py-5">
-        <Logo />
-      </header>
+    <OnboardingShell title={copy.title} body={copy.body} progress={progress}>
+      {formIndex > 0 && (
+        <button type="button" onClick={back} className="mb-6 flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#1A1A1A]">
+          <ArrowLeft className="size-4" aria-hidden /> Back
+        </button>
+      )}
 
-      {/* Progress bar — only for named steps */}
-      <div className="w-full h-0.5 bg-[#F3F4F6]">
-        <div
-          className="h-full bg-[#5B4FFF] transition-all duration-500"
-          style={{ width: stepIndex > 0 ? `${((stepIndex - 1) / (STEPS.length - 2)) * 100}%` : '0%' }}
-        />
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-xl">
-
-          {stepIndex > 1 && (
-            <button
-              onClick={back}
-              className="flex items-center gap-1.5 text-sm text-[#9CA3AF] hover:text-[#1A1A1A] mb-8 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </button>
-          )}
-
-          {/* ── COMPANY + INDUSTRY ── */}
-          {step === 'company' && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 1 of 4</p>
-              <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">Tell us about your brand</h2>
-              <p className="text-[#6B7280] mb-8">This helps GrowthOS tailor its AI to your market.</p>
-
-              {/* Company name */}
-              <div className="mb-6">
-                <label className="block text-sm font-bold text-[#374151] mb-2">Brand / Company Name</label>
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={e => setCompanyName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCompanyContinue()}
-                  placeholder="e.g. Zara India, Nykaa, Lenskart"
-                  className="w-full px-4 py-3 rounded-xl border-2 border-[#E5E7EB] text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] outline-none focus:border-[#5B4FFF] transition-colors"
-                />
-              </div>
-
-              {/* Industry grid */}
-              <div className="mb-8">
-                <label className="block text-sm font-bold text-[#374151] mb-3">Industry</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {INDUSTRIES.map(ind => {
-                    const Icon = ind.icon;
-                    const selected = industry === ind.value;
-                    return (
-                      <button
-                        key={ind.value}
-                        onClick={() => setIndustry(ind.value)}
-                        className={`relative p-5 rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                          selected ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C4BFFF]'
-                        }`}
-                      >
-                        {selected && (
-                          <div className="absolute top-3 right-3 w-5 h-5 bg-[#5B4FFF] rounded-full flex items-center justify-center">
-                            <Check className="h-3 w-3 text-white" />
-                          </div>
-                        )}
-                        <div
-                          className="w-9 h-9 rounded-lg mb-3 flex items-center justify-center"
-                          style={{ backgroundColor: `${ind.color}18` }}
-                        >
-                          <Icon className="h-5 w-5" style={{ color: ind.color }} />
-                        </div>
-                        <div className="text-sm font-bold text-[#1A1A1A]">{ind.label}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {companyError && <p className="text-xs text-red-500 mb-4">{companyError}</p>}
-
-              <button
-                onClick={handleCompanyContinue}
-                disabled={!companyName.trim() || !industry || creatingCompany}
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {creatingCompany ? (
-                  <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
-                ) : (
-                  <>Continue <ArrowRight className="h-4 w-4" /></>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* ── DATA UPLOAD ── */}
-          {step === 'data' && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 2 of 4</p>
-              <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">Connect your customer data</h2>
-              <p className="text-[#6B7280] mb-8">
-                Upload your customers and orders as CSV files. GrowthOS will analyse them instantly.
-              </p>
-
-              {/* Hidden file inputs */}
-              <input
-                ref={customerInputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={e => setCustomerFile(e.target.files?.[0] ?? null)}
-              />
-              <input
-                ref={orderInputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={e => setOrderFile(e.target.files?.[0] ?? null)}
-              />
-
-              <div className="space-y-3 mb-6">
-                <button
-                  type="button"
-                  onClick={() => customerInputRef.current?.click()}
-                  className={`w-full border-2 border-dashed rounded-xl p-5 text-left transition-all hover:border-[#5B4FFF] hover:bg-[#F8F7FF] ${customerFile ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB]'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${customerFile ? 'bg-[#EEF2FF]' : 'bg-[#F3F4F6]'}`}>
-                      {customerFile ? <Check className="h-5 w-5 text-[#5B4FFF]" /> : <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />}
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[#1A1A1A]">Upload Customers CSV</div>
-                      <div className="text-xs text-[#9CA3AF] mt-0.5">
-                        {customerFile ? customerFile.name : 'customer_id, name, email, phone, city...'}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => orderInputRef.current?.click()}
-                  className={`w-full border-2 border-dashed rounded-xl p-5 text-left transition-all hover:border-[#5B4FFF] hover:bg-[#F8F7FF] ${orderFile ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB]'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${orderFile ? 'bg-[#EEF2FF]' : 'bg-[#F3F4F6]'}`}>
-                      {orderFile ? <Check className="h-5 w-5 text-[#5B4FFF]" /> : <UploadCloud className="h-5 w-5 text-[#9CA3AF]" />}
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[#1A1A1A]">Upload Orders CSV</div>
-                      <div className="text-xs text-[#9CA3AF] mt-0.5">
-                        {orderFile ? orderFile.name : 'order_id, customer_id, date, amount, product...'}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              {uploadError && (
-                <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2 mb-4">{uploadError}</p>
-              )}
-
-              <button
-                onClick={handleDataUpload}
-                disabled={!customerFile || !orderFile || uploading}
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed mb-3"
-              >
-                {uploading ? (
-                  <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Validating...</>
-                ) : (
-                  <>Upload & Continue <ArrowRight className="h-4 w-4" /></>
-                )}
-              </button>
-
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex-1 h-px bg-[#E5E7EB]" />
-                <span className="text-xs text-[#9CA3AF]">or</span>
-                <div className="flex-1 h-px bg-[#E5E7EB]" />
-              </div>
-
-              <button
-                onClick={() => {
-                  setUseDemoData(true);
-                  next();
-                }}
-                className="w-full border-2 border-[#E5E7EB] text-[#374151] text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:border-[#5B4FFF] hover:text-[#5B4FFF] transition-colors"
-              >
-                Try it with 500 customers <ArrowRight className="h-4 w-4" />
-              </button>
-              <p className="text-[11px] text-[#9CA3AF] text-center mt-2">
-                Imports 500 customers and 3,000 orders into your workspace so you can evaluate
-                the pipeline before uploading your own files.
-              </p>
-            </div>
-          )}
-
-          {/* ── PRIMARY GOAL ── */}
-          {step === 'goal' && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 3 of 4</p>
-              <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">What is your primary growth goal?</h2>
-              <p className="text-[#6B7280] mb-8">GrowthOS will optimise every decision around this objective.</p>
-
-              <div className="flex flex-col gap-2 mb-8">
-                {GOALS.map(g => {
-                  const Icon = g.icon;
-                  const selected = goal === g.value;
-                  return (
-                    <button
-                      key={g.value}
-                      onClick={() => setGoal(g.value)}
-                      className={`flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all hover:scale-[1.01] active:scale-[0.99] ${
-                        selected ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C4BFFF]'
-                      }`}
-                    >
-                      <div
-                        className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: `${g.color}15` }}
-                      >
-                        <Icon className="h-5 w-5" style={{ color: g.color }} />
-                      </div>
-                      <span className="text-sm font-bold text-[#1A1A1A]">{g.label}</span>
-                      {selected && (
-                        <div className="ml-auto w-5 h-5 bg-[#5B4FFF] rounded-full flex items-center justify-center shrink-0">
-                          <Check className="h-3 w-3 text-white" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={next}
-                disabled={!goal}
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Continue <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
-          {/* ── AI MODE ── */}
-          {step === 'mode' && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-[#5B4FFF] mb-3">Step 4 of 4</p>
-              <h2 className="text-3xl font-black text-[#1A1A1A] mb-2">How should GrowthOS work?</h2>
-              <p className="text-[#6B7280] mb-8">
-                Choose how much autonomy you give your AI team. You can change this at any time.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                <button
-                  onClick={() => setMode('operator')}
-                  className={`p-6 rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                    mode === 'operator' ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C4BFFF]'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-lg bg-[#FEF3C7] flex items-center justify-center mb-4">
-                    <ShieldCheck className="h-5 w-5 text-[#D97706]" />
-                  </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-black text-[#1A1A1A]">Operator</span>
-                    {mode === 'operator' && (
-                      <div className="w-5 h-5 bg-[#5B4FFF] rounded-full flex items-center justify-center">
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-[#6B7280] leading-relaxed">
-                    GrowthOS discovers opportunities, builds audiences, and drafts campaigns.{' '}
-                    <span className="font-semibold text-[#374151]">You approve before launch.</span>
-                  </p>
-                </button>
-
-                <button
-                  disabled
-                  className={`p-6 rounded-xl border-2 text-left opacity-60 cursor-not-allowed ${
-                    mode === 'autonomous' ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C4BFFF]'
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-lg bg-[#F0EEFF] flex items-center justify-center mb-4">
-                    <Zap className="h-5 w-5 text-[#5B4FFF]" />
-                  </div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-black text-[#1A1A1A]">Autonomous — coming soon</span>
-                    {mode === 'autonomous' && (
-                      <div className="w-5 h-5 bg-[#5B4FFF] rounded-full flex items-center justify-center">
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-[#6B7280] leading-relaxed">
-                    Available after launch policy, approval audit, and recipient safety controls are enabled.
-                  </p>
-                </button>
-              </div>
-
-              <button
-                onClick={handleFinish}
-                disabled={isSettingUp}
-                className="w-full bg-[#5B4FFF] text-white text-sm font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 hover:bg-[#4B3FE5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Launch AI Team <Zap className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
+      {step === 'welcome' && (
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-[#1A1A1A]">Welcome to GrowthOS</h1>
+          <p className="mt-3 text-base leading-relaxed text-[#6B7280]">
+            Four quick steps and your agent starts finding revenue you are leaving on the table.
+          </p>
+          <button type="button" onClick={next} className={cn(primaryButton, 'mt-8')}>
+            Get started <ArrowRight className="size-4" aria-hidden />
+          </button>
         </div>
-      </div>
-    </div>
+      )}
+
+      {step === 'company' && (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Tell us about your brand</h1>
+          <label className="mt-6 block text-sm font-medium text-[#374151]" htmlFor="company-name">
+            Brand or company name
+          </label>
+          <input
+            id="company-name"
+            type="text"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCompanyContinue()}
+            placeholder="e.g. Zara India, Nykaa, Lenskart"
+            className="mt-2 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-[#5B4FFF]"
+          />
+          <p className="mt-6 text-sm font-medium text-[#374151]">Industry</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {INDUSTRIES.map((ind) => (
+              <Choice key={ind.value} selected={industry === ind.value} onClick={() => setIndustry(ind.value)} icon={ind.icon} label={ind.label} />
+            ))}
+          </div>
+          {companyError && (
+            <p role="alert" className="mt-4 text-xs text-red-600">
+              {companyError}
+            </p>
+          )}
+          <button type="button" onClick={handleCompanyContinue} disabled={!companyName.trim() || !industry || creatingCompany} className={cn(primaryButton, 'mt-8')}>
+            {creatingCompany ? (
+              <>
+                <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> Saving
+              </>
+            ) : (
+              <>
+                Continue <ArrowRight className="size-4" aria-hidden />
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {step === 'data' && (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Connect your customer data</h1>
+          <p className="mt-2 text-sm text-[#6B7280]">Upload customers and orders as CSV files.</p>
+          <div className="mt-6 space-y-3">
+            <FileDrop file={customerFile} onPick={setCustomerFile} label="Customers CSV" hint="customer_id, name, email, phone, city" />
+            <FileDrop file={orderFile} onPick={setOrderFile} label="Orders CSV" hint="order_id, customer_id, date, amount, product" />
+          </div>
+          {uploadError && (
+            <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+              {uploadError}
+            </p>
+          )}
+          <button type="button" onClick={handleDataUpload} disabled={!customerFile || !orderFile || uploading} className={cn(primaryButton, 'mt-6')}>
+            {uploading ? (
+              <>
+                <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> Validating
+              </>
+            ) : (
+              <>
+                Upload and continue <ArrowRight className="size-4" aria-hidden />
+              </>
+            )}
+          </button>
+          <div className="my-4 flex items-center gap-3 text-xs text-[#9CA3AF]">
+            <span className="h-px flex-1 bg-[#E5E7EB]" /> or <span className="h-px flex-1 bg-[#E5E7EB]" />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setUseDemoData(true);
+              next();
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] py-3 text-sm font-medium text-[#374151] transition-colors hover:border-[#5B4FFF] hover:text-[#5B4FFF]"
+          >
+            Try it with {DEMO_CUSTOMERS} sample customers <ArrowRight className="size-4" aria-hidden />
+          </button>
+          <p className="mt-2 text-center text-[11px] text-[#9CA3AF]">
+            Imports {DEMO_CUSTOMERS} customers and {DEMO_ORDERS} orders into your workspace so you can try the pipeline first.
+          </p>
+        </div>
+      )}
+
+      {step === 'goal' && (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">What is your primary growth goal?</h1>
+          <div className="mt-6 flex flex-col gap-2">
+            {GOALS.map((g) => (
+              <Choice key={g.value} selected={goal === g.value} onClick={() => setGoal(g.value)} icon={g.icon} label={g.label} />
+            ))}
+          </div>
+          <button type="button" onClick={next} disabled={!goal} className={cn(primaryButton, 'mt-8')}>
+            Continue <ArrowRight className="size-4" aria-hidden />
+          </button>
+        </div>
+      )}
+
+      {step === 'mode' && (
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">How should the agent work?</h1>
+          <p className="mt-2 text-sm text-[#6B7280]">You can change this at any time.</p>
+          <div className="mt-6 grid gap-3">
+            <Choice
+              selected={mode === 'operator'}
+              onClick={() => setMode('operator')}
+              icon={ShieldCheck}
+              label="Operator"
+              hint="The agent drafts campaigns. You approve before anything is sent."
+            />
+            <div className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] p-4 opacity-60">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#F3F4F6] text-[#6B7280]">
+                <Zap className="size-4" aria-hidden />
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-[#1A1A1A]">Autonomous, coming soon</span>
+                <span className="block text-xs text-[#9CA3AF]">Available after launch policy, approval audit and recipient safety controls are on.</span>
+              </span>
+            </div>
+          </div>
+          <PrimaryAction onClick={handleFinish} disabled={isSettingUp} className="mt-8 w-full">
+            Launch your agent <Zap className="size-4" aria-hidden />
+          </PrimaryAction>
+        </div>
+      )}
+    </OnboardingShell>
   );
 }
