@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Check, Loader2, Sparkles, Users, Wallet } from 'lucide-react';
 import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
 import { AiOrb } from '@/components/ui/ai-orb';
-import { MetricTile } from '@/components/agent/metric-tile';
+import { MetricStrip } from '@/components/ui/metric-strip';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AgentActivityFeed, type AgentActivityItem } from '@/components/agent/agent-activity-feed';
 import { toActivityEntry } from '@/components/agent/activity-model';
@@ -96,15 +96,15 @@ function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: bool
 
       <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Recoverable</dt>
+          <dt className="text-[13px] font-medium text-[#6B7280]">Recoverable</dt>
           <dd className="mt-1 text-2xl font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Audience</dt>
+          <dt className="text-[13px] font-medium text-[#6B7280]">Audience</dt>
           <dd className="mt-1 text-2xl font-semibold tabular-nums text-[#1A1A1A]">{opp.audience_size.toLocaleString()}</dd>
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Agent confidence</dt>
+          <dt className="text-[13px] font-medium text-[#6B7280]">Agent confidence</dt>
           <dd className="mt-3">
             <ConfidenceMeter value={opp.confidence_score} />
           </dd>
@@ -112,7 +112,7 @@ function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: bool
       </dl>
 
       <div className="mt-6 border-t border-[#F0F0F2] pt-5">
-        <p className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Why the agent flagged this</p>
+        <p className="text-[13px] font-medium text-[#6B7280]">Why the agent flagged this</p>
         <ul className="mt-3 flex flex-wrap gap-2">
           {parseTriggerReasons(opp).map((reason) => (
             <li key={reason} className="flex items-center gap-1.5 rounded-lg bg-[#F8F7FF] px-2.5 py-1 text-xs text-[#4B5563]">
@@ -331,11 +331,14 @@ export default function HomePage() {
 
       {hasContent && (
         <>
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <MetricTile icon={Wallet} accent label="Revenue the agent found" value={formatCurrency(totalRevenue)} hint={`Recoverable across ${opportunities.length} opportunities`} />
-            <MetricTile icon={Users} label="Customers in scope" value={totalAudience.toLocaleString()} hint="Reachable by the campaigns it proposes" />
-            <MetricTile icon={Check} label="Open opportunities" value={String(opportunities.length)} hint={`${formatCurrency(Math.round(totalRevenue / opportunities.length))} average per opportunity`} />
-          </div>
+          <MetricStrip
+            className="mt-8"
+            items={[
+              { label: 'Revenue the agent found', value: totalRevenue, format: formatCurrency, icon: Wallet, accent: true, hint: `Recoverable across ${opportunities.length} opportunities` },
+              { label: 'Customers in scope', value: totalAudience, icon: Users, hint: 'Reachable by the campaigns it proposes' },
+              { label: 'Open opportunities', value: opportunities.length, icon: Check, hint: `${formatCurrency(Math.round(totalRevenue / opportunities.length))} average per opportunity` },
+            ]}
+          />
 
           <div className="mt-6 grid gap-6 lg:grid-cols-12">
             <div className={`lg:col-span-8 transition-opacity duration-300 ${swapping ? 'opacity-0' : 'opacity-100'}`}>

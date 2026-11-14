@@ -4,10 +4,11 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BorderBeam } from 'border-beam';
-import { ArrowRight, Check, Mail, Target, X } from 'lucide-react';
+import { ArrowRight, Check, Clock, Mail, Megaphone, Radio, Target, Users, X } from 'lucide-react';
 import { approveCampaign, getCampaigns, rejectCampaign } from '@/lib/api';
 import type { CampaignWithMetrics } from '@/lib/types';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
+import { MetricStrip } from '@/components/ui/metric-strip';
 import { PrimaryAction } from '@/components/agent/primary-action';
 import { CampaignBuilder } from '@/components/campaign/campaign-builder';
 import { ChannelTabs } from '@/components/campaign/channel-tabs';
@@ -220,11 +221,14 @@ function CampaignList() {
 
   const stats = useMemo(() => {
     const list = campaigns ?? [];
+    const awaiting = list.filter((c) => c.status === 'PendingApproval' || c.status === 'Draft').length;
+    const live = list.filter((c) => c.status === 'Launched').length;
+    const reached = list.reduce((n, c) => n + (c.communications_sent ?? 0), 0);
     return [
-      { label: 'Campaigns', value: formatNumber(list.length) },
-      { label: 'Awaiting approval', value: formatNumber(list.filter((c) => c.status === 'PendingApproval' || c.status === 'Draft').length) },
-      { label: 'Live', value: formatNumber(list.filter((c) => c.status === 'Launched').length) },
-      { label: 'Customers reached', value: formatNumber(list.reduce((n, c) => n + (c.communications_sent ?? 0), 0)) },
+      { label: 'Campaigns', value: list.length, icon: Megaphone, hint: 'Drafted by the agent' },
+      { label: 'Awaiting approval', value: awaiting, icon: Clock, hint: awaiting ? 'Waiting for your review' : 'Nothing waiting on you' },
+      { label: 'Live', value: live, icon: Radio, hint: live ? 'Sending to customers now' : 'None sending right now' },
+      { label: 'Customers reached', value: reached, icon: Users, accent: true, hint: `Across ${list.length} ${list.length === 1 ? 'campaign' : 'campaigns'}` },
     ];
   }, [campaigns]);
 
@@ -250,14 +254,7 @@ function CampaignList() {
   } else {
     body = (
       <div className="space-y-6">
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {stats.map(({ label, value }) => (
-            <Panel key={label} className="px-4 py-3.5">
-              <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</dt>
-              <dd className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[#1A1A1A]">{value}</dd>
-            </Panel>
-          ))}
-        </dl>
+        <MetricStrip items={stats} />
         <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="space-y-3">
             <div role="tablist" aria-label="Filter campaigns" className="flex gap-1 overflow-x-auto rounded-xl bg-[#F3F4F6] p-1">

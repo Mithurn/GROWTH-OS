@@ -3,9 +3,10 @@
 import { AiLoader } from '@/components/ui/ai-loader';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BarChart3, Layers, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
-import { MetricTile } from '@/components/agent/metric-tile';
+import { MetricStrip } from '@/components/ui/metric-strip';
 import { PageHeader } from '@/components/agent/page-header';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -203,12 +204,15 @@ export default function PersonasPage() {
 
       {report ? (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricTile label="Personas" value={String(report.totalPersonas)} hint="Distinct buying behaviours" />
-            <MetricTile label="Customers" value={report.totalCustomers.toLocaleString()} hint="Grouped by the agent" />
-            <MetricTile label="Average per persona" value={formatCurrency(totals?.averageSpendPerPersona ?? 0)} hint="Revenue per persona" />
-            <MetricTile label="Total revenue" value={formatCurrency(totals?.revenueContribution ?? 0)} accent hint="Across all personas" />
-          </div>
+          <MetricStrip
+            className="mt-6"
+            items={[
+              { label: 'Personas', value: report.totalPersonas, icon: Layers, hint: 'Distinct buying behaviours' },
+              { label: 'Customers', value: report.totalCustomers, icon: Users, hint: 'Grouped by the agent' },
+              { label: 'Average per persona', value: totals?.averageSpendPerPersona ?? 0, format: formatCurrency, icon: BarChart3, hint: 'Revenue per persona' },
+              { label: 'Total revenue', value: totals?.revenueContribution ?? 0, format: formatCurrency, icon: Wallet, accent: true, hint: 'Across all personas' },
+            ]}
+          />
 
           <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
             <ul className="space-y-2" aria-label="Personas">

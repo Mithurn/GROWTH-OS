@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronRight, Eye, Lightbulb, Wallet } from 'lucide-react';
 import { GOAL_LOADING_STEPS } from '@/lib/loading-copy';
 import { AiLoader } from '@/components/ui/ai-loader';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
+import { MetricStrip } from '@/components/ui/metric-strip';
+import { CHIP_ACTIVE_CLASS, CHIP_CLASS } from '@/components/ui/action-styles';
+import { SURFACE_CLASS } from '@/components/ui/surface';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AgentPromptInput } from '@/components/agent/agent-prompt-input';
 import { ConfidenceMeter } from '@/components/agent/confidence-meter';
@@ -49,10 +52,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
-        active
-          ? 'border-[#C7D2FE] bg-[#EEF2FF] text-[#4B3FE5]'
-          : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F3F4F6]',
+        CHIP_CLASS,
+        active && CHIP_ACTIVE_CLASS,
       )}
     >
       {children}
@@ -207,6 +208,18 @@ export default function OpportunitiesPage() {
         </div>
       </header>
 
+      {!loading && !error && all.length > 0 && (
+        <MetricStrip
+          className="mt-6"
+          items={[
+            { label: 'Opportunities', value: all.length, icon: Lightbulb, hint: 'Found by the agent' },
+            { label: 'Recoverable revenue', value: totalRevenue, format: formatCurrency, icon: Wallet, accent: true, hint: 'Estimated across all of them' },
+            { label: 'Awaiting review', value: statusCounts.awaiting_review, icon: Eye, hint: 'Campaigns drafted, need your OK' },
+            { label: 'Completed', value: statusCounts.completed, icon: CheckCircle2, hint: 'Campaigns live now' },
+          ]}
+        />
+      )}
+
       <AgentPromptInput
         className="mt-6"
         value={goal}
@@ -225,7 +238,7 @@ export default function OpportunitiesPage() {
       )}
 
       {loading && (
-        <div className="mt-8 divide-y divide-[#F0F0F2] rounded-2xl border border-[#E5E7EB] bg-white" aria-hidden>
+        <div className={cn(SURFACE_CLASS, "mt-8 divide-y divide-[#F0F0F2]")} aria-hidden>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-5">
               <div className="flex-1 space-y-2">
@@ -296,7 +309,7 @@ export default function OpportunitiesPage() {
               )}
             </StatePanel>
           ) : (
-            <ul className="mt-4 divide-y divide-[#F0F0F2] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+            <ul className={cn(SURFACE_CLASS, "mt-4 divide-y divide-[#F0F0F2] overflow-hidden")}>
               {filtered.map((opp) => (
                 <OpportunityRow key={idOf(opp)} opp={opp} campaignStatus={campaignMap[opp.opportunity_id] ?? null} />
               ))}
