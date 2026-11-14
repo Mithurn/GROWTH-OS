@@ -1,39 +1,57 @@
 'use client';
 
+import { useSyncExternalStore, type ReactElement } from 'react';
 import Link from 'next/link';
+import { MetalFx } from 'metal-fx';
 import { enterDemo } from '@/lib/demo/mode';
 import { useBackendStatus } from '@/lib/use-backend-status';
 
 const PRIMARY =
-  'w-full rounded-lg bg-[#5B4FFF] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF] sm:w-auto';
+  'inline-flex h-12 cursor-pointer items-center justify-center rounded-full bg-[#0c0c14] px-7 text-[15px] font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-400';
 const SECONDARY =
-  'w-full rounded-lg border border-[#E5E7EB] bg-white px-6 py-3 text-base font-semibold text-[#111827] transition-colors hover:bg-[#F9FAFB] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF] sm:w-auto';
+  'inline-flex h-12 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-7 text-[15px] font-medium text-zinc-200 transition-colors hover:border-white/20 hover:bg-white/[0.07] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-400';
+
+const subscribeNever = () => () => {};
+
+function MetalCta({ children }: { children: ReactElement }) {
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+  return mounted ? (
+    <MetalFx variant="button" preset="silver" theme="dark">
+      {children}
+    </MetalFx>
+  ) : (
+    children
+  );
+}
 
 /**
  * The real app needs the AWS backend, which is only up on request. While it is asleep the
  * demo is the main action; once it answers, signing up with your own data takes over.
  */
-export function HeroActions({ light = false }: { light?: boolean }) {
-  const status = useBackendStatus();
-  const live = status === 'online';
+export function HeroActions() {
+  const live = useBackendStatus() === 'online';
 
   return (
     <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
       {live ? (
         <>
-          <Link href="/login?mode=signup" className={PRIMARY}>
-            Create account
-          </Link>
-          <button type="button" onClick={enterDemo} className={light ? 'w-full cursor-pointer rounded-lg bg-white/10 px-6 py-3 text-base font-semibold text-white hover:bg-white/20 sm:w-auto' : `${SECONDARY} cursor-pointer`}>
+          <MetalCta>
+            <Link href="/login?mode=signup" className={PRIMARY}>
+              Create account
+            </Link>
+          </MetalCta>
+          <button type="button" onClick={enterDemo} className={SECONDARY}>
             Try the demo
           </button>
         </>
       ) : (
         <>
-          <button type="button" onClick={enterDemo} className={`${PRIMARY} cursor-pointer`}>
-            Try the live demo
-          </button>
-          <Link href="/login" className={light ? 'w-full rounded-lg bg-white/10 px-6 py-3 text-base font-semibold text-white hover:bg-white/20 sm:w-auto' : SECONDARY}>
+          <MetalCta>
+            <button type="button" onClick={enterDemo} className={PRIMARY}>
+              Try the live demo
+            </button>
+          </MetalCta>
+          <Link href="/login" className={SECONDARY}>
             Sign in
           </Link>
         </>
