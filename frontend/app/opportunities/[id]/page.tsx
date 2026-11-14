@@ -1,5 +1,7 @@
 'use client';
 
+import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
+import { AiLoader } from '@/components/ui/ai-loader';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -208,10 +210,7 @@ export default function OpportunityDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#FAFAFA]">
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-          Loading opportunity…
-        </div>
+        <AiLoader size="md" title="Loading opportunity" />
       </div>
     );
   }
@@ -222,9 +221,13 @@ export default function OpportunityDetailPage() {
         <button onClick={() => router.push('/opportunities')} className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 mb-6">
           <ArrowLeft className="h-4 w-4" /> Back to Opportunities
         </button>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          {error ?? 'Opportunity not found'}
-        </div>
+        <StatePanel
+          tone="error"
+          title={error ? 'We could not load this opportunity' : 'Opportunity not found'}
+          message={error ?? 'It may have been removed, or the link is out of date.'}
+        >
+          <button type="button" onClick={() => window.location.reload()} className={statePanelActionClass}>Try again</button>
+        </StatePanel>
       </div>
     );
   }
@@ -282,10 +285,10 @@ export default function OpportunityDetailPage() {
         </div>
 
         {/* ── 2-column layout ── */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* ── LEFT: 2/3 width ── */}
-          <div className="col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
 
             {/* Audience Intel + Key Signals */}
             <div className="grid grid-cols-2 gap-5">
@@ -359,7 +362,7 @@ export default function OpportunityDetailPage() {
           </div>
 
           {/* ── RIGHT sidebar: 1/3 width ── */}
-          <div className="col-span-1 space-y-4">
+          <div className="lg:col-span-1 space-y-4">
 
             {/* Recommended Play */}
             <div className="bg-white rounded-xl border-2 border-indigo-300 p-5 shadow-md hover:shadow-indigo-200 hover:shadow-lg hover:border-indigo-500 transition-all duration-300" style={{ boxShadow: '0 4px 24px 0 rgba(99,102,241,0.10)' }}>

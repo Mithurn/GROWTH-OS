@@ -1,5 +1,7 @@
 'use client';
 
+import { GOAL_LOADING_STEPS } from '@/lib/loading-copy';
+import { AiLoader } from '@/components/ui/ai-loader';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,7 +11,6 @@ import {
   TrendingUp,
   Star,
   LayoutGrid,
-  Loader2,
 } from 'lucide-react';
 import {
   generateOpportunities,
@@ -216,18 +217,15 @@ export default function OpportunitiesPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
-          <p className="text-sm text-gray-500">Loading opportunities…</p>
-        </div>
+        <AiLoader size="md" title="Loading opportunities" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
+    <div className="flex flex-col lg:flex-row lg:h-screen bg-[#F9FAFB] lg:overflow-hidden">
       {/* ── Left Sidebar ── */}
-      <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-y-auto">
+      <aside className="order-2 lg:order-1 w-full lg:w-64 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col lg:overflow-y-auto">
         <div className="p-5 space-y-6">
           {/* All Opportunities */}
           <div>
@@ -304,8 +302,8 @@ export default function OpportunitiesPage() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+      <main className="order-1 lg:order-2 flex-1 flex flex-col lg:overflow-hidden">
+        <div className="flex-1 lg:overflow-y-auto p-4 sm:p-8 space-y-6">
 
           {/* ── AI Command Bar — hero element ── */}
           <div className="mb-12">
@@ -318,7 +316,7 @@ export default function OpportunitiesPage() {
                     onChange={e => setGoal(e.target.value)}
                     placeholder="Ask GrowthOS to discover an opportunity..."
                     disabled={creatingGoal}
-                    className="flex-1 bg-transparent text-2xl font-medium text-gray-800 placeholder:text-gray-300 outline-none"
+                    className="flex-1 min-w-0 bg-transparent text-lg sm:text-2xl font-medium text-gray-800 placeholder:text-gray-300 outline-none"
                   />
                   <span className="text-xs font-medium text-gray-300 border border-gray-200 rounded px-2 py-1 shrink-0">⌘ K</span>
                 </div>
@@ -343,19 +341,15 @@ export default function OpportunitiesPage() {
 
             {/* Generating state */}
             {creatingGoal && (
-              <div className="mt-4 flex items-center gap-4 bg-white border border-gray-100 rounded-xl px-6 py-4 shadow-sm">
-                <Loader2 className="h-5 w-5 text-indigo-400 animate-spin shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-gray-700">Analyzing purchase patterns…</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Building audience &amp; estimating impact</p>
-                </div>
+              <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-6 shadow-sm">
+                <AiLoader size="md" title="Building your opportunity" steps={GOAL_LOADING_STEPS} />
               </div>
             )}
           </div>
 
           {/* Error */}
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+            <div role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               {error}
             </div>
           )}
@@ -415,18 +409,18 @@ function OpportunityRow({
   return (
     <div
       onClick={onClick}
-      className="group relative flex items-center justify-between bg-white rounded-xl border border-gray-200 pl-5 pr-6 py-5 hover:shadow-lg hover:border-indigo-100 cursor-pointer transition-all duration-200 overflow-hidden"
+      className="group relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white rounded-xl border border-gray-200 pl-5 pr-6 py-5 hover:shadow-lg hover:border-indigo-100 cursor-pointer transition-all duration-200 overflow-hidden"
     >
       {/* Left accent border — colour-coded by campaign state */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor} rounded-l-xl`} />
 
       {/* Left content */}
-      <div className="min-w-0 flex-1 pl-4 pr-8">
+      <div className="min-w-0 flex-1 pl-4 sm:pr-8">
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[15px] font-bold text-gray-900 group-hover:text-indigo-600 transition-colors leading-snug">
             {opp.title}
           </span>
-          <span className="text-gray-300">|</span>
+          <span className="hidden sm:inline text-gray-300">|</span>
           <span className="text-sm text-gray-500 font-medium">
             {formatCurrency(opp.potential_revenue)} · {(opp.customer_count ?? opp.audience_size).toLocaleString()} customers · {opp.confidence_score}%
           </span>
@@ -437,7 +431,7 @@ function OpportunityRow({
       </div>
 
       {/* Right content */}
-      <div className="flex flex-col items-end gap-2 shrink-0 min-w-[160px]">
+      <div className="flex flex-col items-start sm:items-end gap-2 shrink-0 pl-4 sm:pl-0 sm:min-w-[160px]">
         {campaignBadge()}
         <button
           onClick={e => { e.stopPropagation(); onClick(); }}
