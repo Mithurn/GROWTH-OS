@@ -302,7 +302,7 @@ export default function OnboardingPage() {
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="max-w-md w-full">
             <div className="text-center mb-10">
-              <AiOrb size="lg" className="mx-auto mb-8" />
+              <AiOrb size="lg" state="connecting" className="mx-auto mb-8" />
               <h2 className="text-2xl font-bold text-[#1A1A1A] mb-2">Setting up your AI Revenue Team</h2>
               <p className="text-sm text-[#6B7280]">Analysing your data. This takes about 30–60 seconds.</p>
             </div>

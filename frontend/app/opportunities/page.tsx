@@ -342,7 +342,7 @@ export default function OpportunitiesPage() {
             {/* Generating state */}
             {creatingGoal && (
               <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-6 shadow-sm">
-                <AiLoader size="md" title="Building your opportunity" steps={GOAL_LOADING_STEPS} />
+                <AiLoader size="md" state="searching" title="Building your opportunity" steps={GOAL_LOADING_STEPS} />
               </div>
             )}
           </div>
