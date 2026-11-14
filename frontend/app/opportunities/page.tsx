@@ -1,45 +1,28 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight, ChevronRight } from 'lucide-react';
 import { GOAL_LOADING_STEPS } from '@/lib/loading-copy';
 import { AiLoader } from '@/components/ui/ai-loader';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
+import { AgentAvatar } from '@/components/agent/agent-avatar';
+import { AgentPromptInput } from '@/components/agent/agent-prompt-input';
+import { ConfidenceMeter } from '@/components/agent/confidence-meter';
+import { StatusPill } from '@/components/agent/status-pill';
+import { generateOpportunities, getOpportunityDashboard, createOpportunityFromGoal, getCampaigns } from '@/lib/api';
+import { formatCurrency } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import type { CampaignWithMetrics, Opportunity } from '@/lib/types';
 import {
-  Sparkles,
-  RotateCcw,
-  ShieldAlert,
-  TrendingUp,
-  Star,
-  LayoutGrid,
-} from 'lucide-react';
-import {
-  generateOpportunities,
-  getOpportunityDashboard,
-  createOpportunityFromGoal,
-  getCampaigns,
-} from '@/lib/api';
-import type { CampaignWithMetrics } from '@/lib/types';
-
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
-interface Opportunity {
-  opportunity_id: string;
-  id?: string;
-  title: string;
-  opportunity_type: string;
-  description: string;
-  trigger_reason: string;
-  ai_summary: string;
-  audience_size: number;
-  potential_revenue: number;
-  confidence_score: number;
-  priority_score: number;
-  recommended_action: string;
-  supporting_customer_segment: string;
-  status: string;
-  customer_count?: number;
-}
+  CATEGORY_FILTERS,
+  GOAL_PLACEHOLDERS,
+  GOAL_SUGGESTIONS,
+  STATUS_FILTERS,
+  categoryForType,
+  parseChannel,
+  stageOf,
+} from './opportunities-config';
 
 interface OpportunityReport {
   totalOpportunities: number;
@@ -49,75 +32,92 @@ interface OpportunityReport {
   opportunityDistribution: Opportunity[];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────────
-const formatCurrency = (amount: number) => {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(0)}K`;
-  return `₹${amount}`;
+type StatusKey = (typeof STATUS_FILTERS)[number]['key'];
+
+const idOf = (o: Opportunity) => o.opportunity_id || o.title;
+
+const stageKeyOf = (map: Record<string, string>, o: Opportunity): StatusKey => {
+  const cs = map[o.opportunity_id];
+  if (!cs) return 'new';
+  return cs === 'Launched' ? 'completed' : 'awaiting_review';
 };
 
-const parseChannel = (action: string): string => {
-  if (!action) return 'WhatsApp';
-  if (action.toLowerCase().includes('whatsapp')) return 'WhatsApp';
-  if (action.toLowerCase().includes('email')) return 'Email';
-  if (action.toLowerCase().includes('sms')) return 'SMS';
-  return 'WhatsApp';
-};
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+        active
+          ? 'border-[#C7D2FE] bg-[#EEF2FF] text-[#4B3FE5]'
+          : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F3F4F6]',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
-const getCategoryForType = (type: string): string => {
-  const t = (type ?? '').toLowerCase();
-  if (t.includes('recov') || t.includes('churn') || t.includes('dormant') || t.includes('winback')) return 'Recovery';
-  if (t.includes('retention') || t.includes('retain') || t.includes('at-risk') || t.includes('risk')) return 'Retention';
-  if (t.includes('expansion') || t.includes('growth') || t.includes('revenue') || t.includes('upsell') || t.includes('cross')) return 'Expansion';
-  if (t.includes('loyalty') || t.includes('vip') || t.includes('reward') || t.includes('tier')) return 'Loyalty';
-  return 'Expansion';
-};
+function OpportunityRow({ opp, campaignStatus }: { opp: Opportunity; campaignStatus: string | null }) {
+  const channel = parseChannel(opp.recommended_action);
+  const stage = stageOf(campaignStatus);
+  const audience = opp.customer_count ?? opp.audience_size;
 
-const CATEGORY_FILTERS = [
-  { key: 'Recovery', icon: RotateCcw, color: 'text-blue-500' },
-  { key: 'Retention', icon: ShieldAlert, color: 'text-amber-500' },
-  { key: 'Expansion', icon: TrendingUp, color: 'text-emerald-500' },
-  { key: 'Loyalty', icon: Star, color: 'text-purple-500' },
-];
+  return (
+    <li>
+      <Link
+        href={`/opportunities/${opp.opportunity_id}`}
+        className="group grid items-center gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-[#FCFBFF] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:grid-cols-[minmax(0,1fr)_88px_88px_150px_auto]"
+      >
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-[#1A1A1A] group-hover:text-[#4B3FE5]">{opp.title}</p>
+          <p className="mt-0.5 line-clamp-1 text-xs text-[#6B7280]">{opp.trigger_reason || opp.description}</p>
+        </div>
+        <div className="hidden sm:block lg:text-right">
+          <p className="font-mono text-sm font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</p>
+          <p className="text-[11px] text-[#9CA3AF]">recoverable</p>
+        </div>
+        <div className="hidden lg:block lg:text-right">
+          <p className="font-mono text-sm font-semibold tabular-nums text-[#1A1A1A]">{audience.toLocaleString()}</p>
+          <p className="text-[11px] text-[#9CA3AF]">customers</p>
+        </div>
+        <ConfidenceMeter value={opp.confidence_score} className="hidden w-[150px] lg:flex" />
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <StatusPill tone={stage.tone}>{stage.label}</StatusPill>
+            <span className="text-[11px] font-medium text-[#6B7280]">{stage.action(channel)}</span>
+          </div>
+          <ChevronRight className="size-4 text-[#D1D5DB] transition-transform group-hover:translate-x-0.5 group-hover:text-[#5B4FFF]" aria-hidden />
+        </div>
+        <div className="flex items-center gap-4 text-xs text-[#6B7280] sm:hidden">
+          <span className="font-mono font-semibold text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</span>
+          <span>{audience.toLocaleString()} customers</span>
+          <span>{Math.round(opp.confidence_score)}% confident</span>
+        </div>
+      </Link>
+    </li>
+  );
+}
 
-const STATUS_FILTERS = [
-  { key: 'new', label: 'No Campaign Yet' },
-  { key: 'awaiting_review', label: 'Campaign Draft' },
-  { key: 'completed', label: 'Campaign Launched' },
-];
-
-const SUGGESTIONS = [
-  'Find customers likely to churn',
-  'Find dormant VIP customers',
-  'Increase denim sales',
-];
-
-// ─────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────
 export default function OpportunitiesPage() {
-  const router = useRouter();
   const [report, setReport] = useState<OpportunityReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [activeStatus, setActiveStatus] = useState<string | null>(null);
-  const [campaignMap, setCampaignMap] = useState<Record<string, string>>({}); // opportunityId → campaign status
+  const [goalError, setGoalError] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusKey | null>(null);
+  const [campaignMap, setCampaignMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
         setError(null);
-        // Fetch opportunities + campaigns in parallel (both are cached)
-        const [res, campRes] = await Promise.all([
-          getOpportunityDashboard(),
-          getCampaigns().catch(() => null),
-        ]);
+        const [res, campRes] = await Promise.all([getOpportunityDashboard(), getCampaigns().catch(() => null)]);
         const data = res.data as OpportunityReport;
         if (!mounted) return;
         if (data.totalOpportunities > 0) {
@@ -135,23 +135,21 @@ export default function OpportunitiesPage() {
           if (mounted) setCampaignMap(map);
         }
       } catch (e) {
-        if (!mounted) return;
-        setError(e instanceof Error ? e.message : 'Failed to load opportunities');
+        if (mounted) setError(e instanceof Error ? e.message : 'Failed to load opportunities');
       } finally {
         if (mounted) setLoading(false);
       }
     }
     load();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const allOpportunities = useMemo<Opportunity[]>(() => {
-    const dist = report?.opportunityDistribution ?? [];
-    const top = report?.topOpportunities ?? [];
-    const merged = [...dist, ...top];
+  const all = useMemo<Opportunity[]>(() => {
     const seen = new Set<string>();
-    return merged.filter(o => {
-      const key = o.opportunity_id || o.id || o.title;
+    return [...(report?.opportunityDistribution ?? []), ...(report?.topOpportunities ?? [])].filter((o) => {
+      const key = idOf(o);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -159,287 +157,153 @@ export default function OpportunitiesPage() {
   }, [report]);
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, { count: number; revenue: number }> = {};
-    allOpportunities.forEach(o => {
-      const cat = getCategoryForType(o.opportunity_type);
-      if (!counts[cat]) counts[cat] = { count: 0, revenue: 0 };
-      counts[cat].count++;
-      counts[cat].revenue += o.potential_revenue ?? 0;
+    const counts: Record<string, number> = {};
+    all.forEach((o) => {
+      const key = categoryForType(o.opportunity_type);
+      counts[key] = (counts[key] ?? 0) + 1;
     });
     return counts;
-  }, [allOpportunities]);
-
-  const getCampaignStatus = (oppId: string) => campaignMap[oppId] ?? null;
+  }, [all]);
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { new: 0, awaiting_review: 0, completed: 0 };
-    allOpportunities.forEach(o => {
-      const id = o.opportunity_id || o.id || '';
-      const cs = campaignMap[id];
-      if (!cs) counts.new++;
-      else if (cs === 'Launched') counts.completed++;
-      else counts.awaiting_review++;
+    const counts: Record<StatusKey, number> = { new: 0, awaiting_review: 0, completed: 0 };
+    all.forEach((o) => {
+      counts[stageKeyOf(campaignMap, o)]++;
     });
     return counts;
-  }, [allOpportunities, campaignMap]);
+  }, [all, campaignMap]);
 
-  const filtered = useMemo(() => {
-    return allOpportunities.filter(o => {
-      if (activeCategory && getCategoryForType(o.opportunity_type) !== activeCategory) return false;
-      if (activeStatus) {
-        const id = o.opportunity_id || o.id || '';
-        const cs = campaignMap[id];
-        if (activeStatus === 'new' && cs) return false;
-        if (activeStatus === 'awaiting_review' && (cs === 'Launched' || !cs)) return false;
-        if (activeStatus === 'completed' && cs !== 'Launched') return false;
-      }
-      return true;
-    });
-  }, [allOpportunities, activeCategory, activeStatus, campaignMap]);
+  const filtered = all.filter(
+    (o) => (!category || categoryForType(o.opportunity_type) === category) && (!status || stageKeyOf(campaignMap, o) === status),
+  );
+  const totalRevenue = all.reduce((sum, o) => sum + (o.potential_revenue ?? 0), 0);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = goal.trim();
-    if (!trimmed || creatingGoal) return;
+  async function submitGoal(value: string) {
     try {
       setCreatingGoal(true);
       setGoal('');
-      await createOpportunityFromGoal(trimmed);
+      setGoalError(null);
+      await createOpportunityFromGoal(value);
       const res = await getOpportunityDashboard();
       setReport(res.data as OpportunityReport);
     } catch {
-      setError('Failed to create opportunity. Try again.');
+      setGoalError('The agent could not create that opportunity. Try again.');
     } finally {
       setCreatingGoal(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F9FAFB]">
-        <AiLoader size="md" title="Loading opportunities" />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col lg:flex-row lg:h-screen bg-[#F9FAFB] lg:overflow-hidden">
-      {/* ── Left Sidebar ── */}
-      <aside className="order-2 lg:order-1 w-full lg:w-64 shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col lg:overflow-y-auto">
-        <div className="p-5 space-y-6">
-          {/* All Opportunities */}
-          <div>
-            <button
-              onClick={() => { setActiveCategory(null); setActiveStatus(null); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                !activeCategory && !activeStatus
-                  ? 'bg-indigo-500 text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              All Opportunities
-            </button>
-          </div>
-
-          {/* Categories */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">Categories</p>
-            <div className="space-y-0.5">
-              {CATEGORY_FILTERS.map(({ key, icon: Icon, color }) => {
-                const data = categoryCounts[key];
-                const isActive = activeCategory === key && !activeStatus;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => { setActiveCategory(key); setActiveStatus(null); }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
-                      isActive ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-indigo-500' : color}`} />
-                      {key}
-                    </div>
-                    {data && (
-                      <span className="text-[11px] text-gray-400">
-                        {data.count} · {formatCurrency(data.revenue)}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Status */}
-          <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">Status</p>
-            <div className="space-y-0.5">
-              {STATUS_FILTERS.map(({ key, label }) => {
-                const count = key === 'new'
-                  ? (statusCounts['new'] ?? 0) + (statusCounts[''] ?? 0) + (statusCounts['detected'] ?? 0)
-                  : statusCounts[key] ?? 0;
-                const isActive = activeStatus === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => { setActiveStatus(key); setActiveCategory(null); }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
-                      isActive ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {count > 0 && (
-                      <span className="text-[11px] text-gray-400">{count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
+      <header className="flex items-center gap-4">
+        <AgentAvatar state={creatingGoal ? 'working' : 'idle'} size="md" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Opportunities</h1>
+          <p className="text-sm text-[#6B7280]">
+            {loading
+              ? 'Scanning for opportunities...'
+              : `${all.length} found by the agent, ${formatCurrency(totalRevenue)} in recoverable revenue`}
+          </p>
         </div>
-      </aside>
+      </header>
 
-      {/* ── Main Content ── */}
-      <main className="order-1 lg:order-2 flex-1 flex flex-col lg:overflow-hidden">
-        <div className="flex-1 lg:overflow-y-auto p-4 sm:p-8 space-y-6">
+      <AgentPromptInput
+        className="mt-6"
+        value={goal}
+        onChange={setGoal}
+        onSubmit={submitGoal}
+        busy={creatingGoal}
+        placeholders={GOAL_PLACEHOLDERS}
+        suggestions={GOAL_SUGGESTIONS}
+        error={goalError}
+      />
 
-          {/* ── AI Command Bar — hero element ── */}
-          <div className="mb-12">
-            <form onSubmit={handleSubmit}>
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md focus-within:border-indigo-300 focus-within:shadow-md transition-all">
-                <div className="flex items-center gap-4 px-8 py-7">
-                  <Sparkles className="h-7 w-7 text-indigo-400 shrink-0" />
-                  <input
-                    value={goal}
-                    onChange={e => setGoal(e.target.value)}
-                    placeholder="Ask GrowthOS to discover an opportunity..."
-                    disabled={creatingGoal}
-                    className="flex-1 min-w-0 bg-transparent text-lg sm:text-2xl font-medium text-gray-800 placeholder:text-gray-300 outline-none"
-                  />
-                  <span className="text-xs font-medium text-gray-300 border border-gray-200 rounded px-2 py-1 shrink-0">⌘ K</span>
-                </div>
+      {creatingGoal && (
+        <div className="mt-4 rounded-2xl border border-[#C7D2FE] bg-white px-6 py-6">
+          <AiLoader size="md" state="searching" title="Building your opportunity" steps={GOAL_LOADING_STEPS} />
+        </div>
+      )}
+
+      {loading && (
+        <div className="mt-8 divide-y divide-[#F0F0F2] rounded-2xl border border-[#E5E7EB] bg-white" aria-hidden>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-5">
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-1/2 rounded bg-[#F3F4F6]" />
+                <div className="h-2.5 w-3/4 rounded bg-[#F3F4F6]" />
               </div>
-            </form>
-
-            {/* Suggestions */}
-            <div className="flex items-center gap-2 mt-4 px-2">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest shrink-0">TRY:</span>
-              {SUGGESTIONS.map((s, i) => (
-                <span key={s} className="flex items-center gap-2">
-                  {i > 0 && <span className="text-gray-300">·</span>}
-                  <button
-                    onClick={() => setGoal(s)}
-                    className="text-sm text-gray-400 hover:text-indigo-500 transition-colors"
-                  >
-                    {s}
-                  </button>
-                </span>
-              ))}
+              <div className="h-6 w-24 rounded-full bg-[#F3F4F6]" />
             </div>
+          ))}
+        </div>
+      )}
 
-            {/* Generating state */}
-            {creatingGoal && (
-              <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-6 shadow-sm">
-                <AiLoader size="md" state="searching" title="Building your opportunity" steps={GOAL_LOADING_STEPS} />
-              </div>
-            )}
-          </div>
+      {error && (
+        <StatePanel tone="error" title="We could not load opportunities" message={error}>
+          <button type="button" onClick={() => window.location.reload()} className={statePanelActionClass}>
+            Try again
+          </button>
+        </StatePanel>
+      )}
 
-          {/* Error */}
-          {error && (
-            <div role="alert" className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              {error}
-            </div>
-          )}
-
-          {/* Opportunity Rows */}
-          <div className="space-y-4">
-            {filtered.length === 0 && (
-              <div className="text-center py-16 text-gray-400 text-sm">
-                No opportunities match the current filter.
-              </div>
-            )}
-            {filtered.map(opp => (
-              <OpportunityRow
-                key={opp.opportunity_id || opp.id || opp.title}
-                opportunity={opp}
-                campaignStatus={getCampaignStatus(opp.opportunity_id || opp.id || '')}
-                onClick={() => router.push(`/opportunities/${opp.opportunity_id || opp.id}`)}
-              />
+      {!loading && !error && (
+        <>
+          <div className="mt-8 flex flex-wrap items-center gap-2">
+            <Chip
+              active={!category && !status}
+              onClick={() => {
+                setCategory(null);
+                setStatus(null);
+              }}
+            >
+              All <span className="font-mono text-[#9CA3AF]">{all.length}</span>
+            </Chip>
+            {CATEGORY_FILTERS.map(({ key, icon: Icon }) => (
+              <Chip
+                key={key}
+                active={category === key}
+                onClick={() => setCategory(category === key ? null : key)}
+              >
+                <Icon className="size-3" aria-hidden />
+                {key} <span className="font-mono text-[#9CA3AF]">{categoryCounts[key] ?? 0}</span>
+              </Chip>
+            ))}
+            <span className="mx-1 hidden h-4 w-px bg-[#E5E7EB] sm:block" aria-hidden />
+            {STATUS_FILTERS.map(({ key, label }) => (
+              <Chip key={key} active={status === key} onClick={() => setStatus(status === key ? null : key)}>
+                {label} <span className="font-mono text-[#9CA3AF]">{statusCounts[key]}</span>
+              </Chip>
             ))}
           </div>
-        </div>
-      </main>
-    </div>
-  );
-}
 
-// ─────────────────────────────────────────────────────────────
-// Opportunity Row
-// ─────────────────────────────────────────────────────────────
-function OpportunityRow({
-  opportunity: opp,
-  campaignStatus,
-  onClick,
-}: {
-  opportunity: Opportunity;
-  campaignStatus: string | null;
-  onClick: () => void;
-}) {
-  const channel = parseChannel(opp.recommended_action);
-  const isLaunched = campaignStatus === 'Launched';
-  const hasDraft = !!campaignStatus && !isLaunched;
-
-  const accentColor = isLaunched ? 'bg-emerald-500' : hasDraft ? 'bg-amber-400' : 'bg-indigo-500';
-
-  const campaignBadge = () => {
-    if (isLaunched) {
-      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 rounded-full border border-emerald-200">● Campaign Live</span>;
-    }
-    if (hasDraft) {
-      return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 rounded-full border border-amber-200">◐ Campaign Draft</span>;
-    }
-    return <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-500 rounded-full border border-indigo-200">✦ AI Generated</span>;
-  };
-
-  const ctaLabel = isLaunched ? 'View Analytics →' : hasDraft ? `${channel} → Review Campaign` : `${channel} → Create Campaign`;
-
-  return (
-    <div
-      onClick={onClick}
-      className="group relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white rounded-xl border border-gray-200 pl-5 pr-6 py-5 hover:shadow-lg hover:border-indigo-100 cursor-pointer transition-all duration-200 overflow-hidden"
-    >
-      {/* Left accent border — colour-coded by campaign state */}
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor} rounded-l-xl`} />
-
-      {/* Left content */}
-      <div className="min-w-0 flex-1 pl-4 sm:pr-8">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <span className="text-[15px] font-bold text-gray-900 group-hover:text-indigo-600 transition-colors leading-snug">
-            {opp.title}
-          </span>
-          <span className="hidden sm:inline text-gray-300">|</span>
-          <span className="text-sm text-gray-500 font-medium">
-            {formatCurrency(opp.potential_revenue)} · {(opp.customer_count ?? opp.audience_size).toLocaleString()} customers · {opp.confidence_score}%
-          </span>
-        </div>
-        <p className="text-xs text-gray-400 mt-1.5 leading-relaxed line-clamp-1">
-          {opp.trigger_reason || opp.description}
-        </p>
-      </div>
-
-      {/* Right content */}
-      <div className="flex flex-col items-start sm:items-end gap-2 shrink-0 pl-4 sm:pl-0 sm:min-w-[160px]">
-        {campaignBadge()}
-        <button
-          onClick={e => { e.stopPropagation(); onClick(); }}
-          className={`text-xs font-bold transition-colors ${isLaunched ? 'text-emerald-600 hover:text-emerald-800' : 'text-indigo-500 hover:text-indigo-700'}`}
-        >
-          {ctaLabel}
-        </button>
-      </div>
+          {filtered.length === 0 ? (
+            <StatePanel
+              tone="empty"
+              title={all.length === 0 ? 'No opportunities yet' : 'Nothing matches these filters'}
+              message={all.length === 0 ? 'Give the agent a goal above and it will size the audience and revenue.' : 'Clear a filter to see the rest.'}
+            >
+              {all.length > 0 && (
+                <button
+                  type="button"
+                  className={statePanelActionClass}
+                  onClick={() => {
+                    setCategory(null);
+                    setStatus(null);
+                  }}
+                >
+                  Clear filters <ArrowRight className="size-4" aria-hidden />
+                </button>
+              )}
+            </StatePanel>
+          ) : (
+            <ul className="mt-4 divide-y divide-[#F0F0F2] overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+              {filtered.map((opp) => (
+                <OpportunityRow key={idOf(opp)} opp={opp} campaignStatus={campaignMap[opp.opportunity_id] ?? null} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
     </div>
   );
 }
