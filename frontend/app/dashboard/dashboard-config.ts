@@ -1,5 +1,3 @@
-import { Megaphone, MessageSquare, Search, Sparkles, Trophy, Zap } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import type { Opportunity } from '@/lib/types';
 
 export const ACTIVITY_POLL_MS = 4000;
@@ -32,15 +30,6 @@ export const RUN_STEPS = (goal: string) => [
   'Mapping audience segments',
   'Drafting the opportunity strategy',
 ];
-
-export const ACTION_META: Record<string, { label: string; icon: LucideIcon }> = {
-  discovered_opportunity: { label: 'Discovered', icon: Search },
-  created_campaign: { label: 'Campaign', icon: Megaphone },
-  launched_campaign: { label: 'Launched', icon: Zap },
-  sent_messages: { label: 'Sent', icon: MessageSquare },
-  achieved_milestone: { label: 'Milestone', icon: Trophy },
-  generating_opportunity: { label: 'Thinking', icon: Sparkles },
-};
 
 export const PRIORITY_TONES = {
   high: { label: 'High', tone: 'live' },

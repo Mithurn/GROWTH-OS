@@ -2,20 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Check, Loader2, Users, Wallet, X } from 'lucide-react';
+import { ArrowRight, Check, Loader2, Sparkles, Users, Wallet } from 'lucide-react';
 import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
 import { AiOrb } from '@/components/ui/ai-orb';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AgentActivityFeed, type AgentActivityItem } from '@/components/agent/agent-activity-feed';
+import { toActivityEntry } from '@/components/agent/activity-model';
 import { AgentPromptInput } from '@/components/agent/agent-prompt-input';
 import { ConfidenceMeter } from '@/components/agent/confidence-meter';
 import { PrimaryAction } from '@/components/agent/primary-action';
 import { StatusPill } from '@/components/agent/status-pill';
 import { getActivityStream, getOpportunityDashboard, createOpportunityFromGoal } from '@/lib/api';
-import { formatCurrency, timeAgo } from '@/lib/format';
+import { formatCurrency } from '@/lib/format';
 import type { Opportunity } from '@/lib/types';
 import {
-  ACTION_META,
   ACTIVITY_FETCH_LIMIT,
   ACTIVITY_POLL_MS,
   COLD_START_HINT_MS,
@@ -43,18 +43,6 @@ interface ActivityRecord {
   details?: Record<string, unknown>;
   createdAt: string;
 }
-
-const toFeedItem = (record: ActivityRecord, index: number): AgentActivityItem => {
-  const meta = ACTION_META[record.actionType];
-  return {
-    id: record.id,
-    label: meta?.label ?? record.actionType.replace(/_/g, ' '),
-    description: record.description,
-    createdAt: record.createdAt,
-    icon: meta?.icon,
-    live: index === 0,
-  };
-};
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Wallet; label: string; value: string }) {
   return (
@@ -191,7 +179,6 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
   const [steps, setSteps] = useState<string[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -290,9 +277,9 @@ export default function HomePage() {
 
   const feed = useMemo<AgentActivityItem[]>(() => {
     const live: AgentActivityItem[] = processing
-      ? [{ id: 'run', label: 'Thinking', description: steps[stepIndex] ?? '', createdAt: new Date().toISOString(), live: true, icon: ACTION_META.generating_opportunity.icon }]
+      ? [{ id: 'run', label: 'Thinking', description: steps[stepIndex] ?? '', createdAt: new Date().toISOString(), live: true, icon: Sparkles, kind: 'discovered' }]
       : [];
-    return [...live, ...activity.map(toFeedItem)];
+    return [...live, ...activity.map(toActivityEntry)];
   }, [activity, processing, steps, stepIndex]);
 
   const featured = pinned ?? opportunities[0];
@@ -372,7 +359,7 @@ export default function HomePage() {
               )}
             </div>
             <div className="lg:col-span-4">
-              <AgentActivityFeed items={feed} loading={activityLoading} busy={processing} onSeeAll={() => setLogOpen(true)} />
+              <AgentActivityFeed items={feed} loading={activityLoading} busy={processing} seeAllHref="/activity" />
             </div>
           </div>
 
@@ -392,46 +379,6 @@ export default function HomePage() {
             </section>
           )}
         </>
-      )}
-
-      {logOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setLogOpen(false)}>
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Agent activity log"
-            className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-3">
-              <h2 className="text-sm font-semibold text-[#1A1A1A]">Agent activity log</h2>
-              <button
-                type="button"
-                onClick={() => setLogOpen(false)}
-                aria-label="Close log"
-                className="flex size-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]"
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            </div>
-            <ul className="space-y-2 overflow-y-auto p-5">
-              {activity.map((item) => (
-                <li key={item.id} className="rounded-xl border border-[#E5E7EB] p-3">
-                  <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">
-                    <span>{ACTION_META[item.actionType]?.label ?? item.actionType}</span>
-                    <span className="font-mono normal-case tracking-normal">{timeAgo(item.createdAt)}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-[#1A1A1A]">{item.description}</p>
-                  {item.details && Object.keys(item.details).length > 0 && (
-                    <pre className="mt-2 overflow-x-auto rounded-lg bg-[#F3F4F6] p-2.5 font-mono text-[11px] leading-relaxed text-[#6B7280]">
-                      {JSON.stringify(item.details, null, 2)}
-                    </pre>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
       )}
     </div>
   );
