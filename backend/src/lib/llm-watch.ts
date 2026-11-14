@@ -26,7 +26,7 @@ export function reportLlmFailure(err: unknown): void {
 }
 
 interface KeyInfo {
-  data?: { limit_remaining?: number | null; limit?: number | null; usage?: number };
+  data?: { limit_remaining?: number | null; limit?: number | null; usage?: number; is_free_tier?: boolean };
 }
 
 interface CreditsInfo {
@@ -53,6 +53,7 @@ async function getJson<T>(url: string, apiKey: string): Promise<T | null> {
 /** Remaining USD on the platform key, or null when OpenRouter does not say. */
 export async function fetchRemainingCredits(apiKey: string, baseUrl: string): Promise<number | null> {
   const key = await getJson<KeyInfo>(`${baseUrl}/auth/key`, apiKey);
+  if (key?.data?.is_free_tier) return null;
   const remaining = key?.data?.limit_remaining;
   if (typeof remaining === 'number') return remaining;
 

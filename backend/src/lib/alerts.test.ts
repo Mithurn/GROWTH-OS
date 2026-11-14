@@ -64,4 +64,9 @@ describe('fetchRemainingCredits', () => {
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { total_credits: 10, total_usage: 7.25 } }) });
     expect(await fetchRemainingCredits('k', 'https://or.test/api/v1')).toBe(2.75);
   });
+
+  it('reports nothing for a free tier key', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ data: { limit_remaining: null, is_free_tier: true } }) });
+    expect(await fetchRemainingCredits('k', 'https://or.test/api/v1')).toBeNull();
+  });
 });
