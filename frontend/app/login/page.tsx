@@ -117,20 +117,20 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#06060a] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <Image src="/logo.png" alt="GrowthOS" width={120} height={33} className="object-contain" />
+          <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white"><Image src="/favicon.png" alt="" width={28} height={28} className="rounded-md" />GrowthOS</span>
         </div>
 
-        <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm p-8">
+        <div className="bg-[#0b0b12] rounded-2xl border border-white/10 p-8">
           {/* Heading */}
           <div className="mb-6">
-            <h1 className="text-xl font-bold text-[#1A1A1A]">
+            <h1 className="text-xl font-bold text-white">
               {mode === 'signin' ? 'Welcome back' : 'Create your account'}
             </h1>
-            <p className="text-sm text-[#6B7280] mt-1">
+            <p className="text-sm text-zinc-400 mt-1">
               {mode === 'signin'
                 ? 'Sign in to your GrowthOS workspace'
                 : 'Start growing your retail business with AI'}
@@ -142,15 +142,15 @@ function LoginForm() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px bg-[#E5E7EB]" />
-            <span className="text-xs text-[#9CA3AF]">or</span>
-            <div className="flex-1 h-px bg-[#E5E7EB]" />
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-zinc-500">or</span>
+            <div className="flex-1 h-px bg-white/10" />
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-sm font-medium text-[#374151]">
+              <Label htmlFor="email" className="text-sm font-medium text-zinc-300">
                 Email
               </Label>
               <Input
@@ -160,12 +160,12 @@ function LoginForm() {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 required
-                className="rounded-xl border-[#E5E7EB] focus:border-[#5B4FFF] focus:ring-[#5B4FFF]/20 h-10"
+                className="rounded-xl border-white/10 focus:border-[#5B4FFF] focus:ring-[#5B4FFF]/20 h-10 bg-black/30 text-white placeholder:text-zinc-600"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-sm font-medium text-[#374151]">
+              <Label htmlFor="password" className="text-sm font-medium text-zinc-300">
                 Password
               </Label>
               <Input
@@ -176,16 +176,16 @@ function LoginForm() {
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="rounded-xl border-[#E5E7EB] focus:border-[#5B4FFF] focus:ring-[#5B4FFF]/20 h-10"
+                className="rounded-xl border-white/10 focus:border-[#5B4FFF] focus:ring-[#5B4FFF]/20 h-10 bg-black/30 text-white placeholder:text-zinc-600"
               />
             </div>
 
             {/* Error / Success */}
             {error && (
-              <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+              <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>
             )}
             {success && (
-              <p className="text-xs text-emerald-600 bg-emerald-50 rounded-lg px-3 py-2">{success}</p>
+              <p className="text-xs text-emerald-400 bg-emerald-500/10 rounded-lg px-3 py-2">{success}</p>
             )}
 
             <button
@@ -201,7 +201,7 @@ function LoginForm() {
           </form>
 
           {/* Toggle */}
-          <p className="text-center text-sm text-[#6B7280] mt-6">
+          <p className="text-center text-sm text-zinc-400 mt-6">
             {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
             <button
               onClick={() => { setMode(m => m === 'signin' ? 'signup' : 'signin'); setError(null); setSuccess(null); }}
@@ -212,7 +212,7 @@ function LoginForm() {
           </p>
         </div>
 
-        <p className="text-center text-xs text-[#9CA3AF] mt-6">
+        <p className="text-center text-xs text-zinc-500 mt-6">
           AI-powered growth for retail marketers
         </p>
       </div>
@@ -222,7 +222,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[#06060a]" />}>
       <LoginForm />
     </Suspense>
   );
