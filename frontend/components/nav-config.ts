@@ -1,4 +1,4 @@
-import { BarChart3, Brain, LayoutDashboard, Megaphone, Settings, Target, Users } from 'lucide-react';
+import { Activity, BarChart3, Brain, LayoutDashboard, Megaphone, Settings, Target, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type NavItem = { label: string; href: string; icon: LucideIcon; keywords?: string };
@@ -9,6 +9,7 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, keywords: 'home goal agent' },
       { label: 'Opportunities', href: '/opportunities', icon: Target, keywords: 'revenue audience' },
+      { label: 'Activity', href: '/activity', icon: Activity, keywords: 'log timeline agent runs' },
       { label: 'Campaigns', href: '/campaigns', icon: Megaphone, keywords: 'messages whatsapp email sms' },
     ],
   },
