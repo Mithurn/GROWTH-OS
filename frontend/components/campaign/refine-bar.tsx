@@ -24,15 +24,15 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
 
   return (
     <div className={cn('space-y-3', className)}>
-      <BorderBeam size="sm" theme="dark" colorVariant="ocean" strength={1} active={focused || busy}>
+      <BorderBeam size="sm" theme="light" colorVariant="ocean" strength={0.8} active={focused || busy}>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void submit(value);
           }}
-          className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-3 pr-1.5 text-zinc-50"
+          className="flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white py-1.5 pl-3.5 pr-1.5"
         >
-          <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
+          <Sparkles className="size-4 shrink-0 text-[#5B4FFF]" aria-hidden />
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -41,13 +41,13 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
             disabled={busy}
             aria-label="Refine this campaign with AI"
             placeholder={busy ? 'Rewriting the draft' : 'Tell the agent what to change'}
-            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed"
+            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-[#1A1A1A] outline-none placeholder:text-[#9CA3AF] disabled:cursor-not-allowed"
           />
           <button
             type="submit"
             disabled={!value.trim() || busy}
             aria-label="Send instruction"
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-white/10 disabled:text-zinc-500"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#141929] text-white transition-colors hover:bg-[#0A0E1A] disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF]"
           >
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
           </button>
@@ -60,7 +60,7 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
             type="button"
             disabled={busy}
             onClick={() => void submit(chip)}
-            className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-zinc-400 transition-colors hover:border-indigo-400/50 hover:text-indigo-300 disabled:opacity-50"
+            className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-medium text-[#4B5563] transition-colors hover:border-[#5B4FFF]/40 hover:bg-[#EEF2FF] hover:text-[#4B3FE5] disabled:opacity-50"
           >
             {chip}
           </button>

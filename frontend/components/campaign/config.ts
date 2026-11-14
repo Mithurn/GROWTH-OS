@@ -17,6 +17,16 @@ export const PREVIEW = {
   time: '10:42',
   link: 'yourbrand.com/offer',
   smsLimit: 160,
+  smsSender: 'YRBRND',
+  email: 'hello@yourbrand.com',
+  cta: 'View the offer',
+  optOut: 'Reply STOP to opt out',
+} as const;
+
+export const PHONE = {
+  maxWidth: 372,
+  screenAspect: '346 / 744',
+  stickyTop: 'lg:top-6',
 } as const;
 
 export const DRAFT_STEPS = [

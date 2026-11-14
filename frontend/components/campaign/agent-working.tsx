@@ -1,11 +1,11 @@
 'use client';
 
-import { BotAvatar } from 'bot-avatars';
 import { BorderBeam } from 'border-beam';
 import { Check } from 'lucide-react';
+import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AiOrb } from '@/components/ui/ai-orb';
 import { cn } from '@/lib/utils';
-import { ConsoleCard } from './console';
+import { Panel } from './panel';
 import { DRAFT_STEPS, TIMING } from './config';
 import { useStepProgress } from './hooks';
 
@@ -21,17 +21,17 @@ export function AgentWorking({ active, title = 'Drafting your campaign', classNa
 
   return (
     <div role="status" aria-live="polite" className={cn('mx-auto w-full max-w-xl', className)}>
-      <BorderBeam size="md" theme="dark" colorVariant="ocean" strength={0.9}>
-        <ConsoleCard glow>
-          <div className="flex items-center gap-4 border-b border-white/10 px-5 py-5">
-            <BotAvatar shading="plastic" type="pill" state={active ? 'working' : 'default'} size={64} interactive={false} />
+      <BorderBeam size="md" theme="light" colorVariant="ocean" strength={0.8}>
+        <Panel className="shadow-[0_20px_50px_-30px_rgba(20,25,41,0.3)]">
+          <div className="flex items-center gap-4 border-b border-[#F0F1F4] px-5 py-5">
+            <AgentAvatar state={active ? 'working' : 'idle'} size="lg" />
             <div className="min-w-0 flex-1">
-              <p className="text-base font-semibold tracking-tight text-white">{title}</p>
-              <p className="mt-0.5 truncate text-sm text-zinc-400">{step.label}</p>
+              <p className="text-base font-semibold tracking-tight text-[#1A1A1A]">{title}</p>
+              <p className="mt-0.5 truncate text-sm text-[#6B7280]">{step.label}</p>
             </div>
-            <AiOrb size="lg" state={step.orb} theme="dark" />
+            <AiOrb size="lg" state={step.orb} />
           </div>
-          <ol className="space-y-px p-2 font-mono text-[13px]">
+          <ol className="space-y-px p-2">
             {DRAFT_STEPS.map(({ label }, i) => {
               const done = i < current;
               const running = i === current;
@@ -39,27 +39,27 @@ export function AgentWorking({ active, title = 'Drafting your campaign', classNa
                 <li
                   key={label}
                   className={cn(
-                    'flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors',
-                    running && 'bg-white/5 text-white',
-                    done && 'text-zinc-400',
-                    !done && !running && 'text-zinc-600',
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                    running && 'bg-[#EEF2FF] font-medium text-[#1A1A1A]',
+                    done && 'text-[#6B7280]',
+                    !done && !running && 'text-[#C4C8D0]',
                   )}
                 >
                   <span
                     className={cn(
                       'flex size-4 shrink-0 items-center justify-center rounded-full',
-                      done ? 'bg-indigo-500 text-white' : 'border border-white/15',
-                      running && 'border-indigo-400',
+                      done ? 'bg-[#5B4FFF] text-white' : 'border border-[#D5D8DF]',
+                      running && 'border-[#5B4FFF]',
                     )}
                   >
-                    {done ? <Check className="size-2.5" aria-hidden /> : running && <span className="size-1.5 animate-pulse rounded-full bg-indigo-400" />}
+                    {done ? <Check className="size-2.5" aria-hidden /> : running && <span className="size-1.5 animate-pulse rounded-full bg-[#5B4FFF]" />}
                   </span>
                   <span className="truncate">{label}</span>
                 </li>
               );
             })}
           </ol>
-        </ConsoleCard>
+        </Panel>
       </BorderBeam>
     </div>
   );
