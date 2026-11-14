@@ -1,5 +1,7 @@
 'use client';
 
+import { AiLoader } from '@/components/ui/ai-loader';
+import { CAMPAIGN_LOADING_STEPS } from '@/lib/loading-copy';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -259,12 +261,8 @@ function CampaignsContent() {
   // ── Render: generating ──
   if (isGenerating || (loading && opportunityId)) {
     return (
-      <div className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center gap-4">
-        <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center">
-          <Sparkles className="h-6 w-6 text-indigo-500 animate-pulse" />
-        </div>
-        <p className="text-sm font-medium text-gray-600">AI is crafting your campaign…</p>
-        <p className="text-xs text-gray-400">Analyzing opportunity signals and writing copy</p>
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <AiLoader title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
       </div>
     );
   }
@@ -336,10 +334,10 @@ function CampaignsContent() {
           </div>
 
           {/* 3-col layout: left strategy (2), right mockup (1) */}
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
             {/* Left: 2/3 */}
-            <div className="col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6">
 
               {/* Why section */}
               <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
@@ -394,7 +392,7 @@ function CampaignsContent() {
             </div>
 
             {/* Right: 1/3 — Phone mockup */}
-            <div className="col-span-1 flex justify-center pt-2">
+            <div className="lg:col-span-1 flex justify-center pt-2">
               <div className="sticky top-6">
                 <PhoneMockup
                   channel={selectedChannel}
@@ -521,7 +519,7 @@ function CampaignsContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+        <AiLoader size="md" title="Loading campaigns" />
       </div>
     );
   }
@@ -560,9 +558,9 @@ function CampaignsContent() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Campaign list */}
-            <div className="col-span-1 space-y-3">
+            <div className="lg:col-span-1 space-y-3">
               {campaigns.map(c => (
                 <button
                   key={c.id}
@@ -586,7 +584,7 @@ function CampaignsContent() {
 
             {/* Campaign detail */}
             {selectedCampaign && (
-              <div className="col-span-2 space-y-5">
+              <div className="lg:col-span-2 space-y-5">
                 <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                   <div className="flex items-start justify-between mb-4">
                     <div>

@@ -198,6 +198,7 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -514,5 +515,11 @@
   .ai-orb-core,
   .ai-step-in {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }

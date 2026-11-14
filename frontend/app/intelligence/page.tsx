@@ -1,5 +1,6 @@
 'use client';
 
+import { AiLoader } from '@/components/ui/ai-loader';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,22 +46,22 @@ export default function IntelligencePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
-        <p className="text-gray-600">Loading customer intelligence...</p>
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <AiLoader size="md" title="Loading customer intelligence" />
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
         <p className="text-gray-600">No data available. Please complete onboarding first.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-8">
+    <div className="min-h-screen bg-[#FAFAFA] p-8">
       <div className="container mx-auto max-w-6xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Customer Intelligence Preview</h1>
@@ -69,7 +70,7 @@ export default function IntelligencePage() {
 
         {/* Business Overview */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">📊 Business Overview</h2>
+          <h2 className="text-base font-semibold tracking-tight text-[#1A1A1A] mb-4">Business Overview</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -119,7 +120,7 @@ export default function IntelligencePage() {
 
         {/* Customer Health */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">📈 Customer Health</h2>
+          <h2 className="text-base font-semibold tracking-tight text-[#1A1A1A] mb-4">Customer Health</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="bg-green-50 border-green-200">
               <CardHeader>
@@ -162,7 +163,7 @@ export default function IntelligencePage() {
         {/* Top Customers */}
         {data.topCustomers && data.topCustomers.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">👑 Top 3 Customers</h2>
+            <h2 className="text-base font-semibold tracking-tight text-[#1A1A1A] mb-4">Top 3 Customers</h2>
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-4">
@@ -186,7 +187,7 @@ export default function IntelligencePage() {
         {/* Next Steps */}
         <Card className="bg-primary/5 border-primary/20">
           <CardHeader>
-            <CardTitle>✨ What&apos;s Next?</CardTitle>
+            <CardTitle>What&apos;s Next?</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-700">
