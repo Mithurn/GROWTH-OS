@@ -14,16 +14,16 @@ const hourLabel = (h: number) => (h <= 0 ? 'Launch' : `+${h}h`);
 function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="min-w-40 rounded-xl border border-[#E5E7EB] bg-white p-3 text-xs shadow-lg">
-      <p className="mb-2 font-medium text-[#111827]">{label}</p>
+    <div className="min-w-40 rounded-xl border border-border bg-card p-3 text-xs shadow-pop">
+      <p className="mb-2 font-medium text-foreground">{label}</p>
       <ul className="space-y-1">
         {[...payload].reverse().map((p) => (
-          <li key={p.dataKey as string} className="flex items-center justify-between gap-4 text-[#6B7280]">
+          <li key={p.dataKey as string} className="flex items-center justify-between gap-4 text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full" style={{ background: p.color }} aria-hidden />
               {p.name}
             </span>
-            <span className="font-medium tabular-nums text-[#111827]">{formatNumber(p.value ?? 0)}</span>
+            <span className="font-medium tabular-nums text-foreground">{formatNumber(p.value ?? 0)}</span>
           </li>
         ))}
       </ul>
@@ -42,7 +42,7 @@ export function DeliveryChart({ timeline }: { timeline: TimelinePoint[] }) {
   const empty = data.length === 0 || data.every((d) => d.delivered === 0);
 
   const chips = (
-    <div role="radiogroup" aria-label="Time range" className="inline-flex rounded-lg bg-[#F3F4F6] p-0.5">
+    <div role="radiogroup" aria-label="Time range" className="inline-flex rounded-lg bg-muted p-0.5">
       {options.map((o) => (
         <button
           key={o.label}
@@ -51,8 +51,8 @@ export function DeliveryChart({ timeline }: { timeline: TimelinePoint[] }) {
           aria-checked={active === o.hours}
           onClick={() => setRange(o.hours)}
           className={cn(
-            'rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#5B4FFF]',
-            active === o.hours ? 'bg-white text-[#111827] shadow-sm' : 'text-[#6B7280] hover:text-[#111827]',
+            'rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary',
+            active === o.hours ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {o.label}
@@ -81,7 +81,7 @@ export function DeliveryChart({ timeline }: { timeline: TimelinePoint[] }) {
                 <CartesianGrid vertical={false} stroke={CHART_UI.grid} />
                 <XAxis dataKey="t" tick={{ fill: CHART_UI.axis, fontSize: CHART_UI.fontSize }} axisLine={false} tickLine={false} tickMargin={8} minTickGap={24} />
                 <YAxis tick={{ fill: CHART_UI.axis, fontSize: CHART_UI.fontSize }} axisLine={false} tickLine={false} width={48} />
-                <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#C7D2FE', strokeWidth: 1 }} />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--brand-line)', strokeWidth: 1 }} />
                 {SERIES.map((s) => (
                   <Area
                     key={s.key}
@@ -100,7 +100,7 @@ export function DeliveryChart({ timeline }: { timeline: TimelinePoint[] }) {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-[#6B7280]">
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
             {SERIES.map((s) => (
               <li key={s.key} className="flex items-center gap-1.5">
                 <svg width="16" height="6" aria-hidden>

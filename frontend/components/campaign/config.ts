@@ -51,11 +51,11 @@ export const LAUNCH_REQUEST = {
 } as const;
 
 export const STATUS_TONE: Record<string, string> = {
-  PendingApproval: 'border-amber-200 bg-amber-50 text-amber-700',
-  Approved: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  PendingApproval: 'border-amber-200 bg-warning-tint text-warning',
+  Approved: 'border-emerald-200 bg-success-tint text-success',
   Launched: 'border-indigo-200 bg-accent text-primary',
   Completed: 'border-border bg-muted text-muted-foreground',
-  Cancelled: 'border-red-200 bg-red-50 text-red-700',
+  Cancelled: 'border-danger/20 bg-danger-tint text-danger',
 };
 
 export const STATUS_TONE_DARK: Record<string, string> = {

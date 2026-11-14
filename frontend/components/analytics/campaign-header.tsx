@@ -40,7 +40,7 @@ function CampaignSwitcher({ currentId }: { currentId: string }) {
           </option>
         ))}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-[#6B7280]" aria-hidden />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
     </label>
   );
 }
@@ -62,8 +62,8 @@ export function CampaignHeader({ data }: { data: AnalyticsData }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <nav aria-label="Breadcrumb" className="mb-2 text-[13px] text-[#6B7280]">
-          <Link href={ALL_CAMPAIGNS_PATH} className="hover:text-[#5B4FFF]">
+        <nav aria-label="Breadcrumb" className="mb-2 text-label text-muted-foreground">
+          <Link href={ALL_CAMPAIGNS_PATH} className="hover:text-primary">
             Analytics
           </Link>
           <span className="mx-1.5" aria-hidden>
@@ -72,10 +72,10 @@ export function CampaignHeader({ data }: { data: AnalyticsData }) {
           <span aria-current="page">Campaign results</span>
         </nav>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#111827]">{campaign.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{campaign.name}</h1>
           <StatusBadge status={campaign.status} />
         </div>
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm text-[#6B7280]">
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
           {Icon && <Icon className="size-3.5" aria-hidden />}
           <span>{campaign.channel}</span>
           <span aria-hidden>·</span>

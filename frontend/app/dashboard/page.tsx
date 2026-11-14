@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import Link from 'next/link';
 import { ArrowRight, Check, Loader2, Sparkles, Users, Wallet } from 'lucide-react';
 import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
@@ -47,25 +48,25 @@ interface ActivityRecord {
 
 function RunPanel({ steps, current }: { steps: string[]; current: number }) {
   return (
-    <div role="status" aria-live="polite" className="rounded-2xl border border-[#C7D2FE] bg-white p-6">
+    <div role="status" aria-live="polite" className="rounded-2xl border border-brand-line bg-white p-6">
       <div className="flex items-center gap-3">
         <AiOrb size="md" state="searching" />
         <div>
           <p className="ai-shimmer text-base font-semibold">The agent is working on your goal</p>
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs text-muted-foreground">
             Step {current + 1} of {steps.length}
           </p>
         </div>
       </div>
       <ol className="mt-5 space-y-2.5">
         {steps.map((step, i) => (
-          <li key={step} className={`flex items-center gap-2.5 text-sm ${i > current ? 'text-[#D1D5DB]' : 'text-[#1A1A1A]'}`}>
+          <li key={step} className={`flex items-center gap-2.5 text-sm ${i > current ? 'text-border-strong' : 'text-foreground'}`}>
             {i < current ? (
-              <Check className="size-4 text-emerald-500" aria-hidden />
+              <Check className="size-4 text-success" aria-hidden />
             ) : i === current ? (
-              <Loader2 className="size-4 text-[#5B4FFF] motion-safe:animate-spin" aria-hidden />
+              <Loader2 className="size-4 text-primary motion-safe:animate-spin" aria-hidden />
             ) : (
-              <span className="size-4 rounded-full border border-[#E5E7EB]" aria-hidden />
+              <span className="size-4 rounded-full border border-border" aria-hidden />
             )}
             {step}
           </li>
@@ -78,45 +79,45 @@ function RunPanel({ steps, current }: { steps: string[]; current: number }) {
 function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: boolean; onUnpin: () => void }) {
   const priority = priorityOf(opp.priority_score);
   return (
-    <article className="ai-step-in rounded-2xl border border-[#E5E7EB] bg-white p-6">
+    <article className="ai-step-in rounded-2xl border border-border bg-white p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <StatusPill tone="live">{pinned ? 'Generated for your goal' : 'Top recommendation'}</StatusPill>
           <StatusPill tone={priority.tone}>{priority.label} priority</StatusPill>
         </div>
         {pinned && (
-          <button type="button" onClick={onUnpin} className="text-xs font-medium text-[#6B7280] hover:text-[#1A1A1A]">
+          <button type="button" onClick={onUnpin} className="text-xs font-medium text-muted-foreground hover:text-foreground">
             Back to top recommendation
           </button>
         )}
       </div>
 
-      <h2 className="mt-4 text-2xl font-semibold tracking-tight text-[#1A1A1A]">{opp.title}</h2>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#6B7280]">{opp.ai_summary || opp.description}</p>
+      <h2 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">{opp.title}</h2>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{opp.ai_summary || opp.description}</p>
 
       <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div>
-          <dt className="text-[13px] font-medium text-[#6B7280]">Recoverable</dt>
-          <dd className="mt-1 text-2xl font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</dd>
+          <dt className="text-label font-medium text-muted-foreground">Recoverable</dt>
+          <dd className="mt-1 text-2xl font-semibold tabular-nums text-primary">{formatCurrency(opportunityRevenue(opp))}</dd>
         </div>
         <div>
-          <dt className="text-[13px] font-medium text-[#6B7280]">Audience</dt>
-          <dd className="mt-1 text-2xl font-semibold tabular-nums text-[#1A1A1A]">{opp.audience_size.toLocaleString()}</dd>
+          <dt className="text-label font-medium text-muted-foreground">Audience</dt>
+          <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{opp.audience_size.toLocaleString()}</dd>
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <dt className="text-[13px] font-medium text-[#6B7280]">Agent confidence</dt>
+          <dt className="text-label font-medium text-muted-foreground">Agent confidence</dt>
           <dd className="mt-3">
             <ConfidenceMeter value={opp.confidence_score} />
           </dd>
         </div>
       </dl>
 
-      <div className="mt-6 border-t border-[#F0F0F2] pt-5">
-        <p className="text-[13px] font-medium text-[#6B7280]">Why the agent flagged this</p>
+      <div className="mt-6 border-t border-line-soft pt-5">
+        <p className="text-label font-medium text-muted-foreground">Why the agent flagged this</p>
         <ul className="mt-3 flex flex-wrap gap-2">
           {parseTriggerReasons(opp).map((reason) => (
-            <li key={reason} className="flex items-center gap-1.5 rounded-lg bg-[#F8F7FF] px-2.5 py-1 text-xs text-[#4B5563]">
-              <Check className="size-3 text-emerald-500" aria-hidden />
+            <li key={reason} className="flex items-center gap-1.5 rounded-lg bg-brand-wash px-2.5 py-1 text-xs text-body">
+              <Check className="size-3 text-success" aria-hidden />
               {reason}
             </li>
           ))}
@@ -128,7 +129,7 @@ function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: bool
           Review and draft campaign
           <ArrowRight className="size-4" aria-hidden />
         </PrimaryAction>
-        <span className="text-xs text-[#6B7280]">
+        <span className="text-xs text-muted-foreground">
           via {parseChannel(opp.recommended_action)} to {opp.supporting_customer_segment || 'all customers'}
         </span>
       </div>
@@ -141,16 +142,16 @@ function OpportunityTile({ opp }: { opp: Opportunity }) {
   return (
     <Link
       href={`/opportunities/${opp.opportunity_id}`}
-      className="group flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 transition-colors hover:border-[#C7D2FE] hover:bg-[#FCFBFF]"
+      className="group flex flex-col rounded-2xl border border-border bg-white p-5 transition-colors hover:border-brand-line hover:bg-surface-inset"
     >
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold leading-snug text-[#1A1A1A] group-hover:text-[#4B3FE5]">{opp.title}</h3>
+        <h3 className="text-sm font-semibold leading-snug text-foreground group-hover:text-primary-hover">{opp.title}</h3>
         <StatusPill tone={priority.tone}>{priority.label}</StatusPill>
       </div>
-      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#6B7280]">{opp.description}</p>
+      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{opp.description}</p>
       <div className="mt-4 flex items-end justify-between">
-        <p className="text-lg font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</p>
-        <p className="text-xs text-[#6B7280]">{opp.audience_size.toLocaleString()} customers</p>
+        <p className="text-lg font-semibold tabular-nums text-primary">{formatCurrency(opportunityRevenue(opp))}</p>
+        <p className="text-xs text-muted-foreground">{opp.audience_size.toLocaleString()} customers</p>
       </div>
       <ConfidenceMeter value={opp.confidence_score} className="mt-3" />
     </Link>
@@ -276,13 +277,13 @@ export default function HomePage() {
   const hasContent = !loading && !error && opportunities.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-8 sm:py-8">
+    <div className={PAGE_SHELL_CLASS}>
       <header className="flex items-center gap-4">
         <AgentAvatar state={processing ? 'working' : 'idle'} size="lg" />
         <div className="min-w-0">
-          <p className="text-xs font-medium text-[#6B7280]">{greetingFor(new Date().getHours())}</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-3xl">Give the agent a goal</h1>
-          <p className="mt-0.5 text-sm text-[#6B7280]">
+          <p className="text-xs font-medium text-muted-foreground">{greetingFor(new Date().getHours())}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Give the agent a goal</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {loading
               ? coldStart
                 ? 'The API is waking up. The first load can take up to a minute.'
@@ -324,8 +325,8 @@ export default function HomePage() {
 
       {loading && !error && (
         <div className="mt-8 grid gap-6 lg:grid-cols-12" aria-hidden>
-          <div className="h-80 animate-pulse rounded-2xl bg-[#F3F4F6] lg:col-span-8" />
-          <div className="h-80 animate-pulse rounded-2xl bg-[#F3F4F6] lg:col-span-4" />
+          <div className="h-80 animate-pulse rounded-2xl bg-muted lg:col-span-8" />
+          <div className="h-80 animate-pulse rounded-2xl bg-muted lg:col-span-4" />
         </div>
       )}
 
@@ -356,8 +357,8 @@ export default function HomePage() {
           {tiles.length > 0 && (
             <section className="mt-10" aria-label="More opportunities">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold tracking-tight text-[#1A1A1A]">More opportunities</h2>
-                <Link href="/opportunities" className="text-xs font-medium text-[#5B4FFF] hover:underline">
+                <h2 className="text-sm font-semibold tracking-tight text-foreground">More opportunities</h2>
+                <Link href="/opportunities" className="text-xs font-medium text-primary hover:underline">
                   View all
                 </Link>
               </div>

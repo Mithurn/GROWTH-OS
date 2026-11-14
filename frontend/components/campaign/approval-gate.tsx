@@ -42,9 +42,9 @@ function buildChecks({ audience, channel, message, caseStatus }: Pick<ApprovalGa
 }
 
 const CHECK_ICON = {
-  pass: <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />,
+  pass: <CheckCircle2 className="size-4 text-success" aria-hidden />,
   warn: <Circle className="size-4 text-amber-500" aria-hidden />,
-  fail: <XCircle className="size-4 text-red-500" aria-hidden />,
+  fail: <XCircle className="size-4 text-danger" aria-hidden />,
 } as const;
 
 export function ApprovalGate(props: ApprovalGateProps) {
@@ -56,22 +56,22 @@ export function ApprovalGate(props: ApprovalGateProps) {
     <Panel>
       <section aria-label="Approval" className="p-5 sm:p-6">
         <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-tint text-primary">
             <ShieldCheck className="size-[18px]" aria-hidden />
           </span>
           <div>
-            <h2 className="text-sm font-semibold tracking-tight text-[#1A1A1A]">{approved ? 'Approved by you' : 'Needs your approval'}</h2>
-            <p className="mt-0.5 text-sm text-[#6B7280]">
+            <h2 className="text-sm font-semibold tracking-tight text-foreground">{approved ? 'Approved by you' : 'Needs your approval'}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
               {approved ? 'Nothing is sent until the campaign is launched.' : 'The agent will not send anything without your explicit approval.'}
             </p>
           </div>
         </div>
 
-        <ul className="mt-5 space-y-2.5 border-t border-[#F0F1F4] pt-4">
+        <ul className="mt-5 space-y-2.5 border-t border-line-soft pt-4">
           {checks.map((c) => (
             <li key={c.label} className="flex items-center gap-2.5 text-sm">
               {CHECK_ICON[c.state]}
-              <span className={cn('text-[#4B5563]', c.state === 'fail' && 'text-red-700')}>{c.label}</span>
+              <span className={cn('text-body', c.state === 'fail' && 'text-danger')}>{c.label}</span>
             </li>
           ))}
         </ul>

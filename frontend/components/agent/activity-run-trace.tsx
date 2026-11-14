@@ -34,7 +34,7 @@ function StepRow({ step, elapsed }: { step: RunStep; elapsed: number }) {
       <span className="mt-0.5 shrink-0">{STEP_ICON[step.status]}</span>
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-baseline gap-x-2">
-          <span className={cn('text-[10px] uppercase tracking-wider', node)}>{step.node}</span>
+          <span className={cn('text-2xs', node)}>{step.node}</span>
           <span className="text-white">{step.toolName}</span>
         </span>
         {step.label && <span className="mt-0.5 block font-sans text-xs text-white/50">{step.label}</span>}
@@ -54,7 +54,7 @@ function StepRow({ step, elapsed }: { step: RunStep; elapsed: number }) {
             {step.result !== undefined && step.result !== null && <Payload label="Output" value={stringify(step.result)} />}
             {step.error && <Payload label="Error" value={step.error} tone="text-red-300" />}
             {step.tokens && (
-              <p className="text-[11px] text-white/40">
+              <p className="text-2xs text-white/40">
                 {formatTokens(step.tokens.in)} tokens in, {formatTokens(step.tokens.out)} out
               </p>
             )}
@@ -70,8 +70,8 @@ function StepRow({ step, elapsed }: { step: RunStep; elapsed: number }) {
 function Payload({ label, value, tone = 'text-white/70' }: { label: string; value: string; tone?: string }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] uppercase tracking-wider text-white/35">{label}</p>
-      <pre className={cn('max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/40 p-2 text-[11px] leading-relaxed', tone)}>{value}</pre>
+      <p className="mb-1 text-2xs text-white/35">{label}</p>
+      <pre className={cn('max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/40 p-2 text-2xs leading-relaxed', tone)}>{value}</pre>
     </div>
   );
 }
@@ -79,7 +79,7 @@ function Payload({ label, value, tone = 'text-white/70' }: { label: string; valu
 function Stat({ label, value, live }: { label: string; value: string; live?: boolean }) {
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
-      <dt className="text-[10px] uppercase tracking-wider text-white/40">{label}</dt>
+      <dt className="text-2xs text-white/40">{label}</dt>
       <dd className={cn('mt-0.5 text-sm font-semibold tabular-nums', live ? 'text-indigo-300' : 'text-white')}>{value}</dd>
     </div>
   );
@@ -129,14 +129,14 @@ export function RunTraceBody({ run, state }: { run: RunDetail | null; state: Run
       </ol>
       {!running && (
         <div className="mx-4 mb-4 mt-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3 font-sans">
-          <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-emerald-300">
+          <p className="flex items-center gap-1.5 text-2xs font-medium text-emerald-300">
             <Check className="size-3.5" aria-hidden /> Outcome
           </p>
-          {run.summary && <p className="mt-1.5 text-[13px] leading-snug text-white/85">{run.summary}</p>}
+          {run.summary && <p className="mt-1.5 text-label leading-snug text-white/85">{run.summary}</p>}
           {run.links.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {run.links.map((link) => (
-                <Link key={link.href + link.label} href={link.href} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-[#1A1A1A] hover:bg-white/90">
+                <Link key={link.href + link.label} href={link.href} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-foreground hover:bg-white/90">
                   {link.label} <ArrowRight className="size-3" aria-hidden />
                 </Link>
               ))}
@@ -156,7 +156,7 @@ export function RunTraceHeader({ run, title, state }: { run: RunDetail | null; t
       <AgentAvatar size="sm" state={running ? 'working' : 'idle'} />
       <div className="min-w-0 flex-1">
         <h2 className="truncate font-sans text-sm font-semibold tracking-tight text-white">{title}</h2>
-        <p className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-white/50">
+        <p className="mt-0.5 flex items-center gap-1.5 font-mono text-2xs text-white/50">
           <span className="relative flex size-1.5">
             {running && <span className="absolute inline-flex size-full rounded-full bg-indigo-400 opacity-70 motion-safe:animate-ping" />}
             <span className={cn('relative inline-flex size-1.5 rounded-full', running ? 'bg-indigo-400' : failed ? 'bg-red-400' : 'bg-emerald-400')} />
@@ -171,7 +171,7 @@ export function RunTraceHeader({ run, title, state }: { run: RunDetail | null; t
 export function ActivityRunTrace({ source = {}, title = 'Latest run', className }: { source?: RunSource; title?: string; className?: string }) {
   const { run, state } = useRunTrace(source);
   return (
-    <section aria-label={title} className={cn('overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b12] text-white', className)}>
+    <section aria-label={title} className={cn('overflow-hidden rounded-2xl border border-white/10 bg-ink-raised text-white', className)}>
       <header className="border-b border-white/10 px-4 py-3">
         <RunTraceHeader run={run} state={state} title={title} />
       </header>

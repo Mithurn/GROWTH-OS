@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
+import { PRIMARY_ACTION_CLASS } from '@/components/ui/action-styles';
 import { BotAvatar } from 'bot-avatars';
 import { AGENT_AVATAR_LOOK } from '@/components/agent/agent-config';
 import { Check, Loader2, Save } from 'lucide-react';
@@ -170,7 +172,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-[1100px] animate-pulse space-y-4 px-4 py-8 sm:px-8" aria-hidden>
+      <div className={cn(PAGE_SHELL_CLASS, 'animate-pulse space-y-4')} aria-hidden>
         <div className="h-16 rounded-2xl bg-muted" />
         <div className="h-10 w-2/3 rounded-lg bg-muted" />
         <div className="h-64 rounded-2xl bg-muted" />
@@ -191,7 +193,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 pt-6 sm:px-8 sm:pt-8">
+    <div className={PAGE_SHELL_CLASS}>
       <div className="mb-6">
         <PageHeader title="Settings" description="Decide what the agent works on and how much it does alone." />
       </div>
@@ -322,15 +324,15 @@ export default function SettingsPage() {
       </div>
 
       <div className="sticky bottom-0 z-30 -mx-4 mt-8 border-t border-border bg-card/90 backdrop-blur sm:-mx-8">
-        <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3 px-4 py-3 sm:px-8">
-          <p role="status" className={cn('min-w-0 truncate text-sm', error ? 'text-red-600' : success ? 'text-emerald-600' : 'text-muted-foreground')}>
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-3 px-4 py-3 sm:px-8">
+          <p role="status" className={cn('min-w-0 truncate text-sm', error ? 'text-danger' : success ? 'text-success' : 'text-muted-foreground')}>
             {error ?? (success ? 'Saved' : dirty ? 'You have unsaved changes' : 'All changes saved')}
           </p>
           <button
             type="button"
             onClick={handleSave}
             disabled={saving || !dirty}
-            className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            className={PRIMARY_ACTION_CLASS}
           >
             {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
             {saving ? 'Saving' : 'Save changes'}
@@ -399,7 +401,7 @@ function IntegrationsSection() {
         credentials: mode === 'byok' ? draftFields[kind] : undefined,
       });
       setCards((prev) => prev.map((c) => (c.kind === kind ? res.data : c)));
-      setNote(mode === 'simulator' ? 'Simulator is on. No tenant key is stored.' : 'Credentials stored encrypted — verify before launching a real campaign.');
+      setNote(mode === 'simulator' ? 'Simulator is on. No tenant key is stored.' : 'Credentials stored encrypted. Verify before launching a real campaign.');
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'Failed to save integration');
     } finally {
@@ -423,17 +425,17 @@ function IntegrationsSection() {
 
   return (
     <Section title="Integrations">
-      <p className="mb-4 text-sm text-[var(--muted-foreground)]">
+      <p className="mb-4 text-sm text-muted-foreground">
         Simulator is the default and free. Real sends use your own account
-        (AES-256-GCM, keys never returned to the browser) — GrowthOS never
+        (AES-256-GCM, keys never returned to the browser). GrowthOS never
         spends its own money sending on your behalf.
       </p>
       {available === false && (
-        <p className="mb-4 text-sm text-[var(--muted-foreground)]">
+        <p className="mb-4 text-sm text-muted-foreground">
           Integration tables are not applied yet. Cards still default to simulator.
         </p>
       )}
-      {note && <p className="mb-4 text-sm text-[#5B4FFF]">{note}</p>}
+      {note && <p className="mb-4 text-sm text-primary">{note}</p>}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {(cards.length > 0 ? cards : (['llm', 'email', 'whatsapp'] as const).map((kind) => ({
           kind,
@@ -445,14 +447,14 @@ function IntegrationsSection() {
         }))).map((card) => {
           const copy = INTEGRATION_COPY[card.kind];
           return (
-            <div key={card.kind} className="rounded-lg border border-[#E4E4E7] p-4">
-              <h3 className="text-sm font-semibold text-[#1A1A1A]">{copy.title}</h3>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">{copy.hint}</p>
-              <p className="mt-3 text-xs font-medium text-[#1A1A1A]">
+            <div key={card.kind} className="rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold text-foreground">{copy.title}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{copy.hint}</p>
+              <p className="mt-3 text-xs font-medium text-foreground">
                 Mode: {card.mode} · {card.status}
               </p>
               {card.maskedKey && (
-                <p className="mt-1 font-mono text-xs text-[var(--muted-foreground)]">{card.maskedKey}</p>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">{card.maskedKey}</p>
               )}
               <div className="mt-3 space-y-2">
                 {CREDENTIAL_FIELDS[card.kind].map((field) => (
@@ -462,7 +464,7 @@ function IntegrationsSection() {
                     placeholder={field.label}
                     value={draftFields[card.kind]?.[field.key] ?? ''}
                     onChange={(e) => setField(card.kind, field.key, e.target.value)}
-                    className="h-9 w-full rounded-md border border-[#E4E4E7] px-2 text-xs"
+                    className="h-9 w-full rounded-md border border-border px-2 text-xs"
                   />
                 ))}
               </div>
@@ -471,7 +473,7 @@ function IntegrationsSection() {
                   type="button"
                   disabled={busy !== null}
                   onClick={() => save(card.kind, 'simulator')}
-                  className="rounded-md border border-[#E4E4E7] px-2 py-1 text-xs"
+                  className="rounded-md border border-border px-2 py-1 text-xs"
                 >
                   Try simulator
                 </button>
@@ -479,7 +481,7 @@ function IntegrationsSection() {
                   type="button"
                   disabled={busy !== null || !hasAllFields(card.kind)}
                   onClick={() => save(card.kind, 'byok')}
-                  className="rounded-md bg-[#5B4FFF] px-2 py-1 text-xs text-white disabled:opacity-40"
+                  className="rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
                 >
                   Save credentials
                 </button>
@@ -487,7 +489,7 @@ function IntegrationsSection() {
                   type="button"
                   disabled={busy !== null}
                   onClick={() => verify(card.kind)}
-                  className="rounded-md border border-[#E4E4E7] px-2 py-1 text-xs"
+                  className="rounded-md border border-border px-2 py-1 text-xs"
                 >
                   Verify
                 </button>
@@ -512,9 +514,9 @@ function BillingSection() {
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('billing') === 'success') {
-      setNote('Payment received — activation usually lands within a minute. Refresh to see it reflected.');
+      setNote('Payment received. Activation usually lands within a minute. Refresh to see it reflected.');
     } else if (params.get('billing') === 'cancelled') {
-      setNote('Checkout cancelled — no changes made.');
+      setNote('Checkout cancelled. No changes made.');
     }
   }, []);
 
@@ -532,29 +534,29 @@ function BillingSection() {
 
   return (
     <Section title="Plan">
-      <p className="mb-4 text-sm text-[var(--muted-foreground)]">
-        Everything is free and unlimited in simulator mode — dashboards, the
+      <p className="mb-4 text-sm text-muted-foreground">
+        Everything is free and unlimited in simulator mode: dashboards, the
         agent, personas, opportunities. Real WhatsApp/Email sends need either
         your own connected key above, or the Pro plan, which sends on
         GrowthOS&apos;s own keys, funded by the subscription.
       </p>
-      {note && <p className="mb-4 text-sm text-[#5B4FFF]">{note}</p>}
-      <div className="rounded-lg border border-[#E4E4E7] p-4">
-        <p className="text-sm font-semibold text-[#1A1A1A]">
+      {note && <p className="mb-4 text-sm text-primary">{note}</p>}
+      <div className="rounded-lg border border-border p-4">
+        <p className="text-sm font-semibold text-foreground">
           Current plan: {status?.plan === 'pro' ? 'Pro' : 'Free (simulator)'}
         </p>
         {status?.subscriptionStatus && (
-          <p className="mt-1 text-xs text-[var(--muted-foreground)]">Subscription: {status.subscriptionStatus}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Subscription: {status.subscriptionStatus}</p>
         )}
         {status && !status.configured && (
-          <p className="mt-2 text-xs text-[var(--muted-foreground)]">Billing is not configured on this deployment yet.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Billing is not configured on this deployment yet.</p>
         )}
         {status?.plan !== 'pro' && (
           <button
             type="button"
             disabled={busy || !status?.configured}
             onClick={upgrade}
-            className="mt-3 rounded-md bg-[#5B4FFF] px-3 py-1.5 text-xs text-white disabled:opacity-40"
+            className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
           >
             Upgrade to Pro
           </button>

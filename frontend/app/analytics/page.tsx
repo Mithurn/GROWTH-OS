@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
@@ -48,17 +49,17 @@ function CampaignPicker() {
           <li key={c.id}>
             <Link
               href={`/analytics?campaignId=${c.id}`}
-              className="group flex h-full flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:border-[#C7D2FE]"
+              className="group flex h-full flex-col rounded-2xl border border-border bg-card p-5 shadow-card transition-colors hover:border-primary/30"
             >
               <span className="flex items-center justify-between gap-3">
-                <span className="truncate text-sm font-semibold text-[#111827]">{c.name}</span>
-                <ArrowRight className="size-4 shrink-0 text-[#6B7280] transition-transform group-hover:translate-x-0.5" aria-hidden />
+                <span className="truncate text-sm font-semibold text-foreground">{c.name}</span>
+                <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
               </span>
               <span className="mt-4 flex items-baseline gap-2">
-                <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-[#5B4FFF]">{rate}%</span>
-                <span className="text-[13px] text-[#6B7280]">click rate</span>
+                <span className="text-3xl font-semibold leading-none tracking-tight tabular-nums text-primary">{rate}%</span>
+                <span className="text-label text-muted-foreground">click rate</span>
               </span>
-              <span className="mt-3 flex items-center gap-1.5 text-[13px] text-[#6B7280]">
+              <span className="mt-3 flex items-center gap-1.5 text-label text-muted-foreground">
                 {Icon && <Icon className="size-3.5" aria-hidden />}
                 {formatNumber(c.communications_clicked)} clicks from {formatNumber(sent)} sent
               </span>
@@ -170,7 +171,7 @@ function AnalyticsContent() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-8 sm:py-8">
+    <div className={PAGE_SHELL_CLASS}>
       {!campaignId && (
         <div className="mb-6">
           <PageHeader title="Analytics" description="Choose a launched campaign to see how it performed." />

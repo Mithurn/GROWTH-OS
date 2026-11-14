@@ -14,7 +14,7 @@ export function DemoBanner() {
 
   if (demo) {
     return (
-      <div className="flex items-center justify-center gap-3 bg-[#111827] px-4 py-2 text-xs text-white">
+      <div className="flex items-center justify-center gap-3 bg-ink px-4 py-2 text-xs text-white">
         <span>Demo mode: sample data, nothing is sent.</span>
         <button
           type="button"
@@ -30,12 +30,12 @@ export function DemoBanner() {
   if (status !== 'offline') return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+    <div className="flex flex-wrap items-center justify-center gap-3 bg-warning-tint px-4 py-2 text-xs text-warning">
       <span>The live backend is asleep to save hosting costs, so real data will not load.</span>
       <button
         type="button"
         onClick={enterDemo}
-        className="cursor-pointer rounded-full bg-amber-900 px-3 py-1 font-medium text-white hover:bg-amber-800"
+        className="cursor-pointer rounded-full bg-warning px-3 py-1 font-medium text-white hover:bg-warning/90"
       >
         Explore the demo
       </button>

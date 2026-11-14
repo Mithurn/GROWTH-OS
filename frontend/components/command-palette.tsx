@@ -83,12 +83,12 @@ export function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-[#0A0E1A]/50 p-4 pt-[15vh] backdrop-blur-sm" onClick={close}>
+    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-ink/50 p-4 pt-[15vh] backdrop-blur-sm" onClick={close}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-[#1E2545] bg-[#0F1424] shadow-2xl"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-ink-line bg-ink-panel shadow-pop"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === 'Escape') close();
@@ -103,8 +103,8 @@ export function CommandPalette() {
           if (e.key === 'Enter') choose(matches[cursor]);
         }}
       >
-        <div className="flex items-center gap-3 border-b border-[#1E2545] px-4">
-          <Search className="size-4 text-[#8B92A5]" aria-hidden />
+        <div className="flex items-center gap-3 border-b border-ink-line px-4">
+          <Search className="size-4 text-ink-muted" aria-hidden />
           <input
             ref={inputRef}
             value={query}
@@ -114,12 +114,12 @@ export function CommandPalette() {
             }}
             placeholder="Jump to a page or run an action"
             aria-label="Search commands"
-            className="h-12 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#8B92A5]"
+            className="h-12 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-ink-muted"
           />
-          <kbd className="rounded border border-[#1E2545] px-1.5 py-0.5 font-mono text-[10px] text-[#8B92A5]">esc</kbd>
+          <kbd className="rounded border border-ink-line px-1.5 py-0.5 font-mono text-2xs text-ink-muted">esc</kbd>
         </div>
         <ul className="max-h-72 overflow-y-auto p-2">
-          {matches.length === 0 && <li className="px-3 py-6 text-center text-sm text-[#8B92A5]">No matches</li>}
+          {matches.length === 0 && <li className="px-3 py-6 text-center text-sm text-ink-muted">No matches</li>}
           {matches.map((command, i) => {
             const Icon = command.icon;
             return (
@@ -130,13 +130,13 @@ export function CommandPalette() {
                   onClick={() => choose(command)}
                   className={cn(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                    i === cursor ? 'bg-[#5B4FFF]/20 text-white' : 'text-[#C5CAD9]',
+                    i === cursor ? 'bg-primary/20 text-white' : 'text-ink-muted',
                   )}
                 >
-                  <Icon className="size-4 text-[#8B92A5]" aria-hidden />
+                  <Icon className="size-4 text-ink-muted" aria-hidden />
                   <span className="flex-1">{command.label}</span>
-                  <span className="text-[11px] text-[#8B92A5]">{command.group}</span>
-                  {i === cursor && <CornerDownLeft className="size-3.5 text-[#8B92A5]" aria-hidden />}
+                  <span className="text-2xs text-ink-muted">{command.group}</span>
+                  {i === cursor && <CornerDownLeft className="size-3.5 text-ink-muted" aria-hidden />}
                 </button>
               </li>
             );

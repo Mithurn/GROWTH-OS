@@ -14,11 +14,11 @@ export type AgentState = keyof typeof AGENT_STATES;
 export type AgentAvatarSize = keyof typeof AGENT_AVATAR_SIZES;
 
 export const STATUS_TONES = {
-  live: { dot: 'bg-[#5B4FFF]', chip: 'bg-[#EEF2FF] text-[#4B3FE5] border-[#E0E7FF]' },
-  success: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-  warning: { dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 border-amber-100' },
-  danger: { dot: 'bg-red-500', chip: 'bg-red-50 text-red-700 border-red-100' },
-  neutral: { dot: 'bg-[#9CA3AF]', chip: 'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]' },
+  live: { dot: 'bg-primary', chip: 'bg-brand-tint text-primary-hover border-brand-tint' },
+  success: { dot: 'bg-success', chip: 'bg-success-tint text-success border-success/20' },
+  warning: { dot: 'bg-warning', chip: 'bg-warning-tint text-warning border-warning/20' },
+  danger: { dot: 'bg-danger', chip: 'bg-danger-tint text-danger border-danger/20' },
+  neutral: { dot: 'bg-subtle', chip: 'bg-muted text-body border-border' },
 } as const;
 
 export type StatusTone = keyof typeof STATUS_TONES;

@@ -1,7 +1,7 @@
 import { AiOrb } from '@/components/ui/ai-orb';
 import { KPI_SKELETONS } from './config';
 
-const block = 'animate-pulse rounded-2xl bg-[#F1F2F5] motion-reduce:animate-none';
+const block = 'animate-pulse rounded-2xl bg-muted motion-reduce:animate-none';
 
 export function AnalyticsSkeleton() {
   return (

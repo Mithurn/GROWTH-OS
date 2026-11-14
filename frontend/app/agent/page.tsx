@@ -167,9 +167,9 @@ export default function AgentPage() {
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
-          <p className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#8B92A5] mb-2">Campaign cases</p>
-          <h1 className="text-2xl font-semibold text-[#1A1A1A]">Agent run trace</h1>
-          <p className="text-sm text-[#6B7280] mt-2 max-w-xl">
+          <p className="text-2xs font-mono text-ink-muted mb-2">Campaign cases</p>
+          <h1 className="text-2xl font-semibold text-foreground">Agent run trace</h1>
+          <p className="text-sm text-muted-foreground mt-2 max-w-xl">
             Each case records Scout, Strategist, and Reviewer work. Campaign creation can draft, but only the owner can approve and launch.
           </p>
         </div>
@@ -178,30 +178,30 @@ export default function AgentPage() {
           onClick={onRun}
           disabled={!agentId || running}
           className="px-4 py-2 rounded-full text-sm font-medium text-white disabled:opacity-40"
-          style={{ background: '#5B4FFF' }}
+          style={{ background: 'var(--primary)' }}
         >
           {running ? 'Running…' : 'Run once'}
         </button>
       </div>
 
-      {loading && <p className="text-sm text-[#6B7280]">Loading…</p>}
-      {error && <p className="text-sm text-[#EF4444] mb-4">{error}</p>}
+      {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {error && <p className="text-sm text-danger mb-4">{error}</p>}
 
       {!loading && agents.length === 0 && (
-        <p className="text-sm text-[#6B7280]">No agent yet. Finish onboarding to create one.</p>
+        <p className="text-sm text-muted-foreground">No agent yet. Finish onboarding to create one.</p>
       )}
 
       {agents.length > 0 && (
         <label className="block mb-6">
-          <span className="text-[11px] font-mono uppercase tracking-[0.14em] text-[#8B92A5]">Agent</span>
+          <span className="text-2xs font-mono text-ink-muted">Agent</span>
           <select
             value={agentId}
             onChange={(e) => onSelectAgent(e.target.value)}
-            className="mt-2 w-full max-w-md border border-[#E5E7EB] rounded-xl px-3 py-2 text-sm bg-white"
+            className="mt-2 w-full max-w-md border border-border rounded-xl px-3 py-2 text-sm bg-white"
           >
             {agents.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name} — {a.status}
+                {a.name}: {a.status}
               </option>
             ))}
           </select>
@@ -209,16 +209,16 @@ export default function AgentPage() {
       )}
 
       {available === false && (
-        <div className="mb-6 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#6B7280]">
+        <div className="mb-6 rounded-xl border border-border bg-white px-4 py-3 text-sm text-muted-foreground">
           Run tables are not applied yet. A tick still observes; nothing is stored to list here.
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4">
-          <h2 className="text-sm font-medium text-[#1A1A1A] mb-3">Runs</h2>
+        <section className="rounded-2xl border border-border bg-white p-4">
+          <h2 className="text-sm font-medium text-foreground mb-3">Runs</h2>
           {runs.length === 0 ? (
-            <p className="text-sm text-[#9CA3AF]">No persisted runs.</p>
+            <p className="text-sm text-muted-foreground">No persisted runs.</p>
           ) : (
             <ul className="space-y-2">
               {runs.map((run) => (
@@ -227,14 +227,14 @@ export default function AgentPage() {
                     type="button"
                     onClick={() => onSelectRun(run.id)}
                     className={`w-full text-left rounded-xl px-3 py-2 text-sm ${
-                      selectedRunId === run.id ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'hover:bg-[#F3F4F6]'
+                      selectedRunId === run.id ? 'bg-brand-tint text-primary' : 'hover:bg-muted'
                     }`}
                   >
                     <div className="flex justify-between gap-2">
                       <span className="font-medium">{run.status}</span>
-                      <span className="text-[#9CA3AF]">{run.stepCount} steps</span>
+                      <span className="text-muted-foreground">{run.stepCount} steps</span>
                     </div>
-                    <p className="text-[#6B7280] mt-1 line-clamp-2">{run.summary || 'No summary'}</p>
+                    <p className="text-muted-foreground mt-1 line-clamp-2">{run.summary || 'No summary'}</p>
                   </button>
                 </li>
               ))}
@@ -242,24 +242,24 @@ export default function AgentPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4">
-          <h2 className="text-sm font-medium text-[#1A1A1A] mb-3">Steps</h2>
-          {summary && <p className="text-sm text-[#1A1A1A] mb-3">{summary}</p>}
+        <section className="rounded-2xl border border-border bg-white p-4">
+          <h2 className="text-sm font-medium text-foreground mb-3">Steps</h2>
+          {summary && <p className="text-sm text-foreground mb-3">{summary}</p>}
           {steps.length === 0 ? (
-            <p className="text-sm text-[#9CA3AF]">Select a run.</p>
+            <p className="text-sm text-muted-foreground">Select a run.</p>
           ) : (
             <ol className="space-y-2">
               {steps
                 .filter((step) => step.toolName || step.error)
                 .map((step, i) => (
-                <li key={step.id} className="text-sm border-b border-[#F3F4F6] pb-2">
-                  <span className="text-[#9CA3AF] mr-2">{i + 1}.</span>
+                <li key={step.id} className="text-sm border-b border-muted pb-2">
+                  <span className="text-muted-foreground mr-2">{i + 1}.</span>
                   <span className="font-medium">{step.toolName || step.node}</span>
-                  <span className="text-[#9CA3AF] ml-2">{step.latencyMs}ms</span>
+                  <span className="text-muted-foreground ml-2">{step.latencyMs}ms</span>
                   {resultLine(step.result) && (
-                    <p className="text-[#6B7280] mt-1">{resultLine(step.result)}</p>
+                    <p className="text-muted-foreground mt-1">{resultLine(step.result)}</p>
                   )}
-                  {step.error && <p className="text-[#EF4444] mt-1">{step.error}</p>}
+                  {step.error && <p className="text-danger mt-1">{step.error}</p>}
                 </li>
               ))}
             </ol>

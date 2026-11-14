@@ -49,7 +49,7 @@ export function AgentPromptInput({
         <div
           className={cn(
             'flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 transition-colors',
-            focused || busy ? 'border-transparent' : 'border-[#E5E7EB]',
+            focused || busy ? 'border-transparent' : 'border-border',
           )}
         >
           <AiOrb size="md" state={busy ? 'working' : focused ? 'listening' : 'breathing'} className="shrink-0" />
@@ -64,14 +64,14 @@ export function AgentPromptInput({
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
-            className="min-w-0 flex-1 bg-transparent text-sm text-[#1A1A1A] outline-none placeholder:text-[#6B7280]"
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
           <button
             type="button"
             onClick={submit}
             disabled={!canSubmit}
             aria-label={busy ? 'Agent is working' : 'Send goal to agent'}
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#5B4FFF] text-white transition-colors hover:bg-[#4B3FE5] disabled:bg-[#E5E7EB] disabled:text-[#6B7280]"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-colors hover:bg-primary-hover disabled:bg-border disabled:text-muted-foreground"
           >
             {busy ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
           </button>
@@ -85,7 +85,7 @@ export function AgentPromptInput({
               type="button"
               disabled={busy}
               onClick={() => onChange(suggestion)}
-              className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs text-[#4B5563] transition-colors hover:border-[#C7D2FE] hover:bg-[#F8F7FF] hover:text-[#4B3FE5] disabled:opacity-50"
+              className="rounded-full border border-border bg-white px-3 py-1 text-xs text-body transition-colors hover:border-brand-line hover:bg-brand-wash hover:text-primary-hover disabled:opacity-50"
             >
               {suggestion}
             </button>
@@ -93,7 +93,7 @@ export function AgentPromptInput({
         </div>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-xs text-red-600">
+        <p role="alert" className="mt-3 text-xs text-danger">
           {error}
         </p>
       )}

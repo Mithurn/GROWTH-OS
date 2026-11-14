@@ -34,13 +34,13 @@ const TONE = {
     fail: 'border-red-500/20 bg-red-500/10 text-red-300',
   },
   light: {
-    live: 'text-emerald-600',
-    label: 'text-[#6B7280]',
-    rate: 'text-[#9CA3AF]',
-    value: 'text-[#1A1A1A]',
-    track: 'bg-[#EEF0F4]',
-    bar: 'bg-gradient-to-r from-[#5B4FFF] to-[#8B7CFF]',
-    fail: 'border-red-200 bg-red-50 text-red-700',
+    live: 'text-success',
+    label: 'text-muted-foreground',
+    rate: 'text-muted-foreground',
+    value: 'text-foreground',
+    track: 'bg-line-soft',
+    bar: 'bg-primary',
+    fail: 'border-danger/20 bg-danger-tint text-danger',
   },
 } as const;
 
@@ -73,14 +73,14 @@ export function LiveFunnel({ counts, live, light, heading = 'Delivery funnel', c
               <div className="mb-1.5 flex items-baseline justify-between text-sm">
                 <span className={t.label}>{label}</span>
                 <span className="flex items-baseline gap-2">
-                  {i > 0 && <span className={cn('text-[11px] tabular-nums', t.rate)}>{rate}%</span>}
+                  {i > 0 && <span className={cn('text-2xs tabular-nums', t.rate)}>{rate}%</span>}
                   <span className={cn('font-semibold tabular-nums', t.value)}>{formatNumber(value)}</span>
                 </span>
               </div>
               <div className={cn('h-1.5 overflow-hidden rounded-full', t.track)}>
                 <div
-                  className={cn('h-full rounded-full transition-[width] duration-700 ease-out', t.bar)}
-                  style={{ width: `${pct}%` }}
+                  className={cn('h-full origin-left rounded-full transition-transform duration-700 ease-out', t.bar)}
+                  style={{ transform: `scaleX(${pct / 100})` }}
                 />
               </div>
             </li>

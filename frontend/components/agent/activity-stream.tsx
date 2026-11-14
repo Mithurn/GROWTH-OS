@@ -73,13 +73,13 @@ export function ActivityStream({ className }: { className?: string }) {
       toolbar={
         <label className="relative hidden sm:block">
           <span className="sr-only">Search activity</span>
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#9CA3AF]" aria-hidden />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
-            className="h-8 w-44 rounded-full border border-[#E5E7EB] bg-[#F7F7FB] pl-8 pr-3 text-xs text-[#1A1A1A] outline-none focus:border-[#5B4FFF]"
+            className="h-8 w-44 rounded-full border border-border bg-surface-inset pl-8 pr-3 text-xs text-foreground outline-none focus:border-primary"
           />
         </label>
       }

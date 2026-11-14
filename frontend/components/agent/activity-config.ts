@@ -9,12 +9,12 @@ export const ACTIVITY_KINDS: Record<
   ActivityKind,
   { label: string; icon: LucideIcon; group: Exclude<ActivityFilter, 'all'>; node: string; text: string }
 > = {
-  discovered: { label: 'Discovered', icon: Radar, group: 'discoveries', node: 'border-[#C7D2FE] bg-[#EEF2FF]', text: 'text-[#4B3FE5]' },
+  discovered: { label: 'Discovered', icon: Radar, group: 'discoveries', node: 'border-brand-line bg-brand-tint', text: 'text-primary-hover' },
   drafted: { label: 'Drafted', icon: PenLine, group: 'campaigns', node: 'border-sky-200 bg-sky-50', text: 'text-sky-700' },
-  approved: { label: 'Approved', icon: CheckCheck, group: 'campaigns', node: 'border-emerald-200 bg-emerald-50', text: 'text-emerald-700' },
-  sent: { label: 'Sent', icon: Send, group: 'delivery', node: 'border-[#C7D2FE] bg-white', text: 'text-[#5B4FFF]' },
-  milestone: { label: 'Milestone', icon: Trophy, group: 'delivery', node: 'border-amber-200 bg-amber-50', text: 'text-amber-700' },
-  error: { label: 'Needs attention', icon: TriangleAlert, group: 'delivery', node: 'border-red-200 bg-red-50', text: 'text-red-700' },
+  approved: { label: 'Approved', icon: CheckCheck, group: 'campaigns', node: 'border-emerald-200 bg-success-tint', text: 'text-success' },
+  sent: { label: 'Sent', icon: Send, group: 'delivery', node: 'border-brand-line bg-white', text: 'text-primary' },
+  milestone: { label: 'Milestone', icon: Trophy, group: 'delivery', node: 'border-amber-200 bg-warning-tint', text: 'text-warning' },
+  error: { label: 'Needs attention', icon: TriangleAlert, group: 'delivery', node: 'border-danger/20 bg-danger-tint', text: 'text-danger' },
 };
 
 export const ACTIVITY_ACTIONS: Record<string, { kind: ActivityKind; label?: string; icon?: LucideIcon }> = {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, ChevronRight, Eye, Lightbulb, Wallet } from 'lucide-react';
 import { GOAL_LOADING_STEPS } from '@/lib/loading-copy';
@@ -70,30 +71,30 @@ function OpportunityRow({ opp, campaignStatus }: { opp: Opportunity; campaignSta
     <li>
       <Link
         href={`/opportunities/${opp.opportunity_id}`}
-        className="group grid items-center gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-[#FCFBFF] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:grid-cols-[minmax(0,1fr)_88px_88px_150px_200px]"
+        className="group grid items-center gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-surface-inset sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:grid-cols-[minmax(0,1fr)_88px_88px_150px_200px]"
       >
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-[#1A1A1A] group-hover:text-[#4B3FE5]">{opp.title}</p>
-          <p className="mt-0.5 line-clamp-1 text-xs text-[#6B7280]">{opp.trigger_reason || opp.description}</p>
+          <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary-hover">{opp.title}</p>
+          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{opp.trigger_reason || opp.description}</p>
         </div>
         <div className="hidden sm:block lg:text-right">
-          <p className="text-sm font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</p>
-          <p className="text-xs text-[#6B7280]">recoverable</p>
+          <p className="text-sm font-semibold tabular-nums text-primary">{formatCurrency(opp.potential_revenue)}</p>
+          <p className="text-xs text-muted-foreground">recoverable</p>
         </div>
         <div className="hidden lg:block lg:text-right">
-          <p className="text-sm font-semibold tabular-nums text-[#1A1A1A]">{audience.toLocaleString()}</p>
-          <p className="text-xs text-[#6B7280]">customers</p>
+          <p className="text-sm font-semibold tabular-nums text-foreground">{audience.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground">customers</p>
         </div>
         <ConfidenceMeter value={opp.confidence_score} className="hidden w-[150px] lg:flex" />
         <div className="flex items-center justify-between gap-3 sm:justify-end">
           <div className="flex flex-col items-start gap-1 sm:items-end">
             <StatusPill tone={stage.tone}>{stage.label}</StatusPill>
-            <span className="text-xs font-medium text-[#6B7280]">{stage.action(channel)}</span>
+            <span className="text-xs font-medium text-muted-foreground">{stage.action(channel)}</span>
           </div>
-          <ChevronRight className="size-4 text-[#D1D5DB] transition-transform group-hover:translate-x-0.5 group-hover:text-[#5B4FFF]" aria-hidden />
+          <ChevronRight className="size-4 text-border-strong transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
         </div>
-        <div className="flex items-center gap-4 text-xs text-[#6B7280] sm:hidden">
-          <span className="font-semibold text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</span>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground sm:hidden">
+          <span className="font-semibold text-primary">{formatCurrency(opp.potential_revenue)}</span>
           <span>{audience.toLocaleString()} customers</span>
           <span>{Math.round(opp.confidence_score)}% confident</span>
         </div>
@@ -195,12 +196,12 @@ export default function OpportunitiesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
+    <div className={PAGE_SHELL_CLASS}>
       <header className="flex items-center gap-4">
         <AgentAvatar state={creatingGoal ? 'working' : 'idle'} size="md" />
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Opportunities</h1>
-          <p className="text-sm text-[#6B7280]">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Opportunities</h1>
+          <p className="text-sm text-muted-foreground">
             {loading
               ? 'Scanning for opportunities...'
               : `${all.length} found by the agent, ${formatCurrency(totalRevenue)} in recoverable revenue`}
@@ -232,20 +233,20 @@ export default function OpportunitiesPage() {
       />
 
       {creatingGoal && (
-        <div className="mt-4 rounded-2xl border border-[#C7D2FE] bg-white px-6 py-6">
+        <div className="mt-4 rounded-2xl border border-brand-line bg-white px-6 py-6">
           <AiLoader size="md" state="searching" title="Building your opportunity" steps={GOAL_LOADING_STEPS} />
         </div>
       )}
 
       {loading && (
-        <div className={cn(SURFACE_CLASS, "mt-8 divide-y divide-[#F0F0F2]")} aria-hidden>
+        <div className={cn(SURFACE_CLASS, "mt-8 divide-y divide-line-soft")} aria-hidden>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-5">
               <div className="flex-1 space-y-2">
-                <div className="h-3 w-1/2 rounded bg-[#F3F4F6]" />
-                <div className="h-2.5 w-3/4 rounded bg-[#F3F4F6]" />
+                <div className="h-3 w-1/2 rounded bg-muted" />
+                <div className="h-2.5 w-3/4 rounded bg-muted" />
               </div>
-              <div className="h-6 w-24 rounded-full bg-[#F3F4F6]" />
+              <div className="h-6 w-24 rounded-full bg-muted" />
             </div>
           ))}
         </div>
@@ -269,7 +270,7 @@ export default function OpportunitiesPage() {
                 setStatus(null);
               }}
             >
-              All <span className="text-[#6B7280]">{all.length}</span>
+              All <span className="text-muted-foreground">{all.length}</span>
             </Chip>
             {CATEGORY_FILTERS.map(({ key, icon: Icon }) => (
               <Chip
@@ -278,13 +279,13 @@ export default function OpportunitiesPage() {
                 onClick={() => setCategory(category === key ? null : key)}
               >
                 <Icon className="size-3" aria-hidden />
-                {key} <span className="text-[#6B7280]">{categoryCounts[key] ?? 0}</span>
+                {key} <span className="text-muted-foreground">{categoryCounts[key] ?? 0}</span>
               </Chip>
             ))}
-            <span className="mx-1 hidden h-4 w-px bg-[#E5E7EB] sm:block" aria-hidden />
+            <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden />
             {STATUS_FILTERS.map(({ key, label }) => (
               <Chip key={key} active={status === key} onClick={() => setStatus(status === key ? null : key)}>
-                {label} <span className="text-[#6B7280]">{statusCounts[key]}</span>
+                {label} <span className="text-muted-foreground">{statusCounts[key]}</span>
               </Chip>
             ))}
           </div>
@@ -309,7 +310,7 @@ export default function OpportunitiesPage() {
               )}
             </StatePanel>
           ) : (
-            <ul className={cn(SURFACE_CLASS, "mt-4 divide-y divide-[#F0F0F2] overflow-hidden")}>
+            <ul className={cn(SURFACE_CLASS, "mt-4 divide-y divide-line-soft overflow-hidden")}>
               {filtered.map((opp) => (
                 <OpportunityRow key={idOf(opp)} opp={opp} campaignStatus={campaignMap[opp.opportunity_id] ?? null} />
               ))}

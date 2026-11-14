@@ -12,7 +12,7 @@ export function StatusBadge({ status, dark, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs font-medium',
         tones[status] ?? tones.Completed,
         className,
       )}
