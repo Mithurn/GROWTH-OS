@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { PRIMARY_ACTION_CLASS, SECONDARY_ACTION_CLASS } from '@/components/ui/action-styles';
 
 const TONES = {
-  error: { icon: AlertCircle, well: 'bg-red-50 text-red-500', role: 'alert' },
+  error: { icon: AlertCircle, well: 'bg-danger-tint text-danger', role: 'alert' },
   empty: { icon: null, well: '', role: undefined },
 } as const;
 
@@ -29,8 +29,8 @@ export function StatePanel({ tone, title, message, children, className }: StateP
       ) : (
         <AiOrb size="lg" state="breathing" />
       )}
-      <h2 className="mt-5 text-lg font-semibold tracking-tight text-[#1A1A1A]">{title}</h2>
-      {message && <p className="mt-1.5 text-sm leading-relaxed text-[#6B7280]">{message}</p>}
+      <h2 className="mt-5 text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      {message && <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{message}</p>}
       {children && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{children}</div>}
     </div>
   );

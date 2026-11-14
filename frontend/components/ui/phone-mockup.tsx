@@ -81,10 +81,10 @@ function WhatsAppView({ message, brandName }: { message: string; brandName: stri
           {initial}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-semibold text-white truncate">{brandName}</div>
+          <div className="text-2xs font-semibold text-white truncate">{brandName}</div>
           <div className="text-[8px] text-emerald-200">Online</div>
         </div>
-        <div className="flex gap-3 text-white/70 text-[11px]">
+        <div className="flex gap-3 text-white/70 text-2xs">
           <span>📹</span><span>📞</span><span>⋮</span>
         </div>
       </div>
@@ -136,7 +136,7 @@ function EmailView({ message, brandName }: { message: string; brandName: string 
       {/* Email app header */}
       <div className="bg-gray-100 border-b border-gray-200 px-3 py-2">
         <div className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Inbox</div>
-        <div className="text-[11px] font-semibold text-gray-900">{brandName}</div>
+        <div className="text-2xs font-semibold text-gray-900">{brandName}</div>
         <div className="text-[9px] text-gray-500 mt-0.5 truncate">Exclusive offer just for you 🎁</div>
       </div>
 
