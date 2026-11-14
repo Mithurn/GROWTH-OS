@@ -310,6 +310,31 @@ export function buildDraft(opp: Opportunity): GeneratedCampaign {
   };
 }
 
+const DEMO_FUNNEL_FINAL = { delivered: 178, read: 131, clicked: 47 };
+const DEMO_TIMELINE_HOURS = [0, 1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
+const DEMO_TIMELINE_LAG = { delivered: 0.25, read: 1.6, clicked: 3.2 };
+const DEMO_TIMELINE_RATE = { delivered: 1.8, read: 0.45, clicked: 0.3 };
+
+const DEMO_TIMELINE = DEMO_TIMELINE_HOURS.map((hour) => {
+  const reach = (key: keyof typeof DEMO_TIMELINE_LAG) =>
+    Math.round(DEMO_FUNNEL_FINAL[key] * (1 - Math.exp(-DEMO_TIMELINE_RATE[key] * Math.max(0, hour - DEMO_TIMELINE_LAG[key] + 1))));
+  return { hour, sent: 189, delivered: reach('delivered'), read: reach('read'), clicked: reach('clicked') };
+});
+
+const DEMO_SEND_TIME_HEATMAP = {
+  days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  slots: ['6-9am', '9-12', '12-3pm', '3-6pm', '6-9pm', '9pm+'],
+  rates: [
+    [12, 18, 22, 20, 41, 24],
+    [14, 21, 24, 23, 44, 26],
+    [13, 19, 25, 22, 46, 28],
+    [15, 22, 27, 25, 49, 30],
+    [16, 24, 29, 31, 52, 36],
+    [11, 26, 33, 35, 58, 41],
+    [10, 23, 30, 32, 54, 38],
+  ],
+};
+
 export const DEMO_ANALYTICS = (campaignId: string) => {
   const campaign = DEMO_CAMPAIGNS.find((c) => c.id === campaignId) ?? DEMO_CAMPAIGNS[0];
   return {
@@ -330,13 +355,9 @@ export const DEMO_ANALYTICS = (campaignId: string) => {
       { persona_name: 'Style Builders', count: 31, percentage: 17 },
       { persona_name: 'Steady Regulars', count: 19, percentage: 10 },
     ],
-    timeline: [
-      { hour: 0, sent: 189, delivered: 120, read: 40, clicked: 6 },
-      { hour: 1, sent: 189, delivered: 165, read: 78, clicked: 15 },
-      { hour: 2, sent: 189, delivered: 172, read: 104, clicked: 27 },
-      { hour: 4, sent: 189, delivered: 176, read: 121, clicked: 38 },
-      { hour: 8, sent: 189, delivered: 178, read: 131, clicked: 47 },
-    ],
+    timeline: DEMO_TIMELINE,
+    sendTimeHeatmap: DEMO_SEND_TIME_HEATMAP,
+    benchmark: { delivered: 91, read: 64, clicked: 19 },
     insights: {
       learnings: [
         'Messages sent at 7pm were read 2.3x faster than the morning batch.',
