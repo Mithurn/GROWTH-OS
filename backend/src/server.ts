@@ -45,7 +45,7 @@ import { unsubscribeRouter } from './routes/unsubscribe';
 
 const app = express();
 
-// Render puts exactly one reverse proxy in front of this service, so `req.ip` is
+// Caddy puts exactly one reverse proxy in front of this service, so `req.ip` is
 // otherwise the proxy's own address for every request — every rate limiter would
 // key on one shared IP. `1` trusts exactly one hop, not `true` (every hop), which
 // would let a spoofed X-Forwarded-For bypass limiting entirely.
@@ -82,7 +82,7 @@ app.get('/api/health', livenessHandler);
 app.use('/api', generalLimiter);
 app.use('/api', unsubscribeRouter);
 
-// Health checks sit outside /api so they are not rate limited — Render polls the
+// Health checks sit outside /api so they are not rate limited — the proxy polls the
 // liveness endpoint and an external cron polls readiness every few minutes.
 app.use('/', healthRouter);
 
@@ -129,13 +129,7 @@ if (require.main === module) {
         logger.info({ port: PORT }, 'Backend server started');
         startCreditMonitor(openRouterConfig.apiKey, openRouterConfig.baseUrl);
 
-        // BullMQ workers belong in their own process (npm run dev:worker locally, the
-        // "xeno-crm-worker" Render service once enabled) — see docs/V3_PLAN.md Phase
-        // 0.2: splitting them out means an API deploy can no longer kill a job
-        // mid-flight. That Render service is written but commented out in render.yaml
-        // pending a hosting-cost decision (a third always-on free service exceeds the
-        // shared 750h/mo allowance), so jobs still run inline here by default — set
-        // WORKERS_IN_API_PROCESS=false once the separate service is turned on.
+        // Workers run in-process by default; set WORKERS_IN_API_PROCESS=false to run them via `npm run dev:worker`.
         if (process.env.WORKERS_IN_API_PROCESS !== 'false') {
           await startWorkers();
         }
@@ -171,7 +165,7 @@ if (require.main === module) {
           logger.info('API: drained, exiting');
           process.exit(0);
         });
-        // Render sends SIGKILL well after this, but bound the wait anyway so a
+        // Docker sends SIGKILL well after this, but bound the wait anyway so a
         // stuck connection can't hang the process past its deploy window.
         setTimeout(() => process.exit(0), 10_000).unref();
       };

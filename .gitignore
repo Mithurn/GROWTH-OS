@@ -61,3 +61,8 @@ backend/.mcp.json
 packages/evals/python/.venv/
 packages/evals/python/*.csv
 docs/bi-exports/
+
+# Build caches
+__pycache__/
+*.pyc
+*.tsbuildinfo

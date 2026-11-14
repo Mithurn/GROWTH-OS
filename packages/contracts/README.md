@@ -14,7 +14,7 @@ Resolution takes two mappings, not one, and both are load-bearing:
 - **The consumer maps the package.** `backend/tsconfig.json` maps
   `@growthos/contracts` → `src/index.ts`, which is what lets the routers import it.
 - **This package maps its own npm dependency.** `tsconfig.json` here maps `zod` into
-  `backend/node_modules`. Without it the real `render.yaml` esbuild build fails to
+  `backend/node_modules`. Without it the production esbuild build fails to
   resolve `zod`, because esbuild reads the tsconfig nearest the importing file and so
   never sees the consumer's mapping. `tsc` is satisfied by the consumer's mapping alone
   and therefore does **not** catch this — which is why the backend's CI now runs the

@@ -9,7 +9,7 @@ export const internalRouter = Router();
  * Drive one orchestrator tick from an external scheduler.
  *
  * The autonomous agent loop used to live in a `setInterval`, which never fired in
- * production: Render's free tier sleeps the instance after 15 minutes idle and the
+ * production: the instance sleeps when idle and the
  * timer dies with the process. Guarded by a shared secret rather than a user JWT,
  * because there is no user behind the call.
  */

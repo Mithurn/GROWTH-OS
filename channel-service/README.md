@@ -13,7 +13,6 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/Express.js-4-000000?style=flat-square&logo=express" alt="Express">
   <img src="https://img.shields.io/badge/Channels-WhatsApp_·_Email_·_SMS-25D366?style=flat-square" alt="Channels">
-  <img src="https://img.shields.io/badge/Deployed-Render-46E3B7?style=flat-square" alt="Render">
 </p>
 
 <p align="center">
@@ -24,12 +23,7 @@
   <a href="#setup">Setup</a>
 </p>
 
-**Production URL:** https://xeno-channel-service.onrender.com
-
-> Runs on Render's free tier and is deliberately **not** kept warm. Render's 750 free
-> instance-hours are shared workspace-wide, and keeping the backend warm 24/7 already
-> consumes ~730 of them. This service spins down when idle and is woken on demand by the
-> backend immediately before a campaign launch fans out its sends.
+Deployed with the rest of the stack on AWS, see [DEPLOYMENT.md](../DEPLOYMENT.md).
 
 ---
 

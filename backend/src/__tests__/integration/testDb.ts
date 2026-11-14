@@ -37,7 +37,7 @@ export async function startTestDb(): Promise<TestDb> {
   const connectionUri = container.getConnectionUri();
 
   // `prisma migrate deploy` shells out rather than using the Prisma Client's own
-  // migration API — this is the same command render.yaml's preDeployCommand runs in
+  // migration API — this is the same command the deploy runs in
   // production, so the integration suite is exercising the actual deploy path, not a
   // parallel one that could drift from it.
   try {

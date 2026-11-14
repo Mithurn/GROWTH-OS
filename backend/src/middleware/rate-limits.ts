@@ -8,8 +8,8 @@ import type { AuthRequest } from './auth';
 
 /**
  * Backed by the shared Redis client so limits hold across every instance —
- * the in-memory default resets per-process, which is a no-op once Render
- * runs more than one.
+ * the in-memory default resets per-process, which is a no-op once more than
+ * one API instance runs.
  */
 function redisStore(prefix: string) {
   return new RedisStore({
