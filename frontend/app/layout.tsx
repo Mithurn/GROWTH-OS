@@ -40,6 +40,7 @@ export const metadata: Metadata = {
     "marketing automation",
     "retail analytics",
   ],
+  other: { 'darkreader-lock': 'light-only' },
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
@@ -68,7 +69,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`h-full antialiased ${display.variable} ${mono.variable}`}>
+    <html lang="en" style={{ colorScheme: "light" }} className={`h-full antialiased ${display.variable} ${mono.variable}`}>
       <body className="min-h-full flex flex-col">
         <MainLayout>{children}</MainLayout>
       </body>

@@ -1,5 +1,7 @@
 'use client';
 
+import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
+import { AiOrb } from '@/components/ui/ai-orb';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -462,37 +464,28 @@ export default function HomePage() {
 
         {/* ── Error ── */}
         {error && (
-          <div className="text-center py-12">
-            <p className="text-red-500 mb-4">{error}</p>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-[#5B4FFF] text-white rounded-lg hover:bg-[#4B3FE5] transition-colors"
-            >
-              Go to Onboarding <ArrowRight className="h-4 w-4" />
+          <StatePanel tone="error" title="We could not load your dashboard" message={error}>
+            <button type="button" onClick={() => window.location.reload()} className={statePanelActionClass}>Try again</button>
+            <Link href="/onboarding" className={statePanelSecondaryClass}>
+              Go to onboarding <ArrowRight className="h-4 w-4" />
             </Link>
-          </div>
+          </StatePanel>
         )}
 
         {/* ── Empty ── */}
         {!loading && !error && opportunities.length === 0 && (
-          <div className="text-center py-16">
-            <Sparkles className="h-12 w-12 mx-auto mb-4 text-[#9CA3AF]" />
-            <h2 className="text-xl font-semibold text-[#1A1A1A] mb-2">No opportunities yet</h2>
-            <p className="text-[#6B7280] mb-6">Upload customer data to discover growth opportunities</p>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#5B4FFF] text-white rounded-xl hover:bg-[#4B3FE5] transition-colors font-medium"
-            >
-              Get Started <ArrowRight className="h-4 w-4" />
+          <StatePanel tone="empty" title="No opportunities yet" message="Upload your customer data and GrowthOS will find where revenue is leaking.">
+            <Link href="/onboarding" className={statePanelActionClass}>
+              Get started <ArrowRight className="h-4 w-4" />
             </Link>
-          </div>
+          </StatePanel>
         )}
 
         {/* ── Two Column Layout ── */}
         {!loading && (featuredOpportunity || processing) && (
-          <div className="grid grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* ── Left: Featured Opportunity or Thinking Skeleton ── */}
-            <div className="col-span-8">
+            <div className="lg:col-span-8">
               {processing ? (
                 /* ── Thinking Skeleton Card ── */
                 <div className="relative bg-white rounded-2xl border border-[#5B4FFF]/20 p-8 shadow-sm overflow-hidden">
@@ -501,10 +494,7 @@ export default function HomePage() {
 
                   {/* Pulsing badge */}
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F0EEFF] text-[#5B4FFF] text-[10px] font-bold uppercase tracking-wider rounded-full mb-6">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5B4FFF] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#5B4FFF]" />
-                    </span>
+                    <AiOrb size="sm" className="size-3" />
                     GrowthOS is analyzing your request
                   </div>
 
@@ -520,7 +510,7 @@ export default function HomePage() {
                   </p>
 
                   {/* Skeleton metric bars */}
-                  <div className="flex gap-16 mb-10">
+                  <div className="flex gap-8 sm:gap-16 mb-10">
                     {['Recoverable Revenue', 'Audience Size'].map(label => (
                       <div key={label}>
                         <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">{label}</p>
@@ -530,7 +520,7 @@ export default function HomePage() {
                   </div>
 
                   {/* Skeleton info rows */}
-                  <div className="grid grid-cols-3 gap-6 pt-8 border-t border-[#E5E7EB]">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8 border-t border-[#E5E7EB]">
                     {['Why GrowthOS Found This', 'Predicted Outcome', 'Recommended Action'].map(col => (
                       <div key={col}>
                         <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">{col}</p>
@@ -573,7 +563,7 @@ export default function HomePage() {
                 </p>
 
                 {/* 2-metric row */}
-                <div className="flex gap-16 mb-10">
+                <div className="flex gap-8 sm:gap-16 mb-10">
                   <div>
                     <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-2">
                       Recoverable Revenue
@@ -593,7 +583,7 @@ export default function HomePage() {
                 </div>
 
                 {/* 2-column info */}
-                <div className="grid grid-cols-2 gap-8 pt-8 border-t border-[#E5E7EB]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pt-8 border-t border-[#E5E7EB]">
                   <div>
                     <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wider mb-4">
                       Why GrowthOS Found This
@@ -663,7 +653,7 @@ export default function HomePage() {
             </div>
 
             {/* ── Right: Activity Feed ── */}
-            <div className="col-span-4">
+            <div className="lg:col-span-4">
 
               {/* Activity Feed */}
               <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
@@ -763,7 +753,7 @@ export default function HomePage() {
             <h3 className="text-lg font-bold text-[#1A1A1A] mb-6">
               {processing ? 'Current Opportunities' : 'Other Opportunities'}
             </h3>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {gridOpportunities.map((opp, i) => {
                 const priority = getPriorityLabel(opp.priority_score);
                 return (

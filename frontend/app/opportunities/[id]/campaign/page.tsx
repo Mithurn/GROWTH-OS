@@ -1,5 +1,8 @@
 'use client';
 
+import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
+import { AiLoader } from '@/components/ui/ai-loader';
+import { CAMPAIGN_LOADING_STEPS } from '@/lib/loading-copy';
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -119,10 +122,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center flex-col gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-[#5B4FFF]" />
-        <p className="text-[#6B7280] font-medium text-sm animate-pulse">
-          GrowthOS is generating your campaign strategy...
-        </p>
+        <AiLoader title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
       </div>
     );
   }
@@ -130,13 +130,12 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   if (error || !opportunity || !campaign) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-6 text-center">
-        <div>
-          <h2 className="text-xl font-bold text-red-600 mb-2">Failed to load campaign</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <Link href={`/opportunities/${opportunityId}`} className="text-[#5B4FFF] font-medium hover:underline">
-            Go back to Opportunity
+        <StatePanel tone="error" title="We could not load this campaign" message={error ?? undefined}>
+          <button type="button" onClick={() => window.location.reload()} className={statePanelActionClass}>Try again</button>
+          <Link href={`/opportunities/${opportunityId}`} className={statePanelSecondaryClass}>
+            Back to opportunity
           </Link>
-        </div>
+        </StatePanel>
       </div>
     );
   }
@@ -145,10 +144,10 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col font-sans">
       
       {/* Main Content */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row lg:overflow-hidden">
         
         {/* Left Side: Strategy */}
-        <div className="w-1/2 p-6 lg:p-8 overflow-y-auto border-r border-[#E5E7EB] bg-white">
+        <div className="w-full lg:w-1/2 p-6 lg:p-8 lg:overflow-y-auto lg:border-r border-b lg:border-b-0 border-[#E5E7EB] bg-white">
           <div className="max-w-lg mx-auto">
             
             <h1 className="text-3xl font-extrabold text-[#1A1A1A] tracking-tight mb-2">
@@ -254,7 +253,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
         </div>
 
         {/* Right Side: Preview */}
-        <div className="w-1/2 bg-[#F8F9FE] p-6 lg:p-8 overflow-y-auto flex flex-col items-center justify-start relative pb-32">
+        <div className="w-full lg:w-1/2 bg-[#F8F9FE] p-6 lg:p-8 lg:overflow-y-auto flex flex-col items-center justify-start relative pb-32">
           
           {/* Phone Mockup */}
           <div className="w-[280px] h-[560px] bg-[#E7E5E4] rounded-[36px] p-2 shadow-xl relative mt-4 mb-6 flex-shrink-0 ring-1 ring-gray-900/5">
@@ -361,9 +360,9 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
           </div>
 
           {/* Floating Action Bar */}
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-[#EEF2FF] p-2 pr-4 rounded-2xl shadow-xl z-50">
+          <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] sm:w-auto flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 bg-[#EEF2FF] p-2 pr-4 rounded-2xl shadow-xl z-50">
             
-            <div className="relative group w-[400px]">
+            <div className="relative group min-w-0 sm:flex-none sm:w-[400px]">
               <div className="relative flex items-center p-1.5 pl-3 bg-white rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-[#5B4FFF]/50 transition-all">
                 <Sparkles className="h-4 w-4 text-[#5B4FFF] mr-2" />
                 <input
@@ -372,11 +371,13 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
                   onChange={(e) => setChatQuery(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleRefine(); }}
                   placeholder="Tell GrowthOS how you'd like to improve this campaign..."
-                  className="flex-1 bg-transparent text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] outline-none"
+                  aria-label="Refine this campaign"
+                  className="flex-1 min-w-0 bg-transparent text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] outline-none"
                   disabled={isRefining}
                 />
                 <button
                   onClick={handleRefine}
+                  aria-label="Send refinement"
                   disabled={!chatQuery.trim() || isRefining}
                   className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all ${
                     chatQuery.trim() && !isRefining ? 'bg-[#EEF2FF] text-[#5B4FFF] hover:bg-[#5B4FFF] hover:text-white' : 'bg-[#F3F4F6] text-[#9CA3AF]'
@@ -387,7 +388,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:justify-start gap-4">
               <button 
                 onClick={() => router.push(`/opportunities/${opportunityId}`)}
                 className="text-xs font-bold text-[#C53030] hover:text-red-700 transition-colors tracking-wider uppercase"

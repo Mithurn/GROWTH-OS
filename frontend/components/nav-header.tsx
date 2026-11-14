@@ -53,15 +53,17 @@ export function NavHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b" style={headerStyle}>
-      <div className="max-w-[1600px] mx-auto px-6 h-16 grid grid-cols-3 items-center">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2 md:grid md:grid-cols-3">
 
         {/* Left: Logo */}
-        <Link href="/dashboard" className="flex items-center">
-          <Image src="/logo.png" alt="GrowthOS" width={80} height={22} className="object-contain" />
+        <Link href="/dashboard" className="flex shrink-0 items-center">
+          <span className="block w-6 overflow-hidden sm:w-auto">
+            <Image src="/logo.png" alt="GrowthOS" width={80} height={22} className="max-w-none object-contain" />
+          </span>
         </Link>
 
         {/* Center: Navigation */}
-        <nav className="flex items-center justify-center gap-1">
+        <nav aria-label="Primary" className="flex min-w-0 items-center justify-center gap-0.5 sm:gap-1">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname.startsWith(item.href);
 
@@ -70,7 +72,8 @@ export function NavHeader() {
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`px-4 py-1.5 text-[13px] font-medium transition-all rounded-full ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`px-2.5 sm:px-4 py-1.5 text-[13px] font-medium transition-all rounded-full ${
                     isActive ? 'text-white' : 'text-[#8B92A5] hover:text-white hover:bg-white/5'
                   }`}
                   style={isActive ? { background: 'rgba(91,79,255,0.18)', color: '#A89DFF' } : {}}
@@ -84,7 +87,8 @@ export function NavHeader() {
               <Link
                 key={item.label}
                 href={item.href}
-                className={`px-4 py-1.5 text-[13px] font-medium transition-all rounded-full ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`px-2.5 sm:px-4 py-1.5 text-[13px] font-medium transition-all rounded-full ${
                   isActive
                     ? 'bg-[#EEF2FF] text-[#5B4FFF]'
                     : 'text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#F3F4F6]'
@@ -97,11 +101,13 @@ export function NavHeader() {
         </nav>
 
         {/* Right: User menu */}
-        <div className="flex justify-end">
+        <div className="flex shrink-0 justify-end">
           {(user || demo) && (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(o => !o)}
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                   dark
                     ? 'text-[#8B92A5] hover:bg-white/5'
