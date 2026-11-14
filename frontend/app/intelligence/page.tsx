@@ -82,15 +82,15 @@ export default function IntelligencePage() {
       <PageHeader title="Customer intelligence" description="What the agent learned from your customer data" />
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricTile label="Customers" value={(data.totalCustomers ?? 0).toLocaleString()} icon={Users} />
-        <MetricTile label="Orders" value={(data.totalOrders ?? 0).toLocaleString()} icon={ShoppingCart} />
-        <MetricTile label="Revenue" value={formatCurrency(data.revenue ?? 0)} icon={DollarSign} accent />
-        <MetricTile label="Average order" value={formatCurrency(data.avgOrderValue ?? 0)} icon={TrendingUp} />
+        <MetricTile label="Customers" value={(data.totalCustomers ?? 0).toLocaleString()} icon={Users} hint={health && data.totalCustomers ? `${Math.round((health.active / data.totalCustomers) * 100)}% active right now` : undefined} />
+        <MetricTile label="Orders" value={(data.totalOrders ?? 0).toLocaleString()} icon={ShoppingCart} hint={data.totalCustomers ? `${((data.totalOrders ?? 0) / data.totalCustomers).toFixed(1)} orders per customer` : undefined} />
+        <MetricTile label="Revenue" value={formatCurrency(data.revenue ?? 0)} icon={DollarSign} accent hint="Lifetime, all channels" />
+        <MetricTile label="Average order" value={formatCurrency(data.avgOrderValue ?? 0)} icon={TrendingUp} hint="Spend per order" />
       </div>
 
       {health && (
         <section className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white p-5" aria-label="Customer health">
-          <h2 className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Customer health</h2>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Customer health</h2>
           <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-[#F3F4F6]" aria-hidden>
             {HEALTH_SEGMENTS.map(({ key, bar }) => (
               <span key={key} className={bar} style={{ width: `${healthTotal ? (health[key] / healthTotal) * 100 : 0}%` }} />
@@ -102,8 +102,8 @@ export default function IntelligencePage() {
                 <span className={cn('mt-1.5 size-2 rounded-full', bar)} aria-hidden />
                 <div>
                   <dt className="text-xs text-[#6B7280]">{label}</dt>
-                  <dd className="font-mono text-xl font-semibold tabular-nums text-[#1A1A1A]">{health[key].toLocaleString()}</dd>
-                  <p className="text-xs text-[#9CA3AF]">{hint}</p>
+                  <dd className="text-xl font-semibold tabular-nums text-[#1A1A1A]">{health[key].toLocaleString()}</dd>
+                  <p className="text-xs text-[#6B7280]">{hint}</p>
                 </div>
               </div>
             ))}
@@ -113,7 +113,7 @@ export default function IntelligencePage() {
 
       {data.topCustomers && data.topCustomers.length > 0 && (
         <section className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white" aria-label="Top customers">
-          <h2 className="border-b border-[#F0F0F2] px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Top customers</h2>
+          <h2 className="border-b border-[#F0F0F2] px-5 py-3 text-xs font-medium uppercase tracking-wider text-[#6B7280]">Top customers</h2>
           <ul className="divide-y divide-[#F0F0F2]">
             {data.topCustomers.map((customer, index) => (
               <li key={customer.name} className="flex items-center justify-between px-5 py-3">
@@ -121,7 +121,7 @@ export default function IntelligencePage() {
                   <Crown className={cn('size-4', index === 0 ? 'text-amber-500' : 'text-[#D1D5DB]')} aria-hidden />
                   {customer.name}
                 </span>
-                <span className="font-mono text-sm font-semibold tabular-nums text-[#5B4FFF]">
+                <span className="text-sm font-semibold tabular-nums text-[#5B4FFF]">
                   ₹{parseFloat(String(customer.totalSpent)).toLocaleString('en-IN')}
                 </span>
               </li>

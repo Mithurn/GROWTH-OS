@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Gem, X } from 'lucide-react';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 import { AiLoader } from '@/components/ui/ai-loader';
+import { MetricTile } from '@/components/agent/metric-tile';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AgentPromptInput } from '@/components/agent/agent-prompt-input';
 import { ConfidenceMeter } from '@/components/agent/confidence-meter';
@@ -53,7 +54,7 @@ const rupees = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`;
 function Card({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <section className={`rounded-2xl border border-[#E5E7EB] bg-white p-5 ${className ?? ''}`}>
-      <h2 className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{title}</h2>
+      <h2 className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -177,7 +178,7 @@ export default function OpportunityDetailPage() {
         <ArrowLeft className="size-4" aria-hidden /> Opportunities
       </Link>
 
-      <header className="mt-4 flex items-start gap-4">
+      <header className="mt-4 flex items-center gap-4">
         <AgentAvatar state={isRefining ? 'working' : 'idle'} size="md" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -188,24 +189,12 @@ export default function OpportunityDetailPage() {
         </div>
       </header>
 
-      <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          { label: 'Recoverable', value: formatCurrency(opp.potential_revenue), accent: true },
-          { label: 'Audience', value: audienceCount.toLocaleString(), accent: false },
-          { label: 'Predicted conversion', value: conversion, accent: false },
-        ].map(({ label, value, accent }) => (
-          <div key={label} className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</dt>
-            <dd className={`mt-1 font-mono text-xl font-semibold tabular-nums ${accent ? 'text-[#5B4FFF]' : 'text-[#1A1A1A]'}`}>{value}</dd>
-          </div>
-        ))}
-        <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
-          <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Agent confidence</dt>
-          <dd className="mt-3">
-            <ConfidenceMeter value={opp.confidence_score} />
-          </dd>
-        </div>
-      </dl>
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricTile accent label="Recoverable" value={formatCurrency(opp.potential_revenue)} hint="Estimated revenue at stake" />
+        <MetricTile label="Audience" value={audienceCount.toLocaleString()} hint="Customers in the target group" />
+        <MetricTile label="Predicted conversion" value={conversion} hint="Of the audience expected to buy" />
+        <MetricTile label="Agent confidence" value={`${Math.round(opp.confidence_score)}%`} hint={`Based on ${reasons.length} signals`} />
+      </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -246,14 +235,14 @@ export default function OpportunityDetailPage() {
 
             <Card title="Personas the agent found">
               {personas.length === 0 ? (
-                <p className="text-sm text-[#9CA3AF]">No personas yet.</p>
+                <p className="text-sm text-[#6B7280]">No personas yet.</p>
               ) : (
                 <ul className="space-y-3">
                   {personas.map((p) => (
                     <li key={p.name}>
                       <p className="flex items-center justify-between text-sm font-medium text-[#1A1A1A]">
                         {p.name}
-                        {p.count != null && <span className="font-mono text-xs text-[#9CA3AF]">{p.count}</span>}
+                        {p.count != null && <span className="text-xs text-[#6B7280]">{p.count}</span>}
                       </p>
                       <p className="text-xs leading-relaxed text-[#6B7280]">{p.description}</p>
                     </li>
@@ -266,7 +255,7 @@ export default function OpportunityDetailPage() {
 
         <aside className="space-y-6">
           <section className="rounded-2xl border border-[#C7D2FE] bg-[#FCFBFF] p-5">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-[#5B4FFF]">Recommended play</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-[#5B4FFF]">Recommended play</p>
             <h2 className="mt-1 text-lg font-semibold tracking-tight text-[#1A1A1A]">{playName(opp.title)}</h2>
             <div className="mt-4 space-y-2.5">
               <Row label="Channel" value={channel} />
@@ -286,9 +275,9 @@ export default function OpportunityDetailPage() {
                   <li key={alt.title} className="rounded-xl bg-[#F9FAFB] p-3">
                     <p className="flex items-center justify-between text-xs font-medium text-[#1A1A1A]">
                       {alt.title}
-                      <span className="font-mono text-[#6B7280]">{alt.conversion_rate}%</span>
+                      <span className="text-[#6B7280]">{alt.conversion_rate}%</span>
                     </p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-[#6B7280]">{alt.note}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#6B7280]">{alt.note}</p>
                   </li>
                 ))}
               </ul>
@@ -359,8 +348,8 @@ function CustomerDrawer({ customer, onClose }: { customer: Customer; onClose: ()
         <dl className="mt-6 grid grid-cols-2 gap-3">
           {stats.map(({ label, value }) => (
             <div key={label} className="rounded-xl border border-[#E5E7EB] p-3">
-              <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</dt>
-              <dd className="mt-1 font-mono text-base font-semibold tabular-nums text-[#1A1A1A]">{value}</dd>
+              <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">{label}</dt>
+              <dd className="mt-1 text-base font-semibold tabular-nums text-[#1A1A1A]">{value}</dd>
             </div>
           ))}
         </dl>

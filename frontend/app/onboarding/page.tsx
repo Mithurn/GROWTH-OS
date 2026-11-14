@@ -69,7 +69,7 @@ function Choice({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium text-[#1A1A1A]">{label}</span>
-        {hint && <span className="block text-xs text-[#9CA3AF]">{hint}</span>}
+        {hint && <span className="block text-xs text-[#6B7280]">{hint}</span>}
       </span>
       {selected && <Check className="size-4 text-[#5B4FFF]" aria-hidden />}
     </button>
@@ -89,12 +89,12 @@ function FileDrop({ file, label, hint, onPick }: { file: File | null; label: str
           file ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#D1D5DB]',
         )}
       >
-        <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', file ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F3F4F6] text-[#9CA3AF]')}>
+        <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', file ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F3F4F6] text-[#6B7280]')}>
           {file ? <Check className="size-5" aria-hidden /> : <UploadCloud className="size-5" aria-hidden />}
         </span>
         <span>
           <span className="block text-sm font-medium text-[#1A1A1A]">{label}</span>
-          <span className="block text-xs text-[#9CA3AF]">{file ? file.name : hint}</span>
+          <span className="block text-xs text-[#6B7280]">{file ? file.name : hint}</span>
         </span>
       </button>
     </>
@@ -295,7 +295,7 @@ export default function OnboardingPage() {
   return (
     <OnboardingShell title={copy.title} body={copy.body} progress={progress}>
       {formIndex > 0 && (
-        <button type="button" onClick={back} className="mb-6 flex items-center gap-1.5 text-sm text-[#9CA3AF] transition-colors hover:text-[#1A1A1A]">
+        <button type="button" onClick={back} className="mb-6 flex items-center gap-1.5 text-sm text-[#6B7280] transition-colors hover:text-[#1A1A1A]">
           <ArrowLeft className="size-4" aria-hidden /> Back
         </button>
       )}
@@ -325,7 +325,7 @@ export default function OnboardingPage() {
             onChange={(e) => setCompanyName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCompanyContinue()}
             placeholder="e.g. Zara India, Nykaa, Lenskart"
-            className="mt-2 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-[#5B4FFF]"
+            className="mt-2 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors placeholder:text-[#6B7280] focus:border-[#5B4FFF]"
           />
           <p className="mt-6 text-sm font-medium text-[#374151]">Industry</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -376,7 +376,7 @@ export default function OnboardingPage() {
               </>
             )}
           </button>
-          <div className="my-4 flex items-center gap-3 text-xs text-[#9CA3AF]">
+          <div className="my-4 flex items-center gap-3 text-xs text-[#6B7280]">
             <span className="h-px flex-1 bg-[#E5E7EB]" /> or <span className="h-px flex-1 bg-[#E5E7EB]" />
           </div>
           <button
@@ -389,7 +389,7 @@ export default function OnboardingPage() {
           >
             Try it with {DEMO_CUSTOMERS} sample customers <ArrowRight className="size-4" aria-hidden />
           </button>
-          <p className="mt-2 text-center text-[11px] text-[#9CA3AF]">
+          <p className="mt-2 text-center text-xs text-[#6B7280]">
             Imports {DEMO_CUSTOMERS} customers and {DEMO_ORDERS} orders into your workspace so you can try the pipeline first.
           </p>
         </div>
@@ -427,7 +427,7 @@ export default function OnboardingPage() {
               </span>
               <span>
                 <span className="block text-sm font-medium text-[#1A1A1A]">Autonomous, coming soon</span>
-                <span className="block text-xs text-[#9CA3AF]">Available after launch policy, approval audit and recipient safety controls are on.</span>
+                <span className="block text-xs text-[#6B7280]">Available after launch policy, approval audit and recipient safety controls are on.</span>
               </span>
             </div>
           </div>

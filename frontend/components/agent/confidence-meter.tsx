@@ -25,7 +25,7 @@ export function ConfidenceMeter({ value, label = 'Confidence', className }: Conf
           <span key={i} className={cn('h-1.5 flex-1 rounded-full', i < filled ? 'bg-[#5B4FFF]' : 'bg-[#E5E7EB]')} />
         ))}
       </div>
-      <span className="w-9 text-right font-mono text-[11px] tabular-nums text-[#4B5563]">{percent}%</span>
+      <span className="w-9 text-right text-xs tabular-nums text-[#4B5563]">{percent}%</span>
     </div>
   );
 }

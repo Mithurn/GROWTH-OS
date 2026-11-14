@@ -204,13 +204,13 @@ export default function PersonasPage() {
       {report ? (
         <>
           <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricTile label="Personas" value={String(report.totalPersonas)} />
-            <MetricTile label="Customers" value={report.totalCustomers.toLocaleString()} />
-            <MetricTile label="Average per persona" value={formatCurrency(totals?.averageSpendPerPersona ?? 0)} />
-            <MetricTile label="Total revenue" value={formatCurrency(totals?.revenueContribution ?? 0)} accent />
+            <MetricTile label="Personas" value={String(report.totalPersonas)} hint="Distinct buying behaviours" />
+            <MetricTile label="Customers" value={report.totalCustomers.toLocaleString()} hint="Grouped by the agent" />
+            <MetricTile label="Average per persona" value={formatCurrency(totals?.averageSpendPerPersona ?? 0)} hint="Revenue per persona" />
+            <MetricTile label="Total revenue" value={formatCurrency(totals?.revenueContribution ?? 0)} accent hint="Across all personas" />
           </div>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
             <ul className="space-y-2" aria-label="Personas">
               {report.personaDistribution.map((persona) => {
                 const isSelected = selectedPersona?.persona_name === persona.persona_name;
@@ -231,14 +231,14 @@ export default function PersonasPage() {
                           <p className="mt-0.5 line-clamp-2 text-xs text-[#6B7280]">{persona.persona_description}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-mono text-base font-semibold tabular-nums text-[#1A1A1A]">{persona.customer_count}</p>
-                          <p className="text-[11px] text-[#9CA3AF]">customers</p>
+                          <p className="text-base font-semibold tabular-nums text-[#1A1A1A]">{persona.customer_count}</p>
+                          <p className="text-xs text-[#6B7280]">customers</p>
                         </div>
                       </div>
                       <div className="mt-3 h-1.5 rounded-full bg-[#F3F4F6]">
                         <div className="h-1.5 rounded-full bg-[#5B4FFF]" style={{ width: `${Math.max(MIN_SHARE_BAR, persona.revenue_share)}%` }} />
                       </div>
-                      <p className="mt-2 flex justify-between text-[11px] text-[#6B7280]">
+                      <p className="mt-2 flex justify-between text-xs text-[#6B7280]">
                         <span>{formatCurrency(persona.average_spend)} average</span>
                         <span>{formatScore(persona.revenue_share)} of revenue</span>
                       </p>
@@ -262,7 +262,7 @@ export default function PersonasPage() {
               ) : selectedCustomers.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
-                    <thead className="text-left text-[11px] uppercase tracking-wider text-[#9CA3AF]">
+                    <thead className="text-left text-xs uppercase tracking-wider text-[#6B7280]">
                       <tr>
                         <th className="px-5 py-2.5 font-medium">Customer</th>
                         <th className="px-3 py-2.5 font-medium">Spend</th>
@@ -276,12 +276,12 @@ export default function PersonasPage() {
                         <tr key={customer.customer_id}>
                           <td className="px-5 py-3">
                             <p className="font-medium text-[#1A1A1A]">{customer.customer_name}</p>
-                            <p className="text-xs text-[#9CA3AF]">
+                            <p className="text-xs text-[#6B7280]">
                               {customer.preferred_channel ?? 'Unknown channel'} · {customer.discount_affinity ?? 'Unknown'} affinity
                             </p>
                           </td>
-                          <td className="px-3 py-3 font-mono tabular-nums text-[#1A1A1A]">{formatCurrency(customer.total_spent)}</td>
-                          <td className="px-3 py-3 font-mono tabular-nums text-[#4B5563]">{customer.total_orders}</td>
+                          <td className="px-3 py-3 tabular-nums text-[#1A1A1A]">{formatCurrency(customer.total_spent)}</td>
+                          <td className="px-3 py-3 tabular-nums text-[#4B5563]">{customer.total_orders}</td>
                           <td className="px-3 py-3 text-[#4B5563]">{customer.favorite_category ?? '-'}</td>
                           <td className="whitespace-nowrap px-5 py-3 text-[#4B5563]">
                             {customer.days_since_last_order === null ? 'No orders yet' : `${customer.days_since_last_order} days ago`}
@@ -292,7 +292,7 @@ export default function PersonasPage() {
                   </table>
                 </div>
               ) : (
-                <p className="p-8 text-center text-sm text-[#9CA3AF]">No customers found for this persona.</p>
+                <p className="p-8 text-center text-sm text-[#6B7280]">No customers found for this persona.</p>
               )}
             </section>
           </div>
