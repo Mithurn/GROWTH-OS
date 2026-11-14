@@ -4,6 +4,7 @@ export const GITHUB_URL = 'https://github.com/Mithurn/GROWTH-OS';
 export const AUTHOR_URL = 'https://github.com/Mithurn';
 
 export const NAV_LINKS = [
+  { href: '#watch', label: 'Watch' },
   { href: '#workflow', label: 'Workflow' },
   { href: '#product', label: 'Product' },
   { href: '#architecture', label: 'Trust' },
@@ -45,13 +46,6 @@ export const RUN_TIMING = {
   lineTicks: 17,
   resultTicks: 8,
 } as const;
-
-export const STATS = [
-  { value: '~60s', label: 'from uploaded customers to ranked opportunities' },
-  { value: '1 tap', label: 'to approve a draft. Nothing sends without it' },
-  { value: '0', label: 'messages to customers who have not opted in' },
-  { value: '3', label: 'channels: WhatsApp, email and SMS' },
-] as const;
 
 export const BENTO = [
   {
