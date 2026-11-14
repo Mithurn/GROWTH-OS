@@ -1,5 +1,6 @@
 'use client';
 
+import { AiLoader } from '@/components/ui/ai-loader';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -7,7 +8,7 @@ import {
   CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  ArrowLeft, Brain, ChevronRight, Loader2, Mail, MailOpen,
+  ArrowLeft, Brain, ChevronRight, Mail, MailOpen,
   MessageSquare, MousePointerClick, Send, Smartphone,
   Sparkles, Target,  Users, Zap, Activity,
 } from 'lucide-react';
@@ -462,7 +463,7 @@ function OpportunityCard({ nextAction }: { nextAction: AnalyticsData['insights']
           ✦ Based on Campaign Performance
         </span>
       </div>
-      <div className="flex items-start justify-between gap-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 sm:gap-8">
         <div className="flex-1 min-w-0">
           <p className="text-[10px] uppercase tracking-widest mb-2 font-bold" style={{ color: C.muted }}>
             New Opportunity Detected:
@@ -543,7 +544,7 @@ function AnalyticsContent() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
-      <Loader2 className="h-7 w-7 animate-spin" style={{ color: C.green }} />
+      <AiLoader size="md" title="Loading analytics" />
     </div>
   );
 
@@ -606,14 +607,14 @@ function AnalyticsContent() {
         </div>
 
         {/* Row 1 */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           <KpiHero campaign={campaign} funnel={funnel} />
           <ConversionFunnel funnel={funnel} />
           <VelocityChart timeline={timeline} potential_revenue={campaign.potential_revenue} targeted={funnel.targeted} />
         </div>
 
         {/* Row 2 */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           <AudienceDonut personas={personaBreakdown} targeted={funnel.targeted} />
           <ChannelPerf campaign={campaign} funnel={funnel} />
           <RevenueBySegment personas={personaBreakdown} revenue={revenue} />
@@ -636,7 +637,7 @@ export default function AnalyticsPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#070A11' }}>
-        <Loader2 className="h-7 w-7 animate-spin" style={{ color: '#10B981' }} />
+        <AiLoader size="md" title="Loading analytics" />
       </div>
     }>
       <AnalyticsContent />
