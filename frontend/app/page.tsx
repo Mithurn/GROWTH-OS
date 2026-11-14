@@ -4,7 +4,7 @@ import { Logo } from '@/components/brand/logo';
 import { Architecture } from '@/components/landing/architecture';
 import { BackendStatusPill } from '@/components/landing/backend-status-pill';
 import { ClosingCta } from '@/components/landing/closing-cta';
-import { AUTHOR_URL, GITHUB_URL, NAV_LINKS, STATS } from '@/components/landing/config';
+import { AUTHOR_URL, GITHUB_URL, NAV_LINKS } from '@/components/landing/config';
 import { HeroActions } from '@/components/landing/hero-actions';
 import { HeroAgent } from '@/components/landing/hero-agent';
 import { LaunchVideo } from '@/components/landing/launch-video';
@@ -68,17 +68,6 @@ export default function LandingPage() {
             <HeroAgent />
           </div>
         </div>
-      </section>
-
-      <section aria-label="Product facts" className="border-y border-white/[0.06]">
-        <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-y-8 px-6 py-10 lg:grid-cols-4">
-          {STATS.map((stat) => (
-            <div key={stat.label} className="flex flex-col px-2 lg:px-6 lg:first:pl-0">
-              <dt className="order-2 mt-2 max-w-[16rem] text-sm leading-snug text-zinc-400">{stat.label}</dt>
-              <dd className="bg-gradient-to-b from-white to-[#A89DFF] bg-clip-text text-5xl font-semibold tracking-tight text-transparent lg:text-6xl">{stat.value}</dd>
-            </div>
-          ))}
-        </dl>
       </section>
 
       <LaunchVideo />
