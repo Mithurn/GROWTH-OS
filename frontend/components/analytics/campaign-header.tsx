@@ -8,13 +8,12 @@ import { getCampaigns } from '@/lib/api';
 import type { CampaignWithMetrics } from '@/lib/types';
 import { CHANNEL_META, formatNumber, type Channel } from '@/components/campaign/config';
 import { StatusBadge } from '@/components/campaign/status-badge';
-import { statePanelSecondaryClass } from '@/components/ui/state-panel';
+import { SECONDARY_ACTION_CLASS } from '@/components/ui/action-styles';
 import { cn } from '@/lib/utils';
 import { ALL_CAMPAIGNS_PATH, EXPORT } from './config';
 import { toCsv, type AnalyticsData } from './model';
 
 const REPORTABLE = ['Launched', 'Completed'];
-const compact = 'px-3 py-1.5';
 
 function CampaignSwitcher({ currentId }: { currentId: string }) {
   const router = useRouter();
@@ -33,7 +32,7 @@ function CampaignSwitcher({ currentId }: { currentId: string }) {
       <select
         value={currentId}
         onChange={(e) => router.push(`${ALL_CAMPAIGNS_PATH}?campaignId=${encodeURIComponent(e.target.value)}`)}
-        className={cn(statePanelSecondaryClass, compact, 'max-w-[220px] appearance-none truncate pr-8')}
+        className={cn(SECONDARY_ACTION_CLASS, 'max-w-[220px] appearance-none truncate pr-8')}
       >
         {list.map((c) => (
           <option key={c.id} value={c.id}>
@@ -85,11 +84,11 @@ export function CampaignHeader({ data }: { data: AnalyticsData }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <CampaignSwitcher currentId={campaign.id} />
-        <button type="button" onClick={() => downloadTimeline(data)} className={cn(statePanelSecondaryClass, compact)}>
+        <button type="button" onClick={() => downloadTimeline(data)} className={cn(SECONDARY_ACTION_CLASS)}>
           <Download className="size-4" aria-hidden />
           Export CSV
         </button>
-        <Link href="/campaigns" className={cn(statePanelSecondaryClass, compact)}>
+        <Link href="/campaigns" className={cn(SECONDARY_ACTION_CLASS)}>
           <ListChecks className="size-4" aria-hidden />
           All campaigns
         </Link>
