@@ -2,17 +2,32 @@
 
 import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
-import { getActivityStream } from '@/lib/api';
-import { ACTIVITY_DEFAULTS, ACTIVITY_TIMING } from './activity-config';
+import { getActivityStream, getAgentRuns, getAgents } from '@/lib/api';
+import { ACTIVITY_DEFAULTS, ACTIVITY_TIMING, RUN_TRACE_LIVE_STATUS } from './activity-config';
 import { toActivityEntry, type ActivityEntry, type RawActivity } from './activity-model';
 import { AgentActivityFeed } from './agent-activity-feed';
+
+async function currentRun(known: readonly RawActivity[]): Promise<RawActivity | null> {
+  const agentId = (await getAgents({ limit: 1 })).data?.[0]?.id;
+  if (!agentId) return null;
+  const run = (await getAgentRuns(agentId, { limit: 1 })).data?.[0];
+  if (!run || run.status !== RUN_TRACE_LIVE_STATUS || known.some((e) => e.details?.runId === run.id)) return null;
+  return {
+    id: `run-${run.id}`,
+    agentId,
+    actionType: 'discovered_opportunity',
+    description: run.goal ?? 'Working on a new pass',
+    createdAt: run.startedAt,
+    details: { status: RUN_TRACE_LIVE_STATUS, runId: run.id },
+  };
+}
 
 export function ActivityStream({ className }: { className?: string }) {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-
+  const [updatedAt, setUpdatedAt] = useState<number>();
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -20,8 +35,11 @@ export function ActivityStream({ className }: { className?: string }) {
     const load = async () => {
       try {
         const res = await getActivityStream(ACTIVITY_DEFAULTS.pageSize);
+        const raw = res.data as RawActivity[];
+        const running = await currentRun(raw).catch(() => null);
         if (cancelled) return;
-        setEntries((res.data as RawActivity[]).map(toActivityEntry));
+        setEntries((running ? [running, ...raw] : raw).map(toActivityEntry));
+        setUpdatedAt(Date.now());
         setError(null);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to fetch activity stream');
@@ -50,7 +68,7 @@ export function ActivityStream({ className }: { className?: string }) {
       loading={loading}
       error={entries.length ? null : error}
       onRetry={() => setAttempt((a) => a + 1)}
-      busy
+      updatedAt={updatedAt}
       limit={ACTIVITY_DEFAULTS.pageSize}
       toolbar={
         <label className="relative hidden sm:block">

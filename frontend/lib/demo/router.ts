@@ -1,6 +1,7 @@
 import type { CampaignWithMetrics, GeneratedCampaign, Opportunity } from '../types';
+import { demoActivityAt, demoRunAt, isDemoRunId, latestDemoRun } from './activity-sim';
 import {
-  DEMO_ACTIVITY, DEMO_AGENT, DEMO_ANALYTICS, DEMO_CAMPAIGNS, DEMO_COMPANY, DEMO_COMPANY_ID, DEMO_INTEGRATIONS,
+  DEMO_AGENT, DEMO_ANALYTICS, DEMO_CAMPAIGNS, DEMO_COMPANY, DEMO_COMPANY_ID, DEMO_INTEGRATIONS,
   DEMO_INTELLIGENCE, DEMO_PERSONA_ROWS, DEMO_RUNS, DEMO_STEPS, DEMO_TOTAL_CUSTOMERS,
   buildCustomers, buildDraft, buildOpportunities, buildPersonaCustomers, hydrateOpportunity,
 } from './data';
@@ -93,7 +94,7 @@ export async function demoFetch(url: string, init: RequestInit = {}): Promise<Re
   if (seg[0] === 'ingestion-status') return json({ step: 'completed', progress: 100, message: 'Done', status: 'completed' });
   if (path === '/intelligence-preview') return json(DEMO_INTELLIGENCE);
   if (path === '/analytics/intelligence-brief') return json({ success: true, data: null });
-  if (path === '/activity-stream') return json({ success: true, data: DEMO_ACTIVITY });
+  if (path === '/activity-stream') return json({ success: true, data: demoActivityAt(Date.now()) });
   if (path === '/integrations') return json({ success: true, available: true, data: DEMO_INTEGRATIONS });
   if (seg[0] === 'integrations') return json({ success: true, data: DEMO_INTEGRATIONS[0] });
   if (path === '/billing/status') return json({ success: true, data: { plan: 'free', subscriptionStatus: null, configured: false } });
@@ -187,11 +188,15 @@ export async function demoFetch(url: string, init: RequestInit = {}): Promise<Re
 
   if (seg[0] === 'agents') {
     if (!seg[1]) return json({ success: true, data: [DEMO_AGENT], meta: { page: 1, limit: 20, total: 1, pages: 1 } });
+    if (seg[2] === 'runs' && seg[3] && isDemoRunId(seg[3])) {
+      const run = demoRunAt(seg[3], Date.now());
+      if (run) return json({ success: true, data: run });
+    }
     if (seg[2] === 'runs' && seg[3]) {
       const run = DEMO_RUNS.find((r) => r.id === seg[3]) ?? DEMO_RUNS[0];
       return json({ success: true, data: { ...run, steps: DEMO_STEPS.slice(0, run.stepCount) } });
     }
-    if (seg[2] === 'runs') return json({ success: true, available: true, data: DEMO_RUNS });
+    if (seg[2] === 'runs') return json({ success: true, available: true, data: [latestDemoRun(Date.now()), ...DEMO_RUNS] });
     if (seg[2] === 'run') return json({ success: true, message: 'Agent execution triggered' });
     return json({ success: true, data: DEMO_AGENT });
   }
