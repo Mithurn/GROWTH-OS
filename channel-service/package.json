@@ -21,7 +21,7 @@
     "@opentelemetry/resources": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.11.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.8",
     "express": "^5.2.1",
     "resend": "^6.16.0",
     "twilio": "^6.0.2",
