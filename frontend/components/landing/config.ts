@@ -4,7 +4,6 @@ export const GITHUB_URL = 'https://github.com/Mithurn/GROWTH-OS';
 export const AUTHOR_URL = 'https://github.com/Mithurn';
 
 export const NAV_LINKS = [
-  { href: '#watch', label: 'Watch' },
   { href: '#workflow', label: 'Workflow' },
   { href: '#product', label: 'Product' },
   { href: '#architecture', label: 'Trust' },

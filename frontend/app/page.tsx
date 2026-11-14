@@ -7,8 +7,8 @@ import { ClosingCta } from '@/components/landing/closing-cta';
 import { AUTHOR_URL, GITHUB_URL, NAV_LINKS } from '@/components/landing/config';
 import { HeroActions } from '@/components/landing/hero-actions';
 import { HeroAgent } from '@/components/landing/hero-agent';
-import { LaunchVideo } from '@/components/landing/launch-video';
 import { ProductBento } from '@/components/landing/product-bento';
+import { WatchVideoButton } from '@/components/landing/watch-video';
 import { Workflow } from '@/components/landing/workflow';
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], display: 'swap' });
@@ -63,6 +63,9 @@ export default function LandingPage() {
           <div className="mt-10">
             <HeroActions />
           </div>
+          <div className="mt-3">
+            <WatchVideoButton />
+          </div>
           <p className="mt-4 text-xs text-zinc-500">The demo runs in your browser on sample data. No sign-up, nothing is sent.</p>
           <div className="mt-16">
             <HeroAgent />
@@ -70,7 +73,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <LaunchVideo />
       <Workflow />
       <ProductBento />
       <Architecture />
