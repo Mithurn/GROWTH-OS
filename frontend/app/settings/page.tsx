@@ -14,6 +14,7 @@ import {
   type IntegrationCard,
   type BillingStatus,
 } from '@/lib/api';
+import { ConsoleCard } from '@/components/campaign/console';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 import { cn } from '@/lib/utils';
 
@@ -261,14 +262,44 @@ export default function SettingsPage() {
 
         {tab === 'agent' && (
           <>
-            <Section title="How should the agent operate?" hint="You always approve campaigns before anything is sent unless you choose Autonomous.">
-              <OptionGrid
-                options={involvementOptions}
-                selected={settings.involvement}
-                onToggle={(value) => toggleSelection('involvement', value)}
-                columns="sm:grid-cols-1"
-              />
-            </Section>
+            <ConsoleCard glow>
+              <section className="p-5 sm:p-6">
+                <div className="flex items-center gap-3">
+                  <BotAvatar type="pill" state="default" size={40} interactive={false} />
+                  <div>
+                    <h2 className="text-sm font-semibold tracking-tight text-white">Autonomy</h2>
+                    <p className="text-xs text-zinc-500">How much the agent does before asking you</p>
+                  </div>
+                </div>
+                <div role="radiogroup" aria-label="Autonomy level" className="mt-5 grid gap-2 sm:grid-cols-3">
+                  {involvementOptions.map((option, i) => {
+                    const [name, description] = option.split(' — ');
+                    const active = settings.involvement.includes(option);
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => toggleSelection('involvement', option)}
+                        className={cn(
+                          'rounded-xl border p-4 text-left transition-colors',
+                          active ? 'border-indigo-400/60 bg-indigo-400/10' : 'border-white/10 bg-white/[0.03] hover:border-white/20',
+                        )}
+                      >
+                        <span className="flex gap-0.5" aria-hidden>
+                          {involvementOptions.map((_, level) => (
+                            <span key={level} className={cn('h-1 w-6 rounded-full', level <= i ? 'bg-indigo-400' : 'bg-white/10')} />
+                          ))}
+                        </span>
+                        <span className="mt-3 block text-sm font-semibold text-white">{name}</span>
+                        <span className="mt-1 block text-xs leading-relaxed text-zinc-400">{description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            </ConsoleCard>
             <Section title="Most important outcome in the next 90 days">
               <OptionGrid options={priorityOptions} selected={settings.priority} onToggle={(value) => toggleSelection('priority', value)} />
             </Section>

@@ -48,6 +48,16 @@ export const STATUS_TONE: Record<string, string> = {
   Cancelled: 'border-red-200 bg-red-50 text-red-700',
 };
 
+export const STATUS_TONE_DARK: Record<string, string> = {
+  PendingApproval: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+  Approved: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+  Launched: 'border-indigo-400/30 bg-indigo-400/10 text-indigo-300',
+  Completed: 'border-white/15 bg-white/5 text-zinc-300',
+  Cancelled: 'border-red-400/30 bg-red-400/10 text-red-300',
+};
+
+export const CONFIDENCE_SEGMENTS = 10;
+
 export const STATUS_LABEL: Record<string, string> = {
   PendingApproval: 'Awaiting approval',
 };
@@ -61,7 +71,8 @@ export const FUNNEL_STAGES = [
 
 export const CHART = {
   primary: '#5B4FFF',
-  soft: '#9D8FFF',
+  soft: '#a78bfa',
+  glow: '#818cf8',
   faint: '#C9C2FF',
   grid: '#E4E4E7',
   axis: '#71717A',

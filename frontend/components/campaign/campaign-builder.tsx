@@ -13,7 +13,8 @@ import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/c
 import { cn } from '@/lib/utils';
 import { AgentWorking } from './agent-working';
 import { ApprovalGate } from './approval-gate';
-import { CHANNELS, CHANNEL_META, DRAFT_STEPS, formatCurrency, formatNumber, type Channel } from './config';
+import { CHANNELS, CHANNEL_META, CONFIDENCE_SEGMENTS, DRAFT_STEPS, formatCurrency, formatNumber, type Channel } from './config';
+import { ConsoleCard, ConsoleLabel, Segments } from './console';
 import { MessagePreview } from './message-preview';
 import { RefineBar } from './refine-bar';
 import { StatusBadge } from './status-badge';
@@ -24,20 +25,6 @@ type BuilderProps = {
 };
 
 type Draft = CampaignWithMetrics;
-
-function Metric({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-      <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-primary">
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <div>
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="text-base font-semibold tabular-nums">{value}</p>
-      </div>
-    </div>
-  );
-}
 
 export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: BuilderProps) {
   const router = useRouter();
@@ -153,58 +140,74 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
   }
 
   const approved = draft.status === 'Approved';
-  const confidence = opportunity.confidence_score;
+  const wordCount = draft.message_content.trim().split(/\s+/).length;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
-      <div className="mb-6 flex items-center justify-between gap-3">
+      <div className="mb-5">
         <Link href={backHref} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary">
           <ArrowLeft className="size-4" aria-hidden /> Opportunities
         </Link>
-        <StatusBadge status={approved ? 'Approved' : 'PendingApproval'} />
       </div>
 
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{draft.name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Drafted by the agent from <span className="font-medium text-foreground">{opportunity.title}</span>
-        </p>
-      </header>
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 space-y-5">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Metric icon={Users} label="Audience" value={formatNumber(opportunity.audience_size)} />
-            <Metric icon={TrendingUp} label="Projected revenue" value={formatCurrency(opportunity.potential_revenue)} />
-            <Metric icon={Target} label="Confidence" value={`${confidence}%`} />
-          </div>
-
-          <section className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-start gap-4">
-              <BotAvatar type="pill" state="default" size={44} interactive={false} />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Why the agent chose this</p>
-                <p className="mt-1.5 text-sm leading-relaxed">{draft.reasoning ?? draft.objective}</p>
-                {draft.expected_outcome && <p className="mt-2 text-xs text-muted-foreground">Expected: {draft.expected_outcome}</p>}
+      <div className="space-y-4">
+        <BorderBeam size="md" theme="dark" colorVariant="ocean" strength={1} active={!approved}>
+          <ConsoleCard glow>
+            <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="flex gap-4">
+                <BotAvatar type="pill" state="default" size={52} interactive={false} className="shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ConsoleLabel>Agent draft v{revision}</ConsoleLabel>
+                    <StatusBadge dark status={approved ? 'Approved' : 'PendingApproval'} />
+                  </div>
+                  <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{draft.name}</h1>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    From <span className="text-zinc-300">{opportunity.title}</span>
+                  </p>
+                  <p className="mt-4 text-sm leading-relaxed text-zinc-300">{draft.reasoning ?? draft.objective}</p>
+                  {draft.expected_outcome && <p className="mt-2 font-mono text-xs text-indigo-300">Expected: {draft.expected_outcome}</p>}
+                </div>
               </div>
+              <dl className="grid grid-cols-3 gap-3 lg:grid-cols-1">
+                {[
+                  { icon: Users, label: 'Audience', value: formatNumber(opportunity.audience_size) },
+                  { icon: TrendingUp, label: 'Projected revenue', value: formatCurrency(opportunity.potential_revenue) },
+                ].map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3">
+                    <dt className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-zinc-500">
+                      <Icon className="size-3.5" aria-hidden /> {label}
+                    </dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums text-white">{value}</dd>
+                  </div>
+                ))}
+                <div className="col-span-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3 lg:col-span-1">
+                  <dt className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-zinc-500">
+                    <Target className="size-3.5" aria-hidden /> Confidence
+                  </dt>
+                  <dd>
+                    <Segments value={opportunity.confidence_score} count={CONFIDENCE_SEGMENTS} label="Confidence" />
+                  </dd>
+                </div>
+              </dl>
             </div>
-            <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+            <ul className="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-white/10 px-5 py-3 font-mono text-xs text-zinc-500 sm:px-6">
               {DRAFT_STEPS.map(({ label }) => (
                 <li key={label} className="flex items-center gap-1.5">
-                  <Check className="size-3 text-primary" aria-hidden />
+                  <Check className="size-3 text-indigo-400" aria-hidden />
                   {label}
                 </li>
               ))}
             </ul>
-          </section>
+          </ConsoleCard>
+        </BorderBeam>
 
-          <BorderBeam size="md" theme="dark" colorVariant="ocean" strength={1} active={!approved}>
-            <section className="rounded-2xl border border-border bg-card p-5">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold tracking-tight">
-                  Draft <span className="text-muted-foreground">v{revision}</span>
-                </h2>
-                <div role="tablist" aria-label="Channel" className="inline-flex rounded-lg bg-muted p-0.5">
+        <div className="grid gap-4 lg:grid-cols-12">
+          <ConsoleCard className="lg:col-span-7">
+            <section className="p-5 sm:p-6">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold tracking-tight text-white">Message</h2>
+                <div role="tablist" aria-label="Channel" className="inline-flex rounded-lg border border-white/10 bg-white/5 p-0.5">
                   {CHANNELS.map((ch) => {
                     const { icon: Icon } = CHANNEL_META[ch];
                     return (
@@ -217,7 +220,7 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
                         onClick={() => ch !== channel && void rewrite('', ch)}
                         className={cn(
                           'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60',
-                          channel === ch ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                          channel === ch ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-white',
                         )}
                       >
                         <Icon className="size-3.5" aria-hidden /> {ch}
@@ -226,39 +229,52 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
                   })}
                 </div>
               </div>
-              <p className="mb-4 text-xs text-muted-foreground">
-                {CHANNEL_META[channel].blurb} · {CHANNEL_META[channel].stat}
-              </p>
-              <dl className="mb-5 grid gap-3 text-sm sm:grid-cols-2">
+
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4">
+                <p className="whitespace-pre-wrap font-mono text-[13px] leading-relaxed text-zinc-200">{draft.message_content}</p>
+                <p className="mt-3 flex items-center justify-between border-t border-white/10 pt-2 font-mono text-[11px] text-zinc-500">
+                  <span>{CHANNEL_META[channel].blurb}</span>
+                  <span className="tabular-nums">
+                    {wordCount} words · {draft.message_content.length} chars
+                  </span>
+                </p>
+              </div>
+
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Offer</dt>
-                  <dd className="mt-0.5 font-medium">{draft.offer || 'None'}</dd>
+                  <dt className="text-[11px] uppercase tracking-wider text-zinc-500">Offer</dt>
+                  <dd className="mt-0.5 text-zinc-200">{draft.offer || 'None'}</dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Angle</dt>
-                  <dd className="mt-0.5 font-medium">{draft.message_angle || 'Direct'}</dd>
+                  <dt className="text-[11px] uppercase tracking-wider text-zinc-500">Angle</dt>
+                  <dd className="mt-0.5 text-zinc-200">{draft.message_angle || 'Direct'}</dd>
                 </div>
               </dl>
-              {!approved && <RefineBar busy={refining} onRefine={rewrite} />}
+
+              {!approved && <RefineBar busy={refining} onRefine={rewrite} className="mt-6" />}
             </section>
-          </BorderBeam>
+          </ConsoleCard>
+
+          <ConsoleCard glow className="lg:col-span-5">
+            <div className="flex h-full flex-col items-center justify-center px-4 py-6">
+              <ConsoleLabel className="mb-4">{channel} preview</ConsoleLabel>
+              <MessagePreview channel={channel} message={draft.message_content} subject={draft.name} offer={draft.offer} busy={refining} />
+            </div>
+          </ConsoleCard>
         </div>
 
-        <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
-          <MessagePreview channel={channel} message={draft.message_content} subject={draft.name} offer={draft.offer} busy={refining} />
-          <ApprovalGate
-            approved={approved}
-            approving={approving}
-            demo={demo}
-            channel={channel}
-            message={draft.message_content}
-            audience={opportunity.audience_size}
-            caseStatus={draft.case_status}
-            error={gateError}
-            onApprove={approve}
-            onDiscard={() => router.push(backHref)}
-          />
-        </aside>
+        <ApprovalGate
+          approved={approved}
+          approving={approving}
+          demo={demo}
+          channel={channel}
+          message={draft.message_content}
+          audience={opportunity.audience_size}
+          caseStatus={draft.case_status}
+          error={gateError}
+          onApprove={approve}
+          onDiscard={() => router.push(backHref)}
+        />
       </div>
     </div>
   );
