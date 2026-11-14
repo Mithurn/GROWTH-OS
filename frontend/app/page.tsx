@@ -1,6 +1,6 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { DM_Sans } from 'next/font/google';
+import { Logo } from '@/components/brand/logo';
 import { Architecture } from '@/components/landing/architecture';
 import { BackendStatusPill } from '@/components/landing/backend-status-pill';
 import { ClosingCta } from '@/components/landing/closing-cta';
@@ -12,6 +12,7 @@ import { Workflow } from '@/components/landing/workflow';
 
 const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], display: 'swap' });
 
+const NAV_LOGO_HEIGHT = 30;
 const NAV_LINK = 'text-sm text-zinc-400 transition-colors hover:text-white';
 
 export default function LandingPage() {
@@ -19,9 +20,8 @@ export default function LandingPage() {
     <div className={`${dmSans.className} min-h-screen overflow-x-clip bg-[#06060a] text-zinc-100 antialiased selection:bg-indigo-500/40`}>
       <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#06060a]/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link href="/" aria-label="GrowthOS home" className="flex items-center gap-2 text-[17px] font-semibold tracking-tight text-white">
-            <Image src="/favicon.png" alt="" width={24} height={24} className="rounded-md" />
-            GrowthOS
+          <Link href="/" aria-label="GrowthOS home">
+            <Logo height={NAV_LOGO_HEIGHT} />
           </Link>
           <nav className="flex items-center gap-6">
             {NAV_LINKS.map((link) => (

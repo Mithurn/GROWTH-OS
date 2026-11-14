@@ -1,4 +1,6 @@
-import Image from 'next/image';
+import { Logo } from '@/components/brand/logo';
+
+const ONBOARDING_LOGO_HEIGHT = 32;
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
@@ -18,7 +20,7 @@ export function OnboardingShell({ title, body, progress, agentState = 'idle', ch
     <div className="flex min-h-screen flex-col bg-white lg:flex-row">
       <aside className="relative flex flex-col justify-between overflow-hidden bg-[#0A0E1A] bg-[radial-gradient(circle_at_20%_0%,rgba(91,79,255,0.28),transparent_55%)] px-6 py-6 text-white lg:w-[420px] lg:shrink-0 lg:px-10 lg:py-10">
         <Link href="/" aria-label="GrowthOS home">
-          <Image src="/logo.png" alt="GrowthOS" width={100} height={28} className="object-contain brightness-0 invert" />
+          <Logo height={ONBOARDING_LOGO_HEIGHT} />
         </Link>
         <div className="mt-8 lg:mt-0">
           <AgentAvatar state={agentState} size="lg" />
