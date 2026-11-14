@@ -1,6 +1,6 @@
 export const AGENT_NAME = 'GrowthOS Agent';
 
-export const AGENT_AVATAR_TYPE = 'pill';
+export const AGENT_AVATAR_LOOK = { type: 'droid', shading: 'plastic', color: '#6a5cff', face: 'mouth' } as const;
 
 export const AGENT_AVATAR_SIZES = { sm: 32, md: 32, lg: 64 } as const;
 

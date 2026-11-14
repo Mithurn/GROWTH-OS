@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'reac
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BotAvatar } from 'bot-avatars';
+import { AGENT_AVATAR_LOOK } from '@/components/agent/agent-config';
 import { BorderBeam } from 'border-beam';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import { getCampaignAnalytics, getCampaigns, openAuthedSse } from '@/lib/api';
@@ -190,7 +191,7 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
           <ConsoleCard className={next?.title ? 'lg:col-span-7' : 'lg:col-span-12'}>
             <section className="p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-3">
-                <BotAvatar shading="plastic" type="pill" state="default" size={32} interactive={false} />
+                <BotAvatar {...AGENT_AVATAR_LOOK} state="default" size={32} interactive={false} />
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-white">What the agent learned</h2>
                   <p className="text-xs text-zinc-500">From this campaign&apos;s results</p>

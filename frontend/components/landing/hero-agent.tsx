@@ -2,6 +2,7 @@
 
 import { BorderBeam } from 'border-beam';
 import { BotAvatar } from 'bot-avatars';
+import { AGENT_AVATAR_LOOK } from '@/components/agent/agent-config';
 import { Check, CornerDownLeft, RotateCcw } from 'lucide-react';
 import { AiOrb } from '@/components/ui/ai-orb';
 import { CONSOLE, STAGES } from './config';
@@ -43,7 +44,7 @@ export function HeroAgent() {
           <div className="grid md:grid-cols-[15rem_1fr]">
             <aside className="flex items-center gap-4 border-b border-white/[0.07] p-5 md:flex-col md:items-start md:border-b-0 md:border-r">
               <div className="flex items-center gap-3">
-                <BotAvatar shading="plastic" type="pill" state={avatarState} size={AVATAR_SIZE} aria-label="GrowthOS agent" />
+                <BotAvatar {...AGENT_AVATAR_LOOK} state={avatarState} size={AVATAR_SIZE} aria-label="GrowthOS agent" />
                 <div>
                   <p className="text-sm font-semibold text-zinc-100">Growth agent</p>
                   <p className="text-xs text-zinc-500">{run.done ? 'Waiting for approval' : run.typing ? 'Ready' : 'Working'}</p>
