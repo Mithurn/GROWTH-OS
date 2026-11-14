@@ -371,11 +371,13 @@ export const DEMO_STEPS = [
 ];
 
 export const DEMO_ACTIVITY = [
-  { id: 'a1', agentId: 'agent-growth', actionType: 'discovered_opportunity', description: 'Found 76 dormant VIPs worth ₹1.1L', createdAt: ago(2 * 60_000) },
-  { id: 'a2', agentId: 'agent-growth', actionType: 'created_campaign', description: 'Drafted "Stay in Style" retention email for 143 customers', createdAt: ago(40 * 60_000) },
-  { id: 'a3', agentId: 'agent-growth', actionType: 'sent_messages', description: 'Delivered 178 of 189 festive preview messages', createdAt: ago(5 * 3_600_000) },
-  { id: 'a4', agentId: 'agent-growth', actionType: 'achieved_milestone', description: '47 customers clicked the festive preview', createdAt: ago(9 * 3_600_000) },
-  { id: 'a5', agentId: 'agent-growth', actionType: 'launched_campaign', description: 'Launched the festive preview on WhatsApp', createdAt: ago(2 * DAY) },
+  { id: 'a1', agentId: 'agent-growth', actionType: 'discovered_opportunity', description: 'Found 76 dormant VIPs worth ₹1.1L', createdAt: ago(2 * 60_000), details: { reasoning: 'These customers spent above the 90th percentile but have not ordered in 90+ days, so a personal win-back is likely to pay off.', metrics: { Audience: 76, 'Est. revenue': '₹84K to ₹1.1L', 'Avg. spend': '₹4,120' } } },
+  { id: 'a2', agentId: 'agent-growth', actionType: 'created_campaign', description: 'Drafted "Stay in Style" retention email for 143 customers', createdAt: ago(40 * 60_000), details: { reasoning: 'Email suits this group: 82% opened the last two newsletters but only 9% were reached on WhatsApp.', metrics: { Audience: 143, Channel: 'Email', Tone: 'Warm' } } },
+  { id: 'a6', agentId: 'agent-growth', actionType: 'approved_campaign', description: 'Festive preview approved by the owner', createdAt: ago(4 * 3_600_000), details: { reasoning: 'Guardrails passed: within the weekly send cap and every recipient has opted in.', metrics: { 'Guardrails': 'Passed', 'Weekly cap used': '38%' } } },
+  { id: 'a3', agentId: 'agent-growth', actionType: 'sent_messages', description: 'Delivered 178 of 189 festive preview messages', createdAt: ago(5 * 3_600_000), details: { metrics: { Delivered: 178, Failed: 11, 'Delivery rate': '94%' } } },
+  { id: 'a7', agentId: 'agent-growth', actionType: 'delivery_failed', description: '11 WhatsApp messages bounced and were skipped', createdAt: ago(5 * 3_600_000 + 60_000), details: { reasoning: 'The numbers were not registered on WhatsApp. The agent will retry them over email.', metrics: { Bounced: 11, Retry: 'Email' } } },
+  { id: 'a4', agentId: 'agent-growth', actionType: 'achieved_milestone', description: '47 customers clicked the festive preview', createdAt: ago(9 * 3_600_000), details: { metrics: { Clicks: 47, 'Click rate': '26%' } } },
+  { id: 'a5', agentId: 'agent-growth', actionType: 'launched_campaign', description: 'Launched the festive preview on WhatsApp', createdAt: ago(2 * DAY), details: { reasoning: 'Sent at 7pm, the hour this audience replied most in past campaigns.' } },
 ];
 
 export const DEMO_INTEGRATIONS = [
