@@ -11,6 +11,12 @@ updates:
     ignore:
       - dependency-name: "@types/node"
         update-types: [version-update:semver-major]
+      - dependency-name: "@opentelemetry/api"
+        update-types: [version-update:semver-minor]
+      - dependency-name: "@opentelemetry/exporter-trace-otlp-http"
+        update-types: [version-update:semver-minor]
+      - dependency-name: "@opentelemetry/sdk-trace-node"
+        update-types: [version-update:semver-minor]
     labels: [dependencies]
 
   - package-ecosystem: npm
