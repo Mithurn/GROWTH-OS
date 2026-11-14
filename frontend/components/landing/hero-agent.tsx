@@ -27,7 +27,7 @@ export function HeroAgent() {
       />
       <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_24px_60px_-24px_rgba(17,24,39,0.3)]">
         <div className="flex items-center gap-3 border-b border-[#F3F4F6] px-5 py-4">
-          <AiOrb size="sm" />
+          <AiOrb size="sm" state="searching" />
           <div>
             <p className="text-sm font-semibold text-[#111827]">GrowthOS agent</p>
             <p className="text-xs text-[#6B7280]">Analyzing your customer data</p>

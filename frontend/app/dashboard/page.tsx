@@ -494,7 +494,7 @@ export default function HomePage() {
 
                   {/* Pulsing badge */}
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F0EEFF] text-[#5B4FFF] text-[10px] font-bold uppercase tracking-wider rounded-full mb-6">
-                    <AiOrb size="sm" className="size-3" />
+                    <AiOrb size="sm" state="searching" />
                     GrowthOS is analyzing your request
                   </div>
 

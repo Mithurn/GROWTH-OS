@@ -122,7 +122,7 @@ export default function CampaignReviewPage({ params }: { params: Promise<{ id: s
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center flex-col gap-4">
-        <AiLoader title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
+        <AiLoader state="composing" title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
       </div>
     );
   }

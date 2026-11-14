@@ -237,7 +237,7 @@ export default function LandingPage() {
 
       <section className="bg-[#111827] py-24 text-white">
         <div className="mx-auto flex max-w-3xl flex-col items-center px-6 text-center">
-          <AiOrb size="lg" className="mb-10" />
+          <AiOrb size="lg" state="weaving" theme="dark" className="mb-10" />
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">See it work before you bring your data</h2>
           <p className="mx-auto mt-4 max-w-xl text-[#9CA3AF]">
             Open the demo to walk the whole flow, from opportunity to campaign to results.

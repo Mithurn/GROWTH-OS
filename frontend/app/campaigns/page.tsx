@@ -262,7 +262,7 @@ function CampaignsContent() {
   if (isGenerating || (loading && opportunityId)) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <AiLoader title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
+        <AiLoader state="composing" title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
       </div>
     );
   }

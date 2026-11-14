@@ -105,8 +105,9 @@ page, never body copy.
 
 ## AI-native patterns
 
-**Orb.** `components/ui/ai-orb.tsx` is a breathing indigo sphere with a rotating halo,
-pure CSS, three sizes (`sm`, `md`, `lg`). It marks anything the model is doing: the
+**Orb.** `components/ui/ai-orb.tsx` wraps `thinking-orbs` (MIT), the dotted canvas orbs from libraries.dev/orbs, tinted indigo.
+Three sizes (`sm`, `md`, `lg`) and a `state` per task: `working`, `searching`, `composing`, `connecting`, `weaving`.
+Pass `theme="dark"` on dark surfaces. It marks anything the model is doing: the
 hero agent card, the final landing CTA, onboarding setup, model-backed waits.
 
 **Loading.** Waits on the model use `AiLoader` (`components/ui/ai-loader.tsx`): the orb,
@@ -130,7 +131,6 @@ landing agent card reveal are CSS keyframes in `globals.css`; the reveal timing 
 `darkreader-lock` meta so extensions do not invert it. The dark analytics page is a
 designed surface, not a theme.
 
-**Considered and not adopted.** `thinking-orbs` (MIT, 130 KB, richer particle orbs, the
-best states are paid) and AI Elements (chat-oriented, tied to the AI SDK, deprecated in
+**Considered and not adopted.** AI Elements (chat-oriented, tied to the AI SDK, deprecated in
 favour of shadcn). Patterns borrowed instead: staged step lists from the Reasoning and
 Task elements, and the shimmer title from 21st.dev text loaders.

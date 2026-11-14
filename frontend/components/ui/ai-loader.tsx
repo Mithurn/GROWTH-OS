@@ -1,6 +1,6 @@
 'use client';
 
-import { AiOrb, type AiOrbSize } from '@/components/ui/ai-orb';
+import { AiOrb, type AiOrbSize, type AiOrbState } from '@/components/ui/ai-orb';
 import { useCyclingIndex } from '@/lib/use-cycling-index';
 import { cn } from '@/lib/utils';
 
@@ -9,15 +9,16 @@ type AiLoaderProps = {
   steps?: readonly string[];
   stepIntervalMs?: number;
   size?: AiOrbSize;
+  state?: AiOrbState;
   className?: string;
 };
 
-export function AiLoader({ title, steps = [], stepIntervalMs, size = 'lg', className }: AiLoaderProps) {
+export function AiLoader({ title, steps = [], stepIntervalMs, size = 'lg', state, className }: AiLoaderProps) {
   const stepIndex = useCyclingIndex(steps.length, stepIntervalMs);
 
   return (
     <div role="status" aria-live="polite" className={cn('flex flex-col items-center gap-5 text-center', className)}>
-      <AiOrb size={size} />
+      <AiOrb size={size} state={state} />
       <div className="space-y-1.5">
         <p className="ai-shimmer text-base font-semibold">{title}</p>
         {steps.length > 0 && (
