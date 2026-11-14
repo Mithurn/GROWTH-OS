@@ -1,5 +1,6 @@
 'use client';
 
+import { AiOrb } from '@/components/ui/ai-orb';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -587,9 +588,7 @@ export default function CustomerIntelligencePage() {
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="h-12 w-12 rounded-full bg-[#F3F4F6] flex items-center justify-center mb-3">
-                  <Sparkles className="h-5 w-5 text-[#9CA3AF]" />
-                </div>
+                <AiOrb size="md" state="breathing" className="mb-3" />
                 <p className="text-sm text-[#6B7280]">Select a customer to view their 360° profile</p>
               </div>
             )}
@@ -604,7 +603,7 @@ export default function CustomerIntelligencePage() {
             {/* AI Input + Quick Chips */}
             <div className="flex items-center gap-2 mb-3">
               <div className="flex-1 flex items-center gap-2 bg-[#F8F9FE] rounded-xl px-3 py-2 border border-[#E5E7EB] focus-within:border-[#5B4FFF]/40 transition-colors">
-                <Sparkles className="h-4 w-4 text-[#5B4FFF] flex-shrink-0" />
+                <AiOrb size="sm" state="listening" className="flex-shrink-0" />
                 <input
                   type="text"
                   value={chatQuery}

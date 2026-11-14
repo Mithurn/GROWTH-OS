@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowUp, Loader2, Sparkles } from 'lucide-react';
+import { ArrowUp, Loader2 } from 'lucide-react';
 import { BorderBeam } from 'border-beam';
+import { AiOrb } from '@/components/ui/ai-orb';
 import { cn } from '@/lib/utils';
 import { useLoopingIndex } from '@/lib/use-cycling-index';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
@@ -51,7 +52,7 @@ export function AgentPromptInput({
             focused || busy ? 'border-transparent' : 'border-[#E5E7EB]',
           )}
         >
-          <Sparkles className="size-4 shrink-0 text-[#5B4FFF]" aria-hidden />
+          <AiOrb size="md" state={busy ? 'working' : focused ? 'listening' : 'breathing'} className="shrink-0" />
           <input
             type="text"
             value={value}
