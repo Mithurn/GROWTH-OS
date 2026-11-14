@@ -30,7 +30,7 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
             e.preventDefault();
             void submit(value);
           }}
-          className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 py-1.5 pl-3 pr-1.5 text-zinc-50"
+          className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-3 pr-1.5 text-zinc-50"
         >
           <Sparkles className="size-4 shrink-0 text-primary" aria-hidden />
           <input
@@ -47,7 +47,7 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
             type="submit"
             disabled={!value.trim() || busy}
             aria-label="Send instruction"
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-zinc-800 disabled:text-zinc-500"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-white/10 disabled:text-zinc-500"
           >
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
           </button>
@@ -60,7 +60,7 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
             type="button"
             disabled={busy}
             onClick={() => void submit(chip)}
-            className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
+            className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-zinc-400 transition-colors hover:border-indigo-400/50 hover:text-indigo-300 disabled:opacity-50"
           >
             {chip}
           </button>

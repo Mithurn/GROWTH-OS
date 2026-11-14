@@ -12,6 +12,8 @@ import { EngagementChart, SegmentBars, type PersonaSlice, type TimelinePoint } f
 import { CHANNEL_META, TIMING, formatCurrency, formatNumber, type Channel } from '@/components/campaign/config';
 import { useCountUp } from '@/components/campaign/hooks';
 import { LiveFunnel, type FunnelCounts } from '@/components/campaign/live-funnel';
+import { ConsoleCard, ConsoleLabel } from '@/components/campaign/console';
+import { PrimaryAction } from '@/components/agent/primary-action';
 import { StatusBadge } from '@/components/campaign/status-badge';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 
@@ -29,22 +31,14 @@ type AnalyticsData = {
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 const SKELETON_KPIS = 4;
 
-function Card({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
+function Panel({ title, children, className, glow }: { title: string; children: ReactNode; className?: string; glow?: boolean }) {
   return (
-    <section className={`rounded-2xl border border-border bg-card p-5 ${className ?? ''}`}>
-      <h2 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Kpi({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card px-5 py-4">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-    </div>
+    <ConsoleCard glow={glow} className={className}>
+      <section className="p-5">
+        <ConsoleLabel className="mb-4">{title}</ConsoleLabel>
+        {children}
+      </section>
+    </ConsoleCard>
   );
 }
 
@@ -115,7 +109,13 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
   const live = campaign.status === 'Launched';
   const revenue = funnel.targeted > 0 ? Math.round((funnel.clicked / funnel.targeted) * campaign.potential_revenue) : 0;
   const animated = useCountUp(revenue, TIMING.countUpMs);
+  const reached = campaign.potential_revenue > 0 ? Math.min(100, Math.round((revenue / campaign.potential_revenue) * 100)) : 0;
   const next = insights.nextAction;
+  const rates = [
+    { label: 'Delivered', value: pct(funnel.delivered, funnel.sent), hint: `${formatNumber(funnel.delivered)} of ${formatNumber(funnel.sent)}` },
+    { label: 'Read', value: pct(funnel.read, funnel.delivered), hint: `${formatNumber(funnel.read)} readers` },
+    { label: 'Clicked', value: pct(funnel.clicked, funnel.read), hint: `${formatNumber(funnel.clicked)} clicks` },
+  ];
 
   return (
     <>
@@ -136,70 +136,88 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
         <StatusBadge status={campaign.status} />
       </header>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Revenue" value={formatCurrency(animated)} hint={`of ${formatCurrency(campaign.potential_revenue)} potential`} />
-        <Kpi label="Delivered" value={`${pct(funnel.delivered, funnel.sent)}%`} hint={`${formatNumber(funnel.delivered)} of ${formatNumber(funnel.sent)}`} />
-        <Kpi label="Read" value={`${pct(funnel.read, funnel.delivered)}%`} hint={`${formatNumber(funnel.read)} readers`} />
-        <Kpi label="Clicked" value={`${pct(funnel.clicked, funnel.read)}%`} hint={`${formatNumber(funnel.clicked)} of those who read`} />
-      </div>
-
-      <div className="mb-4 grid gap-4 lg:grid-cols-3">
-        <Card title="Engagement over time" className="lg:col-span-2">
-          <EngagementChart timeline={timeline} />
-        </Card>
-        <Card title="Funnel">
-          <LiveFunnel counts={funnel} live={live} />
-        </Card>
-      </div>
-
-      <div className="mb-4 grid gap-4 md:grid-cols-2">
-        <Card title="Audience mix">
-          <SegmentBars personas={personaBreakdown} />
-        </Card>
-        <Card title="Revenue by segment">
-          <SegmentBars personas={personaBreakdown} revenue={revenue} />
-        </Card>
-      </div>
-
-      {(insights.learnings.length > 0 || next?.title) && (
-        <section className="grid gap-4 lg:grid-cols-5">
-          <div className="rounded-2xl border border-border bg-card p-5 lg:col-span-3">
-            <div className="mb-4 flex items-center gap-3">
-              <BotAvatar type="pill" state="default" size={36} interactive={false} />
-              <div>
-                <h2 className="text-sm font-semibold tracking-tight">What the agent learned</h2>
-                <p className="text-xs text-muted-foreground">From this campaign&apos;s results</p>
+      <div className="grid gap-4 lg:grid-cols-12">
+        <ConsoleCard glow className="lg:col-span-5">
+          <section className="flex h-full flex-col p-5 sm:p-6">
+            <ConsoleLabel>Revenue generated</ConsoleLabel>
+            <p className="mt-3 text-5xl font-semibold tabular-nums tracking-tight text-white sm:text-6xl">{formatCurrency(animated)}</p>
+            <div className="mt-4">
+              <div className="mb-1.5 flex justify-between font-mono text-[11px] text-zinc-500">
+                <span>{reached}% of potential</span>
+                <span>{formatCurrency(campaign.potential_revenue)}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-400 shadow-[0_0_12px_rgba(129,140,248,0.6)] transition-[width] duration-1000 ease-out"
+                  style={{ width: `${reached}%` }}
+                />
               </div>
             </div>
-            <ul className="space-y-2.5">
-              {insights.learnings.slice(0, 3).map((text) => (
-                <li key={text} className="flex gap-2.5 text-sm leading-relaxed">
-                  <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-                  {text}
-                </li>
+            <dl className="mt-6 grid grid-cols-3 gap-2 pt-1">
+              {rates.map((r) => (
+                <div key={r.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                  <dt className="text-[11px] uppercase tracking-wider text-zinc-500">{r.label}</dt>
+                  <dd className="mt-1 text-xl font-semibold tabular-nums text-white">{r.value}%</dd>
+                  <p className="mt-0.5 truncate text-[11px] text-zinc-500">{r.hint}</p>
+                </div>
               ))}
-            </ul>
-          </div>
-          {next?.title && (
-            <BorderBeam size="md" theme="dark" colorVariant="ocean" strength={1} className="lg:col-span-2">
-              <div className="h-full rounded-2xl border border-border bg-card p-5">
-                <p className="text-xs font-medium uppercase tracking-wider text-primary">Suggested next move</p>
-                <h3 className="mt-2 text-base font-semibold leading-snug tracking-tight">{next.title}</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground">{next.description}</p>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Worth about <span className="font-semibold text-foreground">{formatCurrency(next.potentialRevenue)}</span> at {next.confidence}% confidence
-                </p>
-                <Link
-                  href="/opportunities"
-                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-                >
-                  Review opportunity <ArrowRight className="size-4" aria-hidden />
-                </Link>
+            </dl>
+          </section>
+        </ConsoleCard>
+
+        <Panel title="Engagement over time" className="lg:col-span-7">
+          <EngagementChart timeline={timeline} />
+        </Panel>
+
+        <Panel title="Funnel" className="lg:col-span-4">
+          <LiveFunnel counts={funnel} live={live} heading="Sent to clicked" />
+        </Panel>
+        <Panel title="Audience mix" className="lg:col-span-4">
+          <SegmentBars personas={personaBreakdown} />
+        </Panel>
+        <Panel title="Revenue by segment" className="lg:col-span-4">
+          <SegmentBars personas={personaBreakdown} revenue={revenue} />
+        </Panel>
+
+        {insights.learnings.length > 0 && (
+          <ConsoleCard className={next?.title ? 'lg:col-span-7' : 'lg:col-span-12'}>
+            <section className="p-5 sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <BotAvatar type="pill" state="default" size={40} interactive={false} />
+                <div>
+                  <h2 className="text-sm font-semibold tracking-tight text-white">What the agent learned</h2>
+                  <p className="text-xs text-zinc-500">From this campaign&apos;s results</p>
+                </div>
               </div>
-            </BorderBeam>
-          )}
-        </section>
-      )}
+              <ul className="space-y-3">
+                {insights.learnings.slice(0, 3).map((text) => (
+                  <li key={text} className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm leading-relaxed text-zinc-300">
+                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-indigo-400" aria-hidden />
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </ConsoleCard>
+        )}
+        {next?.title && (
+          <BorderBeam size="md" theme="dark" colorVariant="ocean" strength={1} className={insights.learnings.length > 0 ? 'lg:col-span-5' : 'lg:col-span-12'}>
+            <ConsoleCard glow className="h-full">
+              <section className="flex h-full flex-col p-5 sm:p-6">
+                <ConsoleLabel className="text-indigo-300">Suggested next move</ConsoleLabel>
+                <h3 className="mt-2 text-lg font-semibold leading-snug tracking-tight text-white">{next.title}</h3>
+                <p className="mt-1.5 text-sm text-zinc-400">{next.description}</p>
+                <p className="mt-3 font-mono text-xs text-zinc-500">
+                  Worth about <span className="text-white">{formatCurrency(next.potentialRevenue)}</span> at {next.confidence}% confidence
+                </p>
+                <PrimaryAction href="/opportunities" className="mt-5 self-start">
+                  Review opportunity <ArrowRight className="size-4" aria-hidden />
+                </PrimaryAction>
+              </section>
+            </ConsoleCard>
+          </BorderBeam>
+        )}
+      </div>
     </>
   );
 }

@@ -1,8 +1,9 @@
 'use client';
 
-import { MetalFx } from 'metal-fx';
-import { CheckCircle2, Circle, Loader2, Mail, Rocket, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Mail, Rocket, ShieldCheck, XCircle } from 'lucide-react';
+import { PrimaryAction } from '@/components/agent/primary-action';
 import { cn } from '@/lib/utils';
+import { ConsoleCard } from './console';
 import { LAUNCH_REQUEST, PREVIEW, formatNumber, type Channel } from './config';
 
 type ApprovalGateProps = {
@@ -41,9 +42,9 @@ function buildChecks({ audience, channel, message, caseStatus }: Pick<ApprovalGa
 }
 
 const CHECK_ICON = {
-  pass: <CheckCircle2 className="size-4 text-emerald-600" aria-hidden />,
-  warn: <Circle className="size-4 text-amber-500" aria-hidden />,
-  fail: <XCircle className="size-4 text-red-500" aria-hidden />,
+  pass: <CheckCircle2 className="size-4 text-emerald-400" aria-hidden />,
+  warn: <Circle className="size-4 text-amber-400" aria-hidden />,
+  fail: <XCircle className="size-4 text-red-400" aria-hidden />,
 } as const;
 
 export function ApprovalGate(props: ApprovalGateProps) {
@@ -52,72 +53,67 @@ export function ApprovalGate(props: ApprovalGateProps) {
   const blocked = checks.some((c) => c.state === 'fail');
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm" aria-label="Approval">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="size-4 text-primary" aria-hidden />
-        <h2 className="text-sm font-semibold tracking-tight">{approved ? 'Approved by you' : 'Needs your approval'}</h2>
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {approved ? 'Nothing is sent until the campaign is launched.' : 'The agent will not send anything without your explicit approval.'}
-      </p>
+    <ConsoleCard glow>
+      <section aria-label="Approval" className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-indigo-300" aria-hidden />
+            <h2 className="text-sm font-semibold tracking-tight text-white">{approved ? 'Approved by you' : 'Needs your approval'}</h2>
+          </div>
+          <p className="mt-1 text-xs text-zinc-400">
+            {approved ? 'Nothing is sent until the campaign is launched.' : 'The agent will not send anything without your explicit approval.'}
+          </p>
+          <ul className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-5">
+            {checks.map((c) => (
+              <li key={c.label} className="flex items-center gap-2 text-sm">
+                {CHECK_ICON[c.state]}
+                <span className={cn('text-zinc-300', c.state === 'fail' && 'text-red-300')}>{c.label}</span>
+              </li>
+            ))}
+          </ul>
+          {error && (
+            <p role="alert" className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              {error}
+            </p>
+          )}
+        </div>
 
-      <ul className="mt-4 space-y-2">
-        {checks.map((c) => (
-          <li key={c.label} className="flex items-center gap-2 text-sm">
-            {CHECK_ICON[c.state]}
-            <span className={cn(c.state === 'fail' && 'text-red-700')}>{c.label}</span>
-          </li>
-        ))}
-      </ul>
-
-      {error && (
-        <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-          {error}
-        </p>
-      )}
-
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-        {approved ? (
-          demo ? (
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-10 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-full bg-muted px-5 text-sm font-semibold text-muted-foreground"
-            >
-              <Rocket className="size-4" aria-hidden /> Launch is disabled in the demo
-            </button>
-          ) : (
-            <a
-              href={LAUNCH_REQUEST.href}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              <Mail className="size-4" aria-hidden /> Request launch access
-            </a>
-          )
-        ) : (
-          <>
-            <MetalFx variant="button" preset="chromatic" theme="dark" strength={1} paused={approving || blocked}>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+          {approved ? (
+            demo ? (
               <button
                 type="button"
-                onClick={onApprove}
-                disabled={approving || blocked}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-foreground px-6 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50"
+                disabled
+                className="inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 text-sm font-medium text-zinc-500"
               >
-                {approving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <CheckCircle2 className="size-4" aria-hidden />}
-                Approve campaign
+                <Rocket className="size-4" aria-hidden /> Launch is disabled in the demo
               </button>
-            </MetalFx>
-            <button
-              type="button"
-              onClick={onDiscard}
-              disabled={approving}
-              className="inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium text-muted-foreground hover:text-red-600 disabled:opacity-50"
-            >
-              Discard
-            </button>
-          </>
-        )}
-      </div>
-    </section>
+            ) : (
+              <a
+                href={LAUNCH_REQUEST.href}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-indigo-500 px-5 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+              >
+                <Mail className="size-4" aria-hidden /> Request launch access
+              </a>
+            )
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onDiscard}
+                disabled={approving}
+                className="inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium text-zinc-400 transition-colors hover:text-red-300 disabled:opacity-50"
+              >
+                Discard
+              </button>
+              <PrimaryAction onClick={onApprove} disabled={approving || blocked}>
+                <CheckCircle2 className="size-4" aria-hidden />
+                {approving ? 'Approving' : 'Approve campaign'}
+              </PrimaryAction>
+            </>
+          )}
+        </div>
+      </section>
+    </ConsoleCard>
   );
 }

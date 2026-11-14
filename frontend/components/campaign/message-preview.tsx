@@ -109,7 +109,7 @@ export function MessagePreview({ channel, message, subject, offer, busy, classNa
 
   return (
     <div className={cn('mx-auto w-full max-w-[300px]', className)}>
-      <div className="relative rounded-[2rem] border border-border bg-gradient-to-b from-card to-muted p-2 shadow-lg ring-1 ring-black/5">
+      <div className="relative rounded-[2rem] border border-white/15 bg-gradient-to-b from-zinc-700 to-zinc-900 p-2 shadow-2xl ring-1 ring-black/40">
         <div className="relative flex h-[440px] flex-col overflow-hidden rounded-[1.5rem] border border-border bg-card">
           <div className="flex items-center justify-between bg-inherit px-5 pb-0.5 pt-2 text-[10px] font-semibold text-muted-foreground">
             <span>{PREVIEW.time}</span>
