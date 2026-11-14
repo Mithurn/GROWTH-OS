@@ -7,6 +7,7 @@ import { ClosingCta } from '@/components/landing/closing-cta';
 import { AUTHOR_URL, GITHUB_URL, NAV_LINKS, STATS } from '@/components/landing/config';
 import { HeroActions } from '@/components/landing/hero-actions';
 import { HeroAgent } from '@/components/landing/hero-agent';
+import { LaunchVideo } from '@/components/landing/launch-video';
 import { ProductBento } from '@/components/landing/product-bento';
 import { Workflow } from '@/components/landing/workflow';
 
@@ -80,6 +81,7 @@ export default function LandingPage() {
         </dl>
       </section>
 
+      <LaunchVideo />
       <Workflow />
       <ProductBento />
       <Architecture />

@@ -1,0 +1,267 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  :root { --bg: #06060a; --indigo: #5b4fff; --indigo-soft: #a89dff; --teal: #14b8a6; --text: #f4f4f8; --muted: #9a9aae; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--text);
+    font-family: "SF Pro Display", -apple-system, "Helvetica Neue", Inter, sans-serif; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  .bg-grid { position: absolute; inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size: 64px 64px; -webkit-mask-image: radial-gradient(70% 70% at 50% 40%, #000, transparent); }
+  .glow { position: absolute; width: 1400px; height: 900px; left: 260px; top: 90px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(91,79,255,.28), transparent); filter: blur(30px); }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .abs { position: absolute; }
+  .eyebrow { font-size: 26px; letter-spacing: .18em; text-transform: uppercase; color: var(--indigo-soft); font-weight: 600; }
+  .h1 { font-size: 118px; font-weight: 650; letter-spacing: -.035em; line-height: 1.02; }
+  .h2 { font-size: 76px; font-weight: 650; letter-spacing: -.03em; line-height: 1.06; }
+  .grad { background: linear-gradient(90deg, #c7c0ff, #8c83ff 50%, #7dd3fc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sample { font-size: 22px; color: var(--muted); letter-spacing: .02em; }
+  .frame { position: absolute; border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,.12); background: #fafafa;
+    box-shadow: 0 60px 140px -30px rgba(91,79,255,.45), 0 30px 80px rgba(0,0,0,.6); }
+  .frame .bar { height: 44px; background: #0d0d14; display: flex; gap: 10px; align-items: center; padding: 0 20px; }
+  .frame .bar i { width: 13px; height: 13px; border-radius: 50%; background: rgba(255,255,255,.18); }
+  .frame .view { position: relative; overflow: hidden; }
+  .frame img { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: block; }
+  .chip { display: inline-flex; align-items: center; gap: 12px; padding: 14px 26px; border-radius: 999px; font-size: 30px; font-weight: 600;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #d8d8e6; }
+  .console { background: rgba(13,13,20,.9); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; padding: 40px 44px; width: 1020px;
+    box-shadow: 0 50px 120px -30px rgba(91,79,255,.4); }
+  .console .path { font: 500 24px ui-monospace, "SF Mono", Menlo, monospace; color: #7c7c92; margin-bottom: 28px; }
+  .line { white-space: nowrap; font: 500 28px ui-monospace, "SF Mono", Menlo, monospace; color: #d5d5e4; display: flex; gap: 18px; align-items: center; height: 64px; }
+  .line .ck { color: var(--indigo-soft); }
+  .ring { position: absolute; border: 4px solid #5b4fff; border-radius: 22px; box-shadow: 0 0 0 8px rgba(91,79,255,.18), 0 0 60px rgba(91,79,255,.6); }
+  .callout { position: absolute; padding: 16px 26px; background: #5b4fff; color: #fff; border-radius: 14px; font-size: 32px; font-weight: 600; white-space: nowrap;
+    box-shadow: 0 20px 50px rgba(91,79,255,.5); }
+  .card { background: #fff; color: #14141c; border-radius: 28px; padding: 54px 60px; width: 1000px; box-shadow: 0 60px 140px -30px rgba(91,79,255,.5); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 14px; height: 108px; padding: 0 64px; border-radius: 999px; font-size: 40px; font-weight: 650; color: #fff;
+    background: linear-gradient(#6a5fff, #4b3fe5); box-shadow: 0 18px 40px rgba(91,79,255,.45); }
+  .step { padding: 16px 30px; border-radius: 999px; font-size: 30px; font-weight: 600; border: 1px solid rgba(255,255,255,.14); color: #6d6d82; background: rgba(255,255,255,.03); display: inline-flex; gap: 12px; align-items: center; }
+  .cursor { position: absolute; width: 56px; height: 56px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, #fff, rgba(168,157,255,.6) 40%, transparent 70%); opacity: 0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="glow" id="glow"></div>
+  <div class="bg-grid"></div>
+
+  <div class="scene" id="s1">
+    <div class="abs h1" style="left:140px; top:250px; width:1500px">
+      <div id="s1a" style="opacity:0">Your best customers</div>
+      <div id="s1b" class="grad" style="opacity:0">went quiet.</div>
+    </div>
+    <div class="abs" id="s1c" style="left:140px; top:640px; opacity:0">
+      <div style="font-size:190px; font-weight:700; letter-spacing:-.04em; line-height:1" class="grad"><span id="s1num">0</span></div>
+      <div style="font-size:38px; color:#c9c9d8; margin-top:12px">sitting idle across 76 dormant VIPs</div>
+      <div class="sample" style="margin-top:14px">Sample data from the live demo</div>
+    </div>
+  </div>
+
+  <div class="scene" id="s2">
+    <div class="abs" id="s2l" style="left:140px; top:330px; width:640px">
+      <div id="avatar" style="width:230px; height:230px"></div>
+      <div class="h2" style="margin-top:44px">Meet the agent that watches your data.</div>
+    </div>
+    <div class="abs console" id="s2c" style="left:800px; top:300px">
+      <div class="path">growthos / agent / run</div>
+      <div id="s2lines"></div>
+    </div>
+  </div>
+
+  <div class="scene" id="s3">
+    <div class="frame" id="f3" style="left:700px; top:150px; width:1120px; height:800px">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="view" id="v3" style="height:756px"><img id="i3" src="../frontend/public/shots/opportunity-v2.jpg" /></div>
+    </div>
+    <div class="ring" id="r3" style="opacity:0"></div>
+    <div class="callout" id="c3" style="opacity:0">Sized at ₹1.1L recoverable</div>
+    <div class="abs" style="left:100px; top:170px; width:560px" id="t3">
+      <div class="eyebrow">Observe, decide</div>
+      <div class="h2" style="margin-top:20px">Finds the leak. Sizes it.</div>
+    </div>
+  </div>
+
+  <div class="scene" id="s4">
+    <div class="frame" id="f4" style="left:100px; top:150px; width:1120px; height:800px">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="view" id="v4" style="height:756px"><img id="i4" src="../frontend/public/shots/campaign-v2.jpg" /></div>
+    </div>
+    <div class="abs" style="left:1290px; top:200px; width:540px" id="t4">
+      <div class="eyebrow">Draft</div>
+      <div class="h2" style="margin-top:20px">Writes the message for you.</div>
+      <div style="margin-top:46px; display:flex; flex-direction:column; gap:18px; align-items:flex-start" id="chips"></div>
+    </div>
+  </div>
+
+  <div class="scene" id="s5">
+    <div class="abs" style="left:0; width:1920px; top:90px; text-align:center">
+      <div class="eyebrow">Approve, send, track</div>
+      <div class="h2" style="margin-top:16px">You approve every send.</div>
+    </div>
+    <div class="abs card" id="s5c" style="left:460px; top:340px">
+      <div style="font-size:26px; color:#4b3fe5; font-weight:650; letter-spacing:.1em">WIN-BACK CAMPAIGN</div>
+      <div style="font-size:56px; font-weight:650; letter-spacing:-.02em; margin-top:10px">Win back 76 dormant VIPs</div>
+      <div style="font-size:30px; color:#5c5c70; margin-top:14px">WhatsApp, ₹250 voucher. Waiting for your approval.</div>
+      <div style="margin-top:50px; display:flex; justify-content:center"><div class="btn" id="btn">Approve and send</div></div>
+    </div>
+    <div class="abs" id="steps" style="left:0; width:1920px; top:900px; display:flex; justify-content:center; gap:20px"></div>
+    <svg class="cursor" id="cur" viewBox="0 0 24 24"><path d="M4 2l15 9-6.5 1.6L9.6 19z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  </div>
+
+  <div class="scene" id="s6">
+    <div class="abs" style="left:0; width:1920px; top:250px; display:flex; flex-direction:column; align-items:center; text-align:center">
+      <div id="logo" style="display:flex; align-items:center; gap:28px">
+        <img src="../frontend/public/favicon.png" style="width:120px; height:120px; border-radius:28px" />
+        <div style="font-size:130px; font-weight:700; letter-spacing:-.04em">GrowthOS</div>
+      </div>
+      <div class="h2" id="s6t" style="margin-top:56px; width:1800px; white-space:nowrap">Find the revenue you&rsquo;re losing. <span class="grad">Win it back.</span></div>
+      <div id="s6b" style="margin-top:70px"><div class="btn" style="background:#fff; color:#06060a; box-shadow:0 18px 60px rgba(168,157,255,.4)">Try the demo</div></div>
+      <div class="sample" id="s6s" style="margin-top:30px">Runs on sample data. Nothing is sent.</div>
+    </div>
+    <div class="flash" id="flash"></div>
+  </div>
+</div>
+
+<script>
+const clamp = (x) => Math.min(1, Math.max(0, x));
+const prog = (t, a, d) => clamp((t - a) / d);
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const easeInOut = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const $ = (id) => document.getElementById(id);
+
+const SCENES = [
+  { id: 's1', from: 0, to: 4 },
+  { id: 's2', from: 4, to: 8 },
+  { id: 's3', from: 8, to: 14 },
+  { id: 's4', from: 14, to: 18 },
+  { id: 's5', from: 18, to: 22 },
+  { id: 's6', from: 22, to: 28 },
+];
+const FADE_IN = 0.45, FADE_OUT = 0.3;
+const CONSOLE_LINES = [
+  'Reading 1,480 customers and their order history',
+  'Scored recency, frequency and spend for everyone',
+  'Rule matched: dormant VIPs, 76 customers',
+  'Sized the audience at ₹1.1L of recoverable revenue',
+];
+const CHANNELS = ['WhatsApp', 'Email', 'SMS'];
+const STEPS = ['Approved', 'Sent', 'Results tracked'];
+
+$('avatar').innerHTML = `<svg viewBox="0 0 100 100" width="230" height="230"><defs>
+  <linearGradient id="hx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5eead4"/><stop offset=".6" stop-color="#14b8a6"/><stop offset="1" stop-color="#0d8a7c"/></linearGradient></defs>
+  <polygon points="50,6 88,28 88,72 50,94 12,72 12,28" fill="url(#hx)" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>
+  <ellipse cx="38" cy="44" rx="5" ry="6.5" fill="#052e2b"/><ellipse cx="62" cy="44" rx="5" ry="6.5" fill="#052e2b"/>
+  <path d="M40 62 Q50 70 60 62" stroke="#052e2b" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>`;
+$('s2lines').innerHTML = CONSOLE_LINES.map((l, i) => `<div class="line" id="cl${i}" style="opacity:0"><span class="ck">&gt;</span><span id="clt${i}"></span></div>`).join('');
+$('chips').innerHTML = CHANNELS.map((c, i) => `<div class="chip" id="ch${i}">${c}</div>`).join('');
+$('steps').innerHTML = STEPS.map((s, i) => `<div class="step" id="st${i}"><span id="sti${i}"></span>${s}</div>`).join('');
+
+const IMG_W = 1800;
+function pan(imgId, viewW, viewH, cx, cy, zoom) {
+  const base = viewW / IMG_W;
+  const s = base * zoom;
+  $(imgId).style.width = IMG_W + 'px';
+  $(imgId).style.transform = `translate(${viewW / 2 - cx * s}px, ${viewH / 2 - cy * s}px) scale(${s})`;
+}
+const lerp = (a, b, k) => a + (b - a) * k;
+
+function render(t) {
+  for (const s of SCENES) {
+    const el = $(s.id);
+    const a = easeOut(prog(t, s.from, FADE_IN));
+    const o = 1 - easeInOut(prog(t, s.to - FADE_OUT, FADE_OUT));
+    const vis = t >= s.from && t < s.to;
+    el.style.display = vis ? 'block' : 'none';
+    el.style.opacity = vis ? Math.min(a, o) : 0;
+    el.style.transform = `translateY(${(1 - a) * 24}px) scale(${1 + (1 - o) * 0.015})`;
+  }
+  $('glow').style.transform = `translate(${Math.sin(t * .4) * 80}px, ${Math.cos(t * .3) * 40}px)`;
+
+  // S1
+  let p = easeOut(prog(t, .25, .7)); $('s1a').style.opacity = p; $('s1a').style.transform = `translateY(${(1 - p) * 40}px)`;
+  p = easeOut(prog(t, .95, .7)); $('s1b').style.opacity = p; $('s1b').style.transform = `translateY(${(1 - p) * 40}px)`;
+  p = easeOut(prog(t, 2.0, .6)); $('s1c').style.opacity = p; $('s1c').style.transform = `translateY(${(1 - p) * 30}px)`;
+  $('s1num').textContent = '₹' + (1.1 * easeOut(prog(t, 2.0, 1.4))).toFixed(1) + 'L';
+
+  // S2
+  const t2 = t - 4;
+  p = easeOut(prog(t2, .2, .7)); $('s2l').style.opacity = p; $('s2l').style.transform = `translateY(${(1 - p) * 30}px)`;
+  $('avatar').style.transform = `translateY(${Math.sin(t * 2.4) * 10}px) rotate(${Math.sin(t * 1.2) * 3}deg)`;
+  p = easeOut(prog(t2, .45, .7)); $('s2c').style.opacity = p; $('s2c').style.transform = `translateX(${(1 - p) * 60}px)`;
+  CONSOLE_LINES.forEach((txt, i) => {
+    const st = 1.0 + i * .75;
+    const k = prog(t2, st, .55);
+    $('cl' + i).style.opacity = k > 0 ? 1 : 0;
+    $('clt' + i).textContent = txt.slice(0, Math.ceil(txt.length * k));
+  });
+
+  // S3
+  const t3 = t - 8;
+  const fp = easeOut(prog(t3, 0, .8));
+  $('f3').style.opacity = fp; $('f3').style.transform = `translateY(${(1 - fp) * 60}px)`;
+  const k1 = easeInOut(prog(t3, .6, 1.8));
+  const k2 = easeInOut(prog(t3, 3.2, 1.8));
+  const zoom = lerp(1 + k1 * .04, 1.55, k2);
+  const cx = lerp(900, 330, k2), cy = lerp(645, 380, k2);
+  pan('i3', 1120, 756, cx, cy, zoom);
+  p = easeOut(prog(t3, .2, .7)); $('t3').style.opacity = p * (1 - prog(t3, 5.4, .3)); $('t3').style.transform = `translateX(${(1 - p) * -40}px)`;
+  const rp = easeOut(prog(t3, 3.9, .5));
+  const sc = 1120 / IMG_W * zoom;
+  const rx = 700 + 560 + (125 - cx) * sc, ry = 150 + 44 + 378 + (250 - cy) * sc;
+  Object.assign($('r3').style, { opacity: rp, left: rx + 'px', top: ry + 'px', width: 385 * sc + 'px', height: 240 * sc + 'px' });
+  Object.assign($('c3').style, { opacity: easeOut(prog(t3, 4.3, .5)), left: rx + 'px', top: ry + 240 * sc + 24 + 'px', transform: `translateY(${(1 - easeOut(prog(t3, 4.3, .5))) * 16}px)` });
+
+  // S4
+  const t4 = t - 14;
+  const fp4 = easeOut(prog(t4, 0, .8));
+  $('f4').style.opacity = fp4; $('f4').style.transform = `translateY(${(1 - fp4) * 60}px)`;
+  const z4 = lerp(1, 1.18, easeInOut(prog(t4, .5, 3)));
+  pan('i4', 1120, 756, lerp(900, 760, easeInOut(prog(t4, .5, 3))), lerp(645, 700, easeInOut(prog(t4, .5, 3))), z4);
+  p = easeOut(prog(t4, .3, .7)); $('t4').style.opacity = p; $('t4').style.transform = `translateX(${(1 - p) * 40}px)`;
+  CHANNELS.forEach((c, i) => {
+    const on = t4 >= 1.4 + i * .7 && t4 < 2.1 + i * .7 + (i === 2 ? 5 : 0);
+    const e = $('ch' + i);
+    e.style.background = on ? '#5b4fff' : 'rgba(255,255,255,.06)';
+    e.style.color = on ? '#fff' : '#d8d8e6';
+    e.style.transform = `scale(${on ? 1.06 : 1})`;
+    e.style.opacity = easeOut(prog(t4, 1.0 + i * .15, .4));
+  });
+
+  // S5
+  const t5 = t - 18;
+  p = easeOut(prog(t5, .2, .7)); $('s5c').style.opacity = p; $('s5c').style.transform = `translateY(${(1 - p) * 50}px)`;
+  const cx5 = lerp(1500, 900, easeInOut(prog(t5, .6, 1.2))), cy5 = lerp(800, 660, easeInOut(prog(t5, .6, 1.2)));
+  const press = t5 > 1.9 && t5 < 2.05 ? .94 : 1;
+  $('cur').style.left = cx5 + 'px'; $('cur').style.top = cy5 + 'px'; $('cur').style.opacity = prog(t5, .5, .3) * (1 - prog(t5, 2.6, .3));
+  const done = t5 >= 2.0;
+  $('btn').style.transform = `scale(${press})`;
+  $('btn').innerHTML = done ? '&#10003; Sent' : 'Approve and send';
+  $('btn').style.background = done ? 'linear-gradient(#34d399, #10b981)' : '';
+  STEPS.forEach((s, i) => {
+    const on = t5 >= 2.0 + i * .55;
+    const e = $('st' + i);
+    e.style.color = on ? '#fff' : '#6d6d82';
+    e.style.borderColor = on ? 'rgba(91,79,255,.8)' : 'rgba(255,255,255,.14)';
+    e.style.background = on ? 'rgba(91,79,255,.25)' : 'rgba(255,255,255,.03)';
+    $('sti' + i).textContent = on ? '✓' : '';
+  });
+
+  // S6
+  const t6 = t - 22;
+  const hit = t6 >= 0 ? Math.exp(-t6 * 5) : 0;
+  $('flash').style.opacity = t6 >= 0 ? hit * .9 : 0;
+  p = easeOut(prog(t6, .05, .8)); $('logo').style.opacity = p; $('logo').style.transform = `scale(${lerp(1.18, 1, p)})`;
+  p = easeOut(prog(t6, .9, .8)); $('s6t').style.opacity = p; $('s6t').style.transform = `translateY(${(1 - p) * 30}px)`;
+  p = easeOut(prog(t6, 1.8, .7)); $('s6b').style.opacity = p; $('s6b').style.transform = `translateY(${(1 - p) * 30}px)`;
+  p = easeOut(prog(t6, 2.4, .7)); $('s6s').style.opacity = p;
+}
+window.render = render;
+window.ready = Promise.all([...document.images].map((i) => i.decode())).then(() => document.fonts.ready);
+render(0);
+</script>
+</body>
+</html>
