@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { AiOrb } from '@/components/ui/ai-orb';
 import { cn } from '@/lib/utils';
+import { PRIMARY_ACTION_CLASS, SECONDARY_ACTION_CLASS } from '@/components/ui/action-styles';
 
 const TONES = {
   error: { icon: AlertCircle, well: 'bg-red-50 text-red-500', role: 'alert' },
@@ -35,8 +36,6 @@ export function StatePanel({ tone, title, message, children, className }: StateP
   );
 }
 
-export const statePanelActionClass =
-  'inline-flex items-center gap-2 rounded-xl bg-[#5B4FFF] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF]';
+export const statePanelActionClass = PRIMARY_ACTION_CLASS;
 
-export const statePanelSecondaryClass =
-  'inline-flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F3F4F6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF]';
+export const statePanelSecondaryClass = SECONDARY_ACTION_CLASS;
