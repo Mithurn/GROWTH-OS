@@ -32,7 +32,7 @@ function MetricCell({ label, value, format = defaultFormat, icon: Icon, hint, pr
     <div
       className={cn(
         'group relative flex min-w-0 flex-col gap-3 bg-white p-4 transition-colors duration-200 sm:p-5',
-        accent ? 'bg-gradient-to-br from-[#F4F2FF] via-white to-white' : 'hover:bg-[#FAFAFB]',
+        accent ? 'bg-brand-wash' : 'hover:bg-surface-inset',
       )}
     >
       <div className="flex items-center gap-2.5">
@@ -40,31 +40,31 @@ function MetricCell({ label, value, format = defaultFormat, icon: Icon, hint, pr
           <span
             className={cn(
               'flex size-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition-transform duration-200 group-hover:scale-105',
-              accent ? 'bg-[#5B4FFF] text-white ring-[#5B4FFF]/20 shadow-[0_2px_8px_-2px_rgba(91,79,255,0.5)]' : 'bg-[#F4F4F5] text-[#52525B] ring-black/[0.04]',
+              accent ? 'bg-primary text-white ring-primary/20 shadow-[0_2px_8px_-2px_rgba(91,79,255,0.5)]' : 'bg-muted text-body ring-black/[0.04]',
             )}
           >
             <Icon className="size-3.5" aria-hidden />
           </span>
         )}
-        <p className="text-[13px] font-medium leading-tight text-[#6B7280]">{label}</p>
+        <p className="text-label font-medium leading-tight text-muted-foreground">{label}</p>
       </div>
       <p
         className={cn(
-          'text-[30px] font-semibold leading-none tracking-tight tabular-nums',
-          accent ? 'bg-gradient-to-br from-[#4338CA] to-[#7C6AFF] bg-clip-text text-transparent' : 'text-[#111827]',
+          'text-3xl font-semibold leading-none tracking-tight tabular-nums',
+          accent ? 'text-primary' : 'text-foreground',
         )}
       >
         {format(shown)}
       </p>
       {progress !== undefined && (
-        <div className="h-1 overflow-hidden rounded-full bg-[#EEF0F4]" aria-hidden>
+        <div className="h-1 overflow-hidden rounded-full bg-line-soft" aria-hidden>
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#5B4FFF] to-[#8B7CFF]"
+            className="h-full rounded-full bg-primary"
             style={{ width: `${Math.min(MAX_PROGRESS, Math.max(0, progress))}%` }}
           />
         </div>
       )}
-      {hint && <p className="text-[13px] leading-snug text-[#6B7280]">{hint}</p>}
+      {hint && <p className="text-label leading-snug text-muted-foreground">{hint}</p>}
     </div>
   );
 }
