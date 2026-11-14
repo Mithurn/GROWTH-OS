@@ -12,7 +12,7 @@ type ChannelTabsProps = {
 
 export function ChannelTabs({ value, onChange, disabled, className }: ChannelTabsProps) {
   return (
-    <div role="tablist" aria-label="Channel" className={cn('inline-flex rounded-xl bg-[#F3F4F6] p-1', className)}>
+    <div role="tablist" aria-label="Channel" className={cn('inline-flex rounded-xl bg-muted p-1', className)}>
       {CHANNELS.map((ch) => {
         const { icon: Icon } = CHANNEL_META[ch];
         const active = value === ch;
@@ -25,11 +25,11 @@ export function ChannelTabs({ value, onChange, disabled, className }: ChannelTab
             disabled={disabled}
             onClick={() => !active && onChange(ch)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-60',
-              active ? 'bg-white text-[#1A1A1A] shadow-sm ring-1 ring-black/5' : 'text-[#6B7280] hover:text-[#1A1A1A]',
+              'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60',
+              active ? 'bg-white text-foreground shadow-sm ring-1 ring-black/5' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Icon className={cn('size-3.5', active && 'text-[#5B4FFF]')} aria-hidden /> {ch}
+            <Icon className={cn('size-3.5', active && 'text-primary')} aria-hidden /> {ch}
           </button>
         );
       })}

@@ -39,7 +39,7 @@ import {
 import { OnboardingShell } from './onboarding-shell';
 
 const primaryButton =
-  'flex w-full items-center justify-center gap-2 rounded-xl bg-[#5B4FFF] py-3 text-sm font-medium text-white transition-colors hover:bg-[#4B3FE5] disabled:cursor-not-allowed disabled:opacity-40';
+  'flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40';
 
 function Choice({
   selected,
@@ -61,17 +61,17 @@ function Choice({
       aria-pressed={selected}
       className={cn(
         'flex items-center gap-3 rounded-xl border p-4 text-left transition-colors',
-        selected ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#E5E7EB] bg-white hover:border-[#C7D2FE]',
+        selected ? 'border-primary bg-brand-wash' : 'border-border bg-white hover:border-brand-line',
       )}
     >
-      <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', selected ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F3F4F6] text-[#6B7280]')}>
+      <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', selected ? 'bg-brand-tint text-primary' : 'bg-muted text-muted-foreground')}>
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-[#1A1A1A]">{label}</span>
-        {hint && <span className="block text-xs text-[#6B7280]">{hint}</span>}
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
       </span>
-      {selected && <Check className="size-4 text-[#5B4FFF]" aria-hidden />}
+      {selected && <Check className="size-4 text-primary" aria-hidden />}
     </button>
   );
 }
@@ -85,16 +85,16 @@ function FileDrop({ file, label, hint, onPick }: { file: File | null; label: str
         type="button"
         onClick={() => ref.current?.click()}
         className={cn(
-          'flex w-full items-center gap-4 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-[#5B4FFF] hover:bg-[#F8F7FF]',
-          file ? 'border-[#5B4FFF] bg-[#F8F7FF]' : 'border-[#D1D5DB]',
+          'flex w-full items-center gap-4 rounded-xl border border-dashed p-4 text-left transition-colors hover:border-primary hover:bg-brand-wash',
+          file ? 'border-primary bg-brand-wash' : 'border-border-strong',
         )}
       >
-        <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', file ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F3F4F6] text-[#6B7280]')}>
+        <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-lg', file ? 'bg-brand-tint text-primary' : 'bg-muted text-muted-foreground')}>
           {file ? <Check className="size-5" aria-hidden /> : <UploadCloud className="size-5" aria-hidden />}
         </span>
         <span>
-          <span className="block text-sm font-medium text-[#1A1A1A]">{label}</span>
-          <span className="block text-xs text-[#6B7280]">{file ? file.name : hint}</span>
+          <span className="block text-sm font-medium text-foreground">{label}</span>
+          <span className="block text-xs text-muted-foreground">{file ? file.name : hint}</span>
         </span>
       </button>
     </>
@@ -230,12 +230,12 @@ export default function OnboardingPage() {
 
   if (step === 'setup') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0A0E1A] bg-[radial-gradient(circle_at_50%_0%,rgba(91,79,255,0.28),transparent_55%)] px-6 py-10 text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-ink bg-[radial-gradient(circle_at_50%_0%,rgba(91,79,255,0.28),transparent_55%)] px-6 py-10 text-white">
         <div className="w-full max-w-md">
           <div className="text-center">
             <AiOrb size="lg" state="connecting" theme="dark" className="mx-auto" />
             <h1 className="mt-6 text-2xl font-semibold tracking-tight">Your agent is learning your business</h1>
-            <p className="mt-1.5 text-sm text-[#8B92A5]">This takes about 30 to 60 seconds.</p>
+            <p className="mt-1.5 text-sm text-ink-muted">This takes about 30 to 60 seconds.</p>
           </div>
 
           <ol className="mt-8 space-y-2">
@@ -248,16 +248,16 @@ export default function OnboardingPage() {
                   className={cn(
                     'flex items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-500',
                     isDone && 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
-                    isActive && 'border-[#5B4FFF]/50 bg-[#5B4FFF]/10 text-white',
-                    !isDone && !isActive && 'border-[#1E2545] text-[#5E6680]',
+                    isActive && 'border-primary/50 bg-primary/10 text-white',
+                    !isDone && !isActive && 'border-ink-line text-ink-faint',
                   )}
                 >
                   {isDone ? (
                     <Check className="size-4 text-emerald-400" aria-hidden />
                   ) : isActive ? (
-                    <Loader2 className="size-4 text-[#A89DFF] motion-safe:animate-spin" aria-hidden />
+                    <Loader2 className="size-4 text-brand-soft motion-safe:animate-spin" aria-hidden />
                   ) : (
-                    <span className="size-4 rounded-full border border-[#1E2545]" aria-hidden />
+                    <span className="size-4 rounded-full border border-ink-line" aria-hidden />
                   )}
                   {label}
                 </li>
@@ -265,7 +265,7 @@ export default function OnboardingPage() {
             })}
           </ol>
 
-          {ingestionMessage && !setupError && <p className="mt-4 text-center text-xs text-[#8B92A5]">{ingestionMessage}</p>}
+          {ingestionMessage && !setupError && <p className="mt-4 text-center text-xs text-ink-muted">{ingestionMessage}</p>}
 
           {setupError && (
             <div role="alert" className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-center">
@@ -295,15 +295,15 @@ export default function OnboardingPage() {
   return (
     <OnboardingShell title={copy.title} body={copy.body} progress={progress}>
       {formIndex > 0 && (
-        <button type="button" onClick={back} className="mb-6 flex items-center gap-1.5 text-sm text-[#6B7280] transition-colors hover:text-[#1A1A1A]">
+        <button type="button" onClick={back} className="mb-6 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden /> Back
         </button>
       )}
 
       {step === 'welcome' && (
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1A1A1A]">Welcome to GrowthOS</h1>
-          <p className="mt-3 text-base leading-relaxed text-[#6B7280]">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Welcome to GrowthOS</h1>
+          <p className="mt-3 text-base leading-relaxed text-muted-foreground">
             Four quick steps and your agent starts finding revenue you are leaving on the table.
           </p>
           <button type="button" onClick={next} className={cn(primaryButton, 'mt-8')}>
@@ -314,8 +314,8 @@ export default function OnboardingPage() {
 
       {step === 'company' && (
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Tell us about your brand</h1>
-          <label className="mt-6 block text-sm font-medium text-[#374151]" htmlFor="company-name">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tell us about your brand</h1>
+          <label className="mt-6 block text-sm font-medium text-body" htmlFor="company-name">
             Brand or company name
           </label>
           <input
@@ -325,16 +325,16 @@ export default function OnboardingPage() {
             onChange={(e) => setCompanyName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCompanyContinue()}
             placeholder="e.g. Zara India, Nykaa, Lenskart"
-            className="mt-2 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm text-[#1A1A1A] outline-none transition-colors placeholder:text-[#6B7280] focus:border-[#5B4FFF]"
+            className="mt-2 w-full rounded-xl border border-border px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
           />
-          <p className="mt-6 text-sm font-medium text-[#374151]">Industry</p>
+          <p className="mt-6 text-sm font-medium text-body">Industry</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {INDUSTRIES.map((ind) => (
               <Choice key={ind.value} selected={industry === ind.value} onClick={() => setIndustry(ind.value)} icon={ind.icon} label={ind.label} />
             ))}
           </div>
           {companyError && (
-            <p role="alert" className="mt-4 text-xs text-red-600">
+            <p role="alert" className="mt-4 text-xs text-danger">
               {companyError}
             </p>
           )}
@@ -354,14 +354,14 @@ export default function OnboardingPage() {
 
       {step === 'data' && (
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Connect your customer data</h1>
-          <p className="mt-2 text-sm text-[#6B7280]">Upload customers and orders as CSV files.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Connect your customer data</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Upload customers and orders as CSV files.</p>
           <div className="mt-6 space-y-3">
             <FileDrop file={customerFile} onPick={setCustomerFile} label="Customers CSV" hint="customer_id, name, email, phone, city" />
             <FileDrop file={orderFile} onPick={setOrderFile} label="Orders CSV" hint="order_id, customer_id, date, amount, product" />
           </div>
           {uploadError && (
-            <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+            <p role="alert" className="mt-4 rounded-lg bg-danger-tint px-3 py-2 text-xs text-danger">
               {uploadError}
             </p>
           )}
@@ -376,8 +376,8 @@ export default function OnboardingPage() {
               </>
             )}
           </button>
-          <div className="my-4 flex items-center gap-3 text-xs text-[#6B7280]">
-            <span className="h-px flex-1 bg-[#E5E7EB]" /> or <span className="h-px flex-1 bg-[#E5E7EB]" />
+          <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
           </div>
           <button
             type="button"
@@ -385,11 +385,11 @@ export default function OnboardingPage() {
               setUseDemoData(true);
               next();
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] py-3 text-sm font-medium text-[#374151] transition-colors hover:border-[#5B4FFF] hover:text-[#5B4FFF]"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-3 text-sm font-medium text-body transition-colors hover:border-primary hover:text-primary"
           >
             Try it with {DEMO_CUSTOMERS} sample customers <ArrowRight className="size-4" aria-hidden />
           </button>
-          <p className="mt-2 text-center text-xs text-[#6B7280]">
+          <p className="mt-2 text-center text-xs text-muted-foreground">
             Imports {DEMO_CUSTOMERS} customers and {DEMO_ORDERS} orders into your workspace so you can try the pipeline first.
           </p>
         </div>
@@ -397,7 +397,7 @@ export default function OnboardingPage() {
 
       {step === 'goal' && (
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">What is your primary growth goal?</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">What is your primary growth goal?</h1>
           <div className="mt-6 flex flex-col gap-2">
             {GOALS.map((g) => (
               <Choice key={g.value} selected={goal === g.value} onClick={() => setGoal(g.value)} icon={g.icon} label={g.label} />
@@ -411,8 +411,8 @@ export default function OnboardingPage() {
 
       {step === 'mode' && (
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">How should the agent work?</h1>
-          <p className="mt-2 text-sm text-[#6B7280]">You can change this at any time.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">How should the agent work?</h1>
+          <p className="mt-2 text-sm text-muted-foreground">You can change this at any time.</p>
           <div className="mt-6 grid gap-3">
             <Choice
               selected={mode === 'operator'}
@@ -421,13 +421,13 @@ export default function OnboardingPage() {
               label="Operator"
               hint="The agent drafts campaigns. You approve before anything is sent."
             />
-            <div className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] p-4 opacity-60">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#F3F4F6] text-[#6B7280]">
+            <div className="flex items-center gap-3 rounded-xl border border-border p-4 opacity-60">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Zap className="size-4" aria-hidden />
               </span>
               <span>
-                <span className="block text-sm font-medium text-[#1A1A1A]">Autonomous, coming soon</span>
-                <span className="block text-xs text-[#6B7280]">Available after launch policy, approval audit and recipient safety controls are on.</span>
+                <span className="block text-sm font-medium text-foreground">Autonomous, coming soon</span>
+                <span className="block text-xs text-muted-foreground">Available after launch policy, approval audit and recipient safety controls are on.</span>
               </span>
             </div>
           </div>

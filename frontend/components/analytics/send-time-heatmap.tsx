@@ -21,7 +21,7 @@ export function SendTimeHeatmap({ heatmap }: { heatmap: Heatmap }) {
             <tr>
               <th className="w-10" />
               {heatmap.slots.map((s) => (
-                <th key={s} scope="col" className="pb-1 text-center font-medium text-[#6B7280]">
+                <th key={s} scope="col" className="pb-1 text-center font-medium text-muted-foreground">
                   {s}
                 </th>
               ))}
@@ -30,7 +30,7 @@ export function SendTimeHeatmap({ heatmap }: { heatmap: Heatmap }) {
           <tbody>
             {heatmap.days.map((day, r) => (
               <tr key={day}>
-                <th scope="row" className="pr-2 text-left font-medium text-[#6B7280]">
+                <th scope="row" className="pr-2 text-left font-medium text-muted-foreground">
                   {day}
                 </th>
                 {heatmap.rates[r].map((v, c) => {
@@ -50,7 +50,7 @@ export function SendTimeHeatmap({ heatmap }: { heatmap: Heatmap }) {
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-xs text-[#6B7280]">
+      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <span>Lower</span>
         <span className="flex gap-0.5" aria-hidden>
           {HEATMAP.ramp.map((c) => (

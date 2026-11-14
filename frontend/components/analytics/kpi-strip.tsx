@@ -39,7 +39,7 @@ function Delta({ value }: { value: number }) {
     <span
       className={cn(
         'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums',
-        up ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700',
+        up ? 'bg-success-tint text-success' : 'bg-danger-tint text-danger',
       )}
     >
       <Icon className="size-3" aria-hidden />
@@ -84,17 +84,17 @@ export function KpiStrip({ data }: { data: AnalyticsData }) {
   ];
 
   return (
-    <dl className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:grid-cols-3 xl:grid-cols-5">
+    <dl className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card shadow-card md:grid-cols-3 xl:grid-cols-5">
       {kpis.map((k, i) => {
-        const color = k.accent ? '#5B4FFF' : SERIES.find((s) => s.key === k.spark)!.color;
+        const color = k.accent ? 'var(--primary)' : SERIES.find((s) => s.key === k.spark)!.color;
         return (
-          <div key={k.label} className="relative flex min-w-0 flex-col gap-1 max-md:last:col-span-2 border-b border-r border-[#EEF0F4] p-4 last:border-r-0 xl:border-b-0 xl:[&:nth-child(5n)]:border-r-0">
-            <dt className="text-[13px] font-medium text-[#6B7280]">{k.label}</dt>
+          <div key={k.label} className="relative flex min-w-0 flex-col gap-1 max-md:last:col-span-2 border-b border-r border-line-soft p-4 last:border-r-0 xl:border-b-0 xl:[&:nth-child(5n)]:border-r-0">
+            <dt className="text-label font-medium text-muted-foreground">{k.label}</dt>
             <dd className="flex items-end justify-between gap-2">
-              <span className={cn('text-[28px] font-semibold leading-none tracking-tight tabular-nums', k.accent ? 'text-[#5B4FFF]' : 'text-[#111827]')}>{k.value}</span>
+              <span className={cn('text-3xl font-semibold leading-none tracking-tight tabular-nums', k.accent ? 'text-primary' : 'text-foreground')}>{k.value}</span>
               {k.spark !== 'sent' && <Spark data={seriesOf(timeline, k.spark)} color={color} id={`kpi-spark-${i}`} />}
             </dd>
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-[#6B7280]">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-label text-muted-foreground">
               {k.delta !== undefined && <Delta value={k.delta} />}
               <span>{k.hint}</span>
             </p>

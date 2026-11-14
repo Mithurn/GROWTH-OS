@@ -1,6 +1,7 @@
 'use client';
 
 import { AiLoader } from '@/components/ui/ai-loader';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BarChart3, Layers, Users, Wallet } from 'lucide-react';
@@ -179,7 +180,7 @@ export default function PersonasPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
+    <div className={PAGE_SHELL_CLASS}>
       <PageHeader
         title="Customer personas"
         description="Groups the agent found in your customers, ready to target"
@@ -197,7 +198,7 @@ export default function PersonasPage() {
       />
 
       {error && (
-        <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <p role="alert" className="mt-4 rounded-xl border border-danger/20 bg-danger-tint px-4 py-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -226,23 +227,23 @@ export default function PersonasPage() {
                       onClick={() => setSelectedPersona(persona)}
                       className={cn(
                         'w-full rounded-2xl border p-4 text-left transition-colors',
-                        isSelected ? 'border-[#C7D2FE] bg-[#EEF2FF]' : 'border-[#E5E7EB] bg-white hover:bg-[#FCFBFF]',
+                        isSelected ? 'border-brand-line bg-brand-tint' : 'border-border bg-white hover:bg-surface-inset',
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#1A1A1A]">{persona.persona_name}</p>
-                          <p className="mt-0.5 line-clamp-2 text-xs text-[#6B7280]">{persona.persona_description}</p>
+                          <p className="text-sm font-semibold text-foreground">{persona.persona_name}</p>
+                          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{persona.persona_description}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-base font-semibold tabular-nums text-[#1A1A1A]">{persona.customer_count}</p>
-                          <p className="text-xs text-[#6B7280]">customers</p>
+                          <p className="text-base font-semibold tabular-nums text-foreground">{persona.customer_count}</p>
+                          <p className="text-xs text-muted-foreground">customers</p>
                         </div>
                       </div>
-                      <div className="mt-3 h-1.5 rounded-full bg-[#F3F4F6]">
-                        <div className="h-1.5 rounded-full bg-[#5B4FFF]" style={{ width: `${Math.max(MIN_SHARE_BAR, persona.revenue_share)}%` }} />
+                      <div className="mt-3 h-1.5 rounded-full bg-muted">
+                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${Math.max(MIN_SHARE_BAR, persona.revenue_share)}%` }} />
                       </div>
-                      <p className="mt-2 flex justify-between text-xs text-[#6B7280]">
+                      <p className="mt-2 flex justify-between text-xs text-muted-foreground">
                         <span>{formatCurrency(persona.average_spend)} average</span>
                         <span>{formatScore(persona.revenue_share)} of revenue</span>
                       </p>
@@ -252,21 +253,21 @@ export default function PersonasPage() {
               })}
             </ul>
 
-            <section className="rounded-2xl border border-[#E5E7EB] bg-white" aria-label="Persona customers">
-              <div className="border-b border-[#F0F0F2] px-5 py-4">
-                <h2 className="text-base font-semibold tracking-tight text-[#1A1A1A]">{selectedPersona?.persona_name ?? 'Select a persona'}</h2>
-                <p className="text-sm text-[#6B7280]">{selectedPersona?.persona_description ?? 'Persona details appear here'}</p>
+            <section className="rounded-2xl border border-border bg-white" aria-label="Persona customers">
+              <div className="border-b border-line-soft px-5 py-4">
+                <h2 className="text-base font-semibold tracking-tight text-foreground">{selectedPersona?.persona_name ?? 'Select a persona'}</h2>
+                <p className="text-sm text-muted-foreground">{selectedPersona?.persona_description ?? 'Persona details appear here'}</p>
               </div>
               {customerLoading ? (
                 <div className="space-y-3 p-5" aria-hidden>
                   {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="h-4 animate-pulse rounded bg-[#F3F4F6]" />
+                    <div key={i} className="h-4 animate-pulse rounded bg-muted" />
                   ))}
                 </div>
               ) : selectedCustomers.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
-                    <thead className="text-left text-xs uppercase tracking-wider text-[#6B7280]">
+                    <thead className="text-left text-xs text-muted-foreground">
                       <tr>
                         <th className="px-5 py-2.5 font-medium">Customer</th>
                         <th className="px-3 py-2.5 font-medium">Spend</th>
@@ -275,19 +276,19 @@ export default function PersonasPage() {
                         <th className="px-5 py-2.5 font-medium">Last purchase</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#F0F0F2]">
+                    <tbody className="divide-y divide-line-soft">
                       {selectedCustomers.map((customer) => (
                         <tr key={customer.customer_id}>
                           <td className="px-5 py-3">
-                            <p className="font-medium text-[#1A1A1A]">{customer.customer_name}</p>
-                            <p className="text-xs text-[#6B7280]">
+                            <p className="font-medium text-foreground">{customer.customer_name}</p>
+                            <p className="text-xs text-muted-foreground">
                               {customer.preferred_channel ?? 'Unknown channel'} · {customer.discount_affinity ?? 'Unknown'} affinity
                             </p>
                           </td>
-                          <td className="px-3 py-3 tabular-nums text-[#1A1A1A]">{formatCurrency(customer.total_spent)}</td>
-                          <td className="px-3 py-3 tabular-nums text-[#4B5563]">{customer.total_orders}</td>
-                          <td className="px-3 py-3 text-[#4B5563]">{customer.favorite_category ?? '-'}</td>
-                          <td className="whitespace-nowrap px-5 py-3 text-[#4B5563]">
+                          <td className="px-3 py-3 tabular-nums text-foreground">{formatCurrency(customer.total_spent)}</td>
+                          <td className="px-3 py-3 tabular-nums text-body">{customer.total_orders}</td>
+                          <td className="px-3 py-3 text-body">{customer.favorite_category ?? '-'}</td>
+                          <td className="whitespace-nowrap px-5 py-3 text-body">
                             {customer.days_since_last_order === null ? 'No orders yet' : `${customer.days_since_last_order} days ago`}
                           </td>
                         </tr>
@@ -296,7 +297,7 @@ export default function PersonasPage() {
                   </table>
                 </div>
               ) : (
-                <p className="p-8 text-center text-sm text-[#6B7280]">No customers found for this persona.</p>
+                <p className="p-8 text-center text-sm text-muted-foreground">No customers found for this persona.</p>
               )}
             </section>
           </div>

@@ -1,11 +1,12 @@
+import { PageHeader } from '@/components/agent/page-header';
 import { ActivityRunTrace } from '@/components/agent/activity-run-trace';
 import { ActivityStream } from '@/components/agent/activity-stream';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 
 export default function ActivityPage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10">
-      <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">Activity</h1>
-      <p className="mt-1 text-sm text-[#6B7280]">Live feed of what the agent finds, drafts and sends. Open any item to watch its run.</p>
+    <div className={PAGE_SHELL_CLASS}>
+      <PageHeader title="Activity" description="Live feed of what the agent finds, drafts and sends. Open any item to watch its run." />
       <div className="mt-6 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <ActivityStream />
         <ActivityRunTrace title="Live run trace" className="lg:sticky lg:top-6" />

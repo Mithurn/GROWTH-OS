@@ -11,7 +11,7 @@ export function ConsoleCard({ children, glow, className }: ConsoleCardProps) {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b12] text-zinc-100 shadow-[0_1px_0_0_rgba(255,255,255,0.06)_inset,0_20px_50px_-24px_rgba(24,16,96,0.6)]',
+        'relative overflow-hidden rounded-2xl border border-white/10 bg-ink-raised text-zinc-100 shadow-[0_1px_0_0_rgba(255,255,255,0.06)_inset,0_20px_50px_-24px_rgba(24,16,96,0.6)]',
         className,
       )}
     >
@@ -27,7 +27,7 @@ export function ConsoleCard({ children, glow, className }: ConsoleCardProps) {
 }
 
 export function ConsoleLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('text-[11px] font-medium uppercase tracking-wider text-zinc-500', className)}>{children}</p>;
+  return <p className={cn('text-2xs font-medium text-zinc-500', className)}>{children}</p>;
 }
 
 export function Segments({ value, count, label }: { value: number; count: number; label: string }) {
@@ -40,7 +40,7 @@ export function Segments({ value, count, label }: { value: number; count: number
           <span key={i} className={cn('h-1.5 flex-1 rounded-full', i < filled ? 'bg-indigo-400' : 'bg-white/10')} />
         ))}
       </div>
-      <span className="w-9 text-right font-mono text-[11px] tabular-nums text-zinc-400">{percent}%</span>
+      <span className="w-9 text-right font-mono text-2xs tabular-nums text-zinc-400">{percent}%</span>
     </div>
   );
 }

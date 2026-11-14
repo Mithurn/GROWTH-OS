@@ -44,9 +44,9 @@ export function EngagementChart({ timeline }: { timeline: TimelinePoint[] }) {
           <YAxis tick={{ fill: CHART.axis, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
           <Tooltip
             cursor={{ stroke: 'rgba(255,255,255,0.2)' }}
-            contentStyle={{ background: '#14141f', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', fontSize: 12, color: '#fff' }}
-            itemStyle={{ color: '#e4e4e7' }}
-            labelStyle={{ color: '#a1a1aa' }}
+            contentStyle={{ background: 'var(--ink-panel)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', fontSize: 12, color: '#fff' }}
+            itemStyle={{ color: 'var(--border)' }}
+            labelStyle={{ color: 'var(--ink-muted)' }}
           />
           {SERIES.map(({ key, color }) => (
             <Area key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} fill={`url(#fill-${key})`} />
@@ -83,8 +83,8 @@ export function SegmentBars({ personas, revenue }: { personas: PersonaSlice[]; r
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full transition-[width] duration-700 ease-out"
-              style={{ width: `${p.percentage}%`, background: SHADES[Math.min(i, SHADES.length - 1)] }}
+              className="h-full origin-left rounded-full transition-transform duration-700 ease-out"
+              style={{ transform: `scaleX(${p.percentage / 100})`, background: SHADES[Math.min(i, SHADES.length - 1)] }}
             />
           </div>
         </li>

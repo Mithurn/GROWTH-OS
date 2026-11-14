@@ -85,7 +85,7 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-const AVATAR_COLORS = ['#5B4FFF', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+const AVATAR_COLORS = ['var(--primary)', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
 function getAvatarColor(id: string): string {
   let hash = 0;
@@ -106,7 +106,7 @@ function getPersonaStyle(name: string): { bg: string; text: string } {
   return { bg: '#F3F4F6', text: '#6B7280' };
 }
 
-const BAR_COLORS = ['#5B4FFF', '#A78BFA', '#60A5FA', '#34D399', '#FBBF24', '#F87171'];
+const BAR_COLORS = ['var(--primary)', '#A78BFA', '#60A5FA', '#34D399', '#FBBF24', '#F87171'];
 
 function getBarColor(i: number): string {
   return BAR_COLORS[i % BAR_COLORS.length];
@@ -209,8 +209,8 @@ export default function CustomerIntelligencePage() {
     return (
       <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 120px)' }}>
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-[#5B4FFF]" />
-          <p className="text-sm text-[#6B7280]">Loading customer intelligence...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading customer intelligence...</p>
         </div>
       </div>
     );
@@ -222,7 +222,7 @@ export default function CustomerIntelligencePage() {
       <div className="p-8 max-w-4xl mx-auto">
         <button
           onClick={() => router.push(`/opportunities/${opportunityId}`)}
-          className="flex items-center gap-2 text-sm font-medium text-[#6B7280] hover:text-[#5B4FFF] mb-6 transition-colors"
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Opportunity
@@ -240,10 +240,10 @@ export default function CustomerIntelligencePage() {
   const totalCustomers = customers.length || 1;
 
   const behavioralDrivers = [
-    { iconBg: '#FEE2E2', icon: <Clock className="h-3.5 w-3.5 text-[#EF4444]" />, label: 'Missed Purchase Cycle' },
-    { iconBg: '#EEF2FF', icon: <Star className="h-3.5 w-3.5 text-[#5B4FFF]" />, label: 'Luxury Category Affinity' },
-    { iconBg: '#FEF3C7', icon: <CalendarDays className="h-3.5 w-3.5 text-[#F59E0B]" />, label: 'Seasonal Purchase Pattern' },
-    { iconBg: '#F3F4F6', icon: <TrendingDown className="h-3.5 w-3.5 text-[#6B7280]" />, label: 'Reduced Engagement' },
+    { iconBg: '#FEE2E2', icon: <Clock className="h-3.5 w-3.5 text-danger" />, label: 'Missed Purchase Cycle' },
+    { iconBg: '#EEF2FF', icon: <Star className="h-3.5 w-3.5 text-primary" />, label: 'Luxury Category Affinity' },
+    { iconBg: '#FEF3C7', icon: <CalendarDays className="h-3.5 w-3.5 text-warning" />, label: 'Seasonal Purchase Pattern' },
+    { iconBg: '#F3F4F6', icon: <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />, label: 'Reduced Engagement' },
   ];
 
   const journey = selectedCustomer ? buildJourney(selectedCustomer) : [];
@@ -255,36 +255,36 @@ export default function CustomerIntelligencePage() {
       <div className="flex-1 flex overflow-hidden">
 
         {/* ════ LEFT: Opportunity Summary ════ */}
-        <div className="w-[25%] flex-shrink-0 overflow-y-auto border-r border-[#E5E7EB] bg-white p-5 pb-12">
+        <div className="w-[25%] flex-shrink-0 overflow-y-auto border-r border-border bg-white p-5 pb-12">
 
-          <h1 className="text-xl font-extrabold text-[#1A1A1A] leading-tight mb-5">
+          <h1 className="text-xl font-extrabold text-foreground leading-tight mb-5">
             {opportunity.title}
           </h1>
 
           {/* 4 Metric Cards */}
           <div className="grid grid-cols-2 gap-2.5 mb-5">
-            <div className="rounded-xl border border-[#E5E7EB] bg-white p-3">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-1">Segment Value</div>
-              <div className="text-lg font-extrabold text-[#1A1A1A]">{formatCurrency(opportunity.potential_revenue)}</div>
+            <div className="rounded-xl border border-border bg-white p-3">
+              <div className="text-2xs font-bold text-muted-foreground mb-1">Segment Value</div>
+              <div className="text-lg font-extrabold text-foreground">{formatCurrency(opportunity.potential_revenue)}</div>
             </div>
-            <div className="rounded-xl border border-[#E5E7EB] bg-white p-3">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-1">Avg. LTV</div>
-              <div className="text-lg font-extrabold text-[#1A1A1A]">{formatCurrency(avgLtv)}</div>
+            <div className="rounded-xl border border-border bg-white p-3">
+              <div className="text-2xs font-bold text-muted-foreground mb-1">Avg. LTV</div>
+              <div className="text-lg font-extrabold text-foreground">{formatCurrency(avgLtv)}</div>
             </div>
-            <div className="rounded-xl border border-[#E5E7EB] bg-white p-3">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-1">Pred. Conversion</div>
-              <div className="text-lg font-extrabold text-[#10B981]">14%</div>
+            <div className="rounded-xl border border-border bg-white p-3">
+              <div className="text-2xs font-bold text-muted-foreground mb-1">Pred. Conversion</div>
+              <div className="text-lg font-extrabold text-success">14%</div>
             </div>
-            <div className="rounded-xl border border-[#E5E7EB] bg-white p-3">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">AI Confidence</div>
+            <div className="rounded-xl border border-border bg-white p-3">
+              <div className="text-2xs font-bold text-muted-foreground mb-2">AI Confidence</div>
               <div className="flex items-center gap-1.5">
-                <div className="flex-1 h-1.5 rounded-full bg-[#F3F4F6] overflow-hidden">
+                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[#5B4FFF]"
+                    className="h-full rounded-full bg-primary"
                     style={{ width: `${Math.min(100, Math.round(opportunity.confidence_score))}%` }}
                   />
                 </div>
-                <span className="text-[11px] font-extrabold text-[#5B4FFF]">
+                <span className="text-2xs font-extrabold text-primary">
                   {Math.round(opportunity.confidence_score)}%
                 </span>
               </div>
@@ -292,8 +292,8 @@ export default function CustomerIntelligencePage() {
           </div>
 
           {/* Why This Segment Matters */}
-          <div className="rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] p-4 mb-5">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-[#3B82F6] mb-3">
+          <div className="rounded-xl bg-info-tint border border-[#BFDBFE] p-4 mb-5">
+            <div className="text-2xs font-bold text-info mb-3">
               Why This Segment Matters
             </div>
             <div className="space-y-2.5">
@@ -304,8 +304,8 @@ export default function CustomerIntelligencePage() {
                 { label: 'Expected Revenue', value: formatCurrency(expectedRevenue) },
               ].map((row) => (
                 <div key={row.label} className="flex items-center justify-between">
-                  <span className="text-[11px] text-[#4B5563]">{row.label}</span>
-                  <span className={`text-[11px] font-bold ${row.purple ? 'text-[#5B4FFF]' : 'text-[#1A1A1A]'}`}>
+                  <span className="text-2xs text-body">{row.label}</span>
+                  <span className={`text-2xs font-bold ${row.purple ? 'text-primary' : 'text-foreground'}`}>
                     {row.value}
                   </span>
                 </div>
@@ -315,7 +315,7 @@ export default function CustomerIntelligencePage() {
 
           {/* Behavioral Drivers */}
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
+            <div className="text-2xs font-bold text-muted-foreground mb-3">
               Behavioral Drivers
             </div>
             <div className="space-y-3">
@@ -327,7 +327,7 @@ export default function CustomerIntelligencePage() {
                   >
                     {d.icon}
                   </div>
-                  <span className="text-[12px] text-[#374151] font-medium">{d.label}</span>
+                  <span className="text-xs text-body font-medium">{d.label}</span>
                 </div>
               ))}
             </div>
@@ -335,11 +335,11 @@ export default function CustomerIntelligencePage() {
         </div>
 
         {/* ════ MIDDLE: Customer Roster ════ */}
-        <div className="w-[45%] flex-shrink-0 overflow-y-auto bg-[#F8F9FE] border-r border-[#E5E7EB] pb-36">
+        <div className="w-[45%] flex-shrink-0 overflow-y-auto bg-brand-wash border-r border-border pb-36">
 
           {/* AI Discovered Personas */}
           <div className="px-5 pt-5 pb-4">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
+            <div className="text-2xs font-bold text-muted-foreground mb-3">
               AI Discovered Personas
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1">
@@ -350,33 +350,33 @@ export default function CustomerIntelligencePage() {
                     <div
                       key={p.name}
                       onClick={() => setSelectedPersonaIdx(i)}
-                      className="flex-shrink-0 w-[196px] rounded-2xl border-2 p-4 cursor-pointer transition-all"
+                      className="flex-shrink-0 w-[196px] rounded-2xl border-2 p-4 cursor-pointer transition-colors"
                       style={{
-                        borderColor: isSelected ? '#5B4FFF' : '#E5E7EB',
+                        borderColor: isSelected ? 'var(--primary)' : '#E5E7EB',
                         backgroundColor: isSelected ? '#FAFAFE' : 'white',
                       }}
                     >
                       <div className="flex items-start justify-between mb-1.5">
-                        <div className="text-[13px] font-bold text-[#1A1A1A] leading-tight pr-2">{p.name}</div>
+                        <div className="text-label font-bold text-foreground leading-tight pr-2">{p.name}</div>
                         {isSelected && (
-                          <div className="h-4 w-4 rounded-full bg-[#5B4FFF] flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none">
+                          <div className="h-4 w-4 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg aria-hidden viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none">
                               <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </div>
                         )}
                       </div>
-                      <div className="text-[9px] font-bold text-[#9CA3AF] mb-2">
+                      <div className="text-2xs font-bold text-muted-foreground mb-2">
                         {p.count} CUSTOMERS · {formatCurrency(p.totalSpent)} VALUE
                       </div>
-                      <p className="text-[11px] text-[#6B7280] leading-relaxed line-clamp-2">
+                      <p className="text-2xs text-muted-foreground leading-relaxed line-clamp-2">
                         {p.description || getPersonaFallbackDesc(p.name)}
                       </p>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-sm text-[#6B7280] italic py-2">No personas discovered yet.</div>
+                <div className="text-sm text-muted-foreground italic py-2">No personas discovered yet.</div>
               )}
             </div>
           </div>
@@ -384,7 +384,7 @@ export default function CustomerIntelligencePage() {
           {/* Segment Composition */}
           {personas.length > 0 && (
             <div className="px-5 pb-5">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">
+              <div className="text-2xs font-bold text-muted-foreground mb-2">
                 Segment Composition
               </div>
               <div className="flex h-2 rounded-full overflow-hidden mb-2.5">
@@ -402,7 +402,7 @@ export default function CustomerIntelligencePage() {
                 {personas.map((p, i) => (
                   <div key={p.name} className="flex items-center gap-1.5">
                     <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: getBarColor(i) }} />
-                    <span className="text-[10px] text-[#6B7280]">
+                    <span className="text-2xs text-muted-foreground">
                       {p.name} ({Math.round((p.count / totalCustomers) * 100)}%)
                     </span>
                   </div>
@@ -414,8 +414,8 @@ export default function CustomerIntelligencePage() {
           {/* Customer Roster */}
           <div className="px-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-[#9CA3AF]">Customer Roster</div>
-              <div className="text-[10px] text-[#9CA3AF]">
+              <div className="text-2xs font-bold text-muted-foreground">Customer Roster</div>
+              <div className="text-2xs text-muted-foreground">
                 Showing {Math.min(customers.length, 6)} of {audienceSize}
               </div>
             </div>
@@ -428,21 +428,21 @@ export default function CustomerIntelligencePage() {
                   <button
                     key={c.customer_id}
                     onClick={() => setSelectedCustomer(c)}
-                    className="rounded-2xl border-2 bg-white p-4 text-left transition-all hover:shadow-sm"
-                    style={{ borderColor: isSelected ? '#5B4FFF' : '#E5E7EB' }}
+                    className="rounded-2xl border-2 bg-white p-4 text-left transition-colors hover:shadow-sm"
+                    style={{ borderColor: isSelected ? 'var(--primary)' : '#E5E7EB' }}
                   >
                     <div className="flex items-center gap-2.5 mb-3">
                       <div
-                        className="h-9 w-9 rounded-full flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0"
-                        style={{ backgroundColor: isSelected ? '#5B4FFF' : avatarColor }}
+                        className="h-9 w-9 rounded-full flex items-center justify-center text-label font-bold text-white flex-shrink-0"
+                        style={{ backgroundColor: isSelected ? 'var(--primary)' : avatarColor }}
                       >
                         {getInitials(c.customer_name)}
                       </div>
                       <div className="min-w-0">
-                        <div className="text-[13px] font-bold text-[#1A1A1A] truncate">{c.customer_name}</div>
+                        <div className="text-label font-bold text-foreground truncate">{c.customer_name}</div>
                         {c.persona_name && (
                           <div
-                            className="text-[8px] font-bold uppercase tracking-wide mt-0.5 truncate px-1.5 py-0.5 rounded-full inline-block"
+                            className="text-2xs font-bold mt-0.5 truncate px-1.5 py-0.5 rounded-full inline-block"
                             style={{ backgroundColor: personaStyle.bg, color: personaStyle.text }}
                           >
                             {c.persona_name}
@@ -452,12 +452,12 @@ export default function CustomerIntelligencePage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <div className="text-[8px] font-bold uppercase tracking-wide text-[#9CA3AF]">LTV</div>
-                        <div className="text-[12px] font-bold text-[#1A1A1A] mt-0.5">{formatCurrency(c.total_spent)}</div>
+                        <div className="text-2xs font-bold text-muted-foreground">LTV</div>
+                        <div className="text-xs font-bold text-foreground mt-0.5">{formatCurrency(c.total_spent)}</div>
                       </div>
                       <div>
-                        <div className="text-[8px] font-bold uppercase tracking-wide text-[#9CA3AF]">Last Purchase</div>
-                        <div className="text-[11px] font-semibold text-[#6B7280] mt-0.5">
+                        <div className="text-2xs font-bold text-muted-foreground">Last Purchase</div>
+                        <div className="text-2xs font-semibold text-muted-foreground mt-0.5">
                           {c.days_since_last_order != null ? `${c.days_since_last_order} Days Ago` : 'Unknown'}
                         </div>
                       </div>
@@ -470,27 +470,27 @@ export default function CustomerIntelligencePage() {
         </div>
 
         {/* ════ RIGHT: Customer 360 ════ */}
-        <div className="w-[30%] flex-shrink-0 overflow-y-auto bg-white border-l border-[#E5E7EB] pb-36">
+        <div className="w-[30%] flex-shrink-0 overflow-y-auto bg-white border-l border-border pb-36">
           <div className="p-5">
-            <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-4">Customer 360</div>
+            <div className="text-2xs font-bold text-muted-foreground mb-4">Customer 360</div>
 
             {selectedCustomer ? (
               <>
                 {/* Avatar + Name */}
                 <div className="flex flex-col items-center text-center mb-5">
                   <div
-                    className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-extrabold text-white mb-3 ring-4 ring-[#EEF2FF]"
+                    className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-extrabold text-white mb-3 ring-4 ring-brand-tint"
                     style={{ backgroundColor: getAvatarColor(selectedCustomer.customer_id) }}
                   >
                     {getInitials(selectedCustomer.customer_name)}
                   </div>
-                  <div className="text-[17px] font-extrabold text-[#1A1A1A]">{selectedCustomer.customer_name}</div>
-                  <div className="text-[11px] text-[#6B7280] mt-0.5">Mumbai, India · Member since 2021</div>
+                  <div className="text-lg font-extrabold text-foreground">{selectedCustomer.customer_name}</div>
+                  <div className="text-2xs text-muted-foreground mt-0.5">Mumbai, India · Member since 2021</div>
                 </div>
 
                 {/* Why This Segment Matters */}
-                <div className="rounded-xl bg-[#F8F9FE] border border-[#E5E7EB] p-4 mb-4">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
+                <div className="rounded-xl bg-brand-wash border border-border p-4 mb-4">
+                  <div className="text-2xs font-bold text-muted-foreground mb-3">
                     Why This Segment Matters
                   </div>
                   <div className="space-y-2.5">
@@ -501,8 +501,8 @@ export default function CustomerIntelligencePage() {
                       { label: 'Expected Revenue', value: formatCurrency(selectedCustomer.avg_order_value * 0.14) },
                     ].map((row) => (
                       <div key={row.label} className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#6B7280]">{row.label}</span>
-                        <span className={`text-[11px] font-bold ${row.purple ? 'text-[#5B4FFF]' : 'text-[#1A1A1A]'}`}>
+                        <span className="text-2xs text-muted-foreground">{row.label}</span>
+                        <span className={`text-2xs font-bold ${row.purple ? 'text-primary' : 'text-foreground'}`}>
                           {row.value}
                         </span>
                       </div>
@@ -512,22 +512,22 @@ export default function CustomerIntelligencePage() {
 
                 {/* Preferred Channel + Top Categories */}
                 <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="rounded-xl border border-[#E5E7EB] bg-white p-3">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">
+                  <div className="rounded-xl border border-border bg-white p-3">
+                    <div className="text-2xs font-bold text-muted-foreground mb-2">
                       Preferred Channel
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <MessageCircle className="h-3.5 w-3.5 text-[#10B981]" />
-                      <span className="text-[12px] font-bold text-[#1A1A1A]">
+                      <MessageCircle className="h-3.5 w-3.5 text-success" />
+                      <span className="text-xs font-bold text-foreground">
                         {selectedCustomer.preferred_channel || 'WhatsApp'}
                       </span>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-[#E5E7EB] bg-white p-3">
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-2">
+                  <div className="rounded-xl border border-border bg-white p-3">
+                    <div className="text-2xs font-bold text-muted-foreground mb-2">
                       Top Categories
                     </div>
-                    <div className="text-[12px] font-bold text-[#1A1A1A] truncate">
+                    <div className="text-xs font-bold text-foreground truncate">
                       {[selectedCustomer.favorite_category, selectedCustomer.second_favorite_category]
                         .filter(Boolean)
                         .join(', ') || 'Dresses, Acc.'}
@@ -536,11 +536,11 @@ export default function CustomerIntelligencePage() {
                 </div>
 
                 {/* Predicted Next Purchase */}
-                <div className="rounded-xl border border-[#E5E7EB] bg-white p-3 mb-4">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-1">
+                <div className="rounded-xl border border-border bg-white p-3 mb-4">
+                  <div className="text-2xs font-bold text-muted-foreground mb-1">
                     Predicted Next Purchase
                   </div>
-                  <div className="text-[13px] font-bold text-[#1A1A1A]">
+                  <div className="text-label font-bold text-foreground">
                     {selectedCustomer.favorite_category
                       ? `Premium ${selectedCustomer.favorite_category}`
                       : 'Premium Handbag'}
@@ -549,22 +549,22 @@ export default function CustomerIntelligencePage() {
 
                 {/* Customer Journey */}
                 <div className="mb-4">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-[#9CA3AF] mb-3">
+                  <div className="text-2xs font-bold text-muted-foreground mb-3">
                     Customer Journey
                   </div>
                   <div>
                     {journey.map((event, i) => (
                       <div key={i} className="flex items-start gap-3">
                         <div className="flex flex-col items-center flex-shrink-0 mt-0.5">
-                          <div className="h-5 w-5 rounded-full bg-[#EEF2FF] border-2 border-[#5B4FFF] flex items-center justify-center">
-                            <div className="h-1.5 w-1.5 rounded-full bg-[#5B4FFF]" />
+                          <div className="h-5 w-5 rounded-full bg-brand-tint border-2 border-primary flex items-center justify-center">
+                            <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                           </div>
-                          {i < journey.length - 1 && <div className="w-0.5 h-7 bg-[#E5E7EB]" />}
+                          {i < journey.length - 1 && <div className="w-0.5 h-7 bg-border" />}
                         </div>
                         <div className="pb-2">
-                          <div className="text-[9px] font-bold text-[#9CA3AF]">{event.days} Days Ago</div>
-                          <div className="text-[12px] font-semibold text-[#1A1A1A]">{event.label}</div>
-                          <div className="text-[10px] text-[#6B7280]">{event.sub}</div>
+                          <div className="text-2xs font-bold text-muted-foreground">{event.days} Days Ago</div>
+                          <div className="text-xs font-semibold text-foreground">{event.label}</div>
+                          <div className="text-2xs text-muted-foreground">{event.sub}</div>
                         </div>
                       </div>
                     ))}
@@ -574,13 +574,13 @@ export default function CustomerIntelligencePage() {
                 {/* AI Insight */}
                 <div
                   className="rounded-xl p-4"
-                  style={{ background: 'linear-gradient(135deg, #5B4FFF 0%, #7C3AED 100%)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #7C3AED 100%)' }}
                 >
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-white/80" />
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-white/80">AI Insight</span>
+                    <span className="text-2xs font-bold text-white/80">AI Insight</span>
                   </div>
-                  <p className="text-[12px] text-white leading-relaxed">
+                  <p className="text-xs text-white leading-relaxed">
                     Responds best to urgency-driven WhatsApp campaigns. High likelihood of conversion
                     with limited-time offers in their preferred category.
                   </p>
@@ -589,7 +589,7 @@ export default function CustomerIntelligencePage() {
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <AiOrb size="md" state="breathing" className="mb-3" />
-                <p className="text-sm text-[#6B7280]">Select a customer to view their 360° profile</p>
+                <p className="text-sm text-muted-foreground">Select a customer to view their 360° profile</p>
               </div>
             )}
           </div>
@@ -599,20 +599,20 @@ export default function CustomerIntelligencePage() {
       {/* ════ FLOATING ACTION BAR ════ */}
       <div className="fixed bottom-6 z-50" style={{ left: '25%', right: 0 }}>
         <div className="max-w-2xl mx-auto px-6">
-          <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-xl shadow-black/10 p-3">
+          <div className="bg-white rounded-2xl border border-border shadow-xl shadow-black/10 p-3">
             {/* AI Input + Quick Chips */}
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex-1 flex items-center gap-2 bg-[#F8F9FE] rounded-xl px-3 py-2 border border-[#E5E7EB] focus-within:border-[#5B4FFF]/40 transition-colors">
+              <div className="flex-1 flex items-center gap-2 bg-brand-wash rounded-xl px-3 py-2 border border-border focus-within:border-primary/40 transition-colors">
                 <AiOrb size="sm" state="listening" className="flex-shrink-0" />
                 <input
                   type="text"
                   value={chatQuery}
                   onChange={(e) => setChatQuery(e.target.value)}
                   placeholder="Ask AI about this audience..."
-                  className="flex-1 bg-transparent text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] outline-none"
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                 />
                 {chatQuery && (
-                  <button className="h-6 w-6 rounded-md bg-[#5B4FFF] flex items-center justify-center flex-shrink-0">
+                  <button className="h-6 w-6 rounded-md bg-primary flex items-center justify-center flex-shrink-0">
                     <Send className="h-3 w-3 text-white ml-0.5" />
                   </button>
                 )}
@@ -621,7 +621,7 @@ export default function CustomerIntelligencePage() {
                 <button
                   key={chip}
                   onClick={() => setChatQuery(chip)}
-                  className="flex-shrink-0 bg-white border border-[#E5E7EB] text-[#4B5563] text-[11px] font-semibold px-3 py-2 rounded-xl hover:border-[#5B4FFF]/40 hover:text-[#5B4FFF] transition-colors whitespace-nowrap"
+                  className="flex-shrink-0 bg-white border border-border text-body text-2xs font-semibold px-3 py-2 rounded-xl hover:border-primary/40 hover:text-primary transition-colors whitespace-nowrap"
                 >
                   {chip}
                 </button>
@@ -632,16 +632,16 @@ export default function CustomerIntelligencePage() {
             <div className="flex items-center gap-3">
               <Link
                 href={`/opportunities/${opportunityId}/campaign`}
-                className="flex-1 flex items-center justify-center gap-2 bg-[#5B4FFF] hover:bg-[#4B3FE5] text-white text-[12px] font-bold rounded-xl py-2.5 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white text-xs font-bold rounded-xl py-2.5 transition-colors"
               >
                 Review Recommended Campaign
               </Link>
-              <button className="flex items-center gap-1.5 border border-[#E5E7EB] text-[#4B5563] text-[12px] font-bold px-4 py-2.5 rounded-xl hover:border-[#D1D5DB] transition-colors whitespace-nowrap">
+              <button className="flex items-center gap-1.5 border border-border text-body text-xs font-bold px-4 py-2.5 rounded-xl hover:border-muted-foreground transition-colors whitespace-nowrap">
                 <Download className="h-3.5 w-3.5" />
                 Export Segment
               </button>
-              <button className="flex items-center gap-1.5 border border-[#E5E7EB] text-[#4B5563] text-[12px] font-bold px-4 py-2.5 rounded-xl hover:border-[#5B4FFF]/40 hover:text-[#5B4FFF] transition-colors whitespace-nowrap">
-                <Sparkles className="h-3.5 w-3.5 text-[#5B4FFF]" />
+              <button className="flex items-center gap-1.5 border border-border text-body text-xs font-bold px-4 py-2.5 rounded-xl hover:border-primary/40 hover:text-primary transition-colors whitespace-nowrap">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
                 Ask AI
               </button>
             </div>

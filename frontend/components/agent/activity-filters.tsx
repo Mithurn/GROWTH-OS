@@ -19,8 +19,8 @@ export function ActivityFilters({ value, onChange, className }: ActivityFiltersP
           aria-pressed={value === f.id}
           onClick={() => onChange(f.id)}
           className={cn(
-            'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[#5B4FFF]',
-            value === f.id ? 'border-[#5B4FFF] bg-[#5B4FFF] text-white' : 'border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F7F7FB]',
+            'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary',
+            value === f.id ? 'border-primary bg-primary text-white' : 'border-border bg-white text-body hover:bg-surface-inset',
           )}
         >
           {f.label}

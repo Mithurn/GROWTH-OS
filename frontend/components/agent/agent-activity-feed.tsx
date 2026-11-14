@@ -50,7 +50,7 @@ const toEntry = (item: AgentActivityItem): ActivityEntry => ({
   icon: item.icon ?? ACTIVITY_KINDS[item.kind ?? ACTIVITY_FALLBACK.kind].icon,
 });
 
-const SEE_ALL_CLASS = 'inline-flex items-center gap-1 text-xs font-medium text-[#5B4FFF] hover:underline';
+const SEE_ALL_CLASS = 'inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline';
 
 export function AgentActivityFeed({
   items,
@@ -81,24 +81,24 @@ export function AgentActivityFeed({
   const closeDrawer = useCallback(() => setOpened(null), []);
 
   return (
-    <section aria-label={title} className={cn('overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white', className)}>
-      <header className="flex items-center gap-3 border-b border-[#F0F0F2] px-4 py-3">
+    <section aria-label={title} className={cn('overflow-hidden rounded-2xl border border-border bg-white', className)}>
+      <header className="flex items-center gap-3 border-b border-line-soft px-4 py-3">
         <AgentAvatar size="sm" state={running ? 'working' : 'idle'} />
         <div className="min-w-0 flex-1">
-          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-[#1A1A1A]">
+          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
             {title}
             <StatusPill tone={running ? 'live' : 'neutral'} pulse={Boolean(running)}>
               {running ? 'Running' : 'Idle'}
             </StatusPill>
           </h2>
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-[#6B7280]" aria-live="polite">
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground" aria-live="polite">
             <AiOrb size="sm" state={running ? 'working' : 'breathing'} className="shrink-0" />
             <span className="sr-only">{AGENT_NAME}: </span>
             <span className="truncate">{status}</span>
           </p>
           {ageSec !== null && (
-            <p className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-[#9CA3AF]">
-              <span className="size-1.5 rounded-full bg-emerald-500 motion-safe:animate-pulse" aria-hidden />
+            <p className="mt-0.5 flex items-center gap-1.5 font-mono text-2xs text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-success motion-safe:animate-pulse" aria-hidden />
               Connected, updated {ageSec < 2 ? 'just now' : `${ageSec}s ago`}
             </p>
           )}
@@ -117,7 +117,7 @@ export function AgentActivityFeed({
       </header>
 
       {filterable && !loading && !error && items.length > 0 && (
-        <div className="border-b border-[#F0F0F2] px-4 py-2">
+        <div className="border-b border-line-soft px-4 py-2">
           <ActivityFilters value={filter} onChange={setFilter} />
         </div>
       )}
@@ -127,20 +127,20 @@ export function AgentActivityFeed({
           <ul className="space-y-3" aria-hidden>
             {Array.from({ length: ACTIVITY_DEFAULTS.skeletonRows }, (_, i) => (
               <li key={i} className="flex animate-pulse gap-3">
-                <span className="size-7 shrink-0 rounded-lg bg-[#F3F4F6]" />
-                <span className="h-14 flex-1 rounded-xl bg-[#F3F4F6]" />
+                <span className="size-7 shrink-0 rounded-lg bg-muted" />
+                <span className="h-14 flex-1 rounded-xl bg-muted" />
               </li>
             ))}
           </ul>
         ) : error ? (
           <div role="alert" className="py-8 text-center">
-            <span className="mx-auto flex size-10 items-center justify-center rounded-xl bg-red-50 text-red-500">
+            <span className="mx-auto flex size-10 items-center justify-center rounded-xl bg-danger-tint text-danger">
               <WifiOff className="size-5" aria-hidden />
             </span>
-            <p className="mt-3 text-sm font-medium text-[#1A1A1A]">Could not load activity</p>
-            <p className="mt-1 text-xs text-[#6B7280]">{error}</p>
+            <p className="mt-3 text-sm font-medium text-foreground">Could not load activity</p>
+            <p className="mt-1 text-xs text-muted-foreground">{error}</p>
             {onRetry && (
-              <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-[#E5E7EB] px-3 py-1 text-xs font-medium text-[#4B5563] hover:bg-[#F7F7FB]">
+              <button type="button" onClick={onRetry} className="mt-3 rounded-full border border-border px-3 py-1 text-xs font-medium text-body hover:bg-surface-inset">
                 Try again
               </button>
             )}
@@ -150,8 +150,8 @@ export function AgentActivityFeed({
             <span className="mx-auto flex size-10 items-center justify-center">
               <AiOrb size="md" state="breathing" />
             </span>
-            <p className="mt-2 text-sm font-medium text-[#4B5563]">{items.length ? 'Nothing here yet' : emptyTitle}</p>
-            <p className="mt-1 text-xs text-[#9CA3AF]">{items.length ? 'Try another filter.' : emptyHint}</p>
+            <p className="mt-2 text-sm font-medium text-body">{items.length ? 'Nothing here yet' : emptyTitle}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{items.length ? 'Try another filter.' : emptyHint}</p>
           </div>
         ) : (
           <ActivityTimeline entries={visible} onOpen={setOpened} freshIds={fresh} />

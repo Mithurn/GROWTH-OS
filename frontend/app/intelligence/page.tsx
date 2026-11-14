@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import Link from 'next/link';
 import { ArrowRight, Crown, DollarSign, ShoppingCart, TrendingUp, Users } from 'lucide-react';
 import { AiLoader } from '@/components/ui/ai-loader';
@@ -55,7 +56,7 @@ export default function IntelligencePage() {
 
   if (!data) {
     return (
-      <div className="mx-auto w-full max-w-[1100px] px-4 py-8 sm:px-8">
+      <div className={PAGE_SHELL_CLASS}>
         <StatePanel
           tone={failed ? 'error' : 'empty'}
           title={failed ? 'We could not load customer intelligence' : 'No customer data yet'}
@@ -80,7 +81,7 @@ export default function IntelligencePage() {
   const activePct = health && data.totalCustomers ? Math.round((health.active / data.totalCustomers) * 100) : 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
+    <div className={PAGE_SHELL_CLASS}>
       <PageHeader title="Customer intelligence" description="What the agent learned from your customer data" />
 
       <MetricStrip
@@ -96,7 +97,7 @@ export default function IntelligencePage() {
       {health && (
         <section className={cn(SURFACE_CLASS, 'mt-6 p-5')} aria-label="Customer health">
           <h2 className={SECTION_LABEL_CLASS}>Customer health</h2>
-          <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-[#F3F4F6]" aria-hidden>
+          <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
             {HEALTH_SEGMENTS.map(({ key, bar }) => (
               <span key={key} className={bar} style={{ width: `${healthTotal ? (health[key] / healthTotal) * 100 : 0}%` }} />
             ))}
@@ -106,9 +107,9 @@ export default function IntelligencePage() {
               <div key={key} className="flex items-start gap-2.5">
                 <span className={cn('mt-1.5 size-2 rounded-full', bar)} aria-hidden />
                 <div>
-                  <dt className="text-xs text-[#6B7280]">{label}</dt>
-                  <dd className="text-xl font-semibold tabular-nums text-[#1A1A1A]">{health[key].toLocaleString()}</dd>
-                  <p className="text-xs text-[#6B7280]">{hint}</p>
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dd className="text-xl font-semibold tabular-nums text-foreground">{health[key].toLocaleString()}</dd>
+                  <p className="text-xs text-muted-foreground">{hint}</p>
                 </div>
               </div>
             ))}
@@ -118,15 +119,15 @@ export default function IntelligencePage() {
 
       {data.topCustomers && data.topCustomers.length > 0 && (
         <section className={cn(SURFACE_CLASS, 'mt-6')} aria-label="Top customers">
-          <h2 className={cn(SECTION_LABEL_CLASS, 'border-b border-[#F0F0F2] px-5 py-3')}>Top customers</h2>
-          <ul className="divide-y divide-[#F0F0F2]">
+          <h2 className={cn(SECTION_LABEL_CLASS, 'border-b border-line-soft px-5 py-3')}>Top customers</h2>
+          <ul className="divide-y divide-line-soft">
             {data.topCustomers.map((customer, index) => (
               <li key={customer.name} className="flex items-center justify-between px-5 py-3">
-                <span className="flex items-center gap-3 text-sm font-medium text-[#1A1A1A]">
+                <span className="flex items-center gap-3 text-sm font-medium text-foreground">
                   <Crown className={cn('size-4', index === 0 ? 'text-amber-500' : 'text-[#D1D5DB]')} aria-hidden />
                   {customer.name}
                 </span>
-                <span className="text-sm font-semibold tabular-nums text-[#5B4FFF]">
+                <span className="text-sm font-semibold tabular-nums text-primary">
                   ₹{parseFloat(String(customer.totalSpent)).toLocaleString('en-IN')}
                 </span>
               </li>
@@ -137,8 +138,8 @@ export default function IntelligencePage() {
 
       <section className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#C7D2FE] bg-[#FCFBFF] p-5">
         <div>
-          <h2 className="text-sm font-semibold text-[#1A1A1A]">The agent is ready to act</h2>
-          <p className="mt-0.5 text-sm text-[#6B7280]">It can turn this data into revenue opportunities.</p>
+          <h2 className="text-sm font-semibold text-foreground">The agent is ready to act</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">It can turn this data into revenue opportunities.</p>
         </div>
         <PrimaryAction href="/opportunities">
           Open opportunities <ArrowRight className="size-4" aria-hidden />

@@ -22,7 +22,7 @@ const mono = JetBrains_Mono({
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://growos-ai.vercel.app";
 
-const TITLE = "GrowthOS — an autonomous AI growth agent for retail";
+const TITLE = "GrowthOS: an autonomous AI growth agent for retail";
 const DESCRIPTION =
   "Upload your customer data and GrowthOS finds where revenue is leaking, writes the campaign to recover it, and tracks what converted. You approve the decisions — it does the work.";
 

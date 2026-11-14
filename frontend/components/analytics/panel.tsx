@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { SURFACE_CLASS } from '@/components/ui/surface';
 
 type PanelProps = {
   title: string;
@@ -11,11 +12,11 @@ type PanelProps = {
 
 export function Panel({ title, description, action, children, className }: PanelProps) {
   return (
-    <section className={cn('flex min-w-0 flex-col rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]', className)}>
+    <section className={cn(SURFACE_CLASS, 'flex min-w-0 flex-col p-5', className)}>
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold tracking-tight text-[#111827]">{title}</h2>
-          {description && <p className="mt-0.5 text-[13px] text-[#6B7280]">{description}</p>}
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
+          {description && <p className="mt-0.5 text-label text-muted-foreground">{description}</p>}
         </div>
         {action}
       </header>
@@ -26,7 +27,7 @@ export function Panel({ title, description, action, children, className }: Panel
 
 export function ChartEmpty({ message, height }: { message: string; height: number }) {
   return (
-    <div className="flex items-center justify-center rounded-xl bg-[#F9FAFB] text-sm text-[#6B7280]" style={{ height }}>
+    <div className="flex items-center justify-center rounded-xl bg-surface-inset text-sm text-muted-foreground" style={{ height }}>
       {message}
     </div>
   );

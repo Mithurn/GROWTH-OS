@@ -23,9 +23,9 @@ export function FunnelPanel({ funnel }: { funnel: FunnelCounts }) {
           return (
             <li key={s.key} className="grid h-16 grid-cols-[76px_1fr_64px] items-center gap-3 sm:grid-cols-[96px_1fr_84px]">
               <div>
-                <p className="text-[13px] font-medium text-[#6B7280]">{s.label}</p>
-                <p className="text-lg font-semibold leading-tight tabular-nums text-[#111827]">
-                  {formatNumber(s.count)} <span className="text-xs font-medium text-[#6B7280]">{formatPct(pct(s.count, top))}</span>
+                <p className="text-label font-medium text-muted-foreground">{s.label}</p>
+                <p className="text-lg font-semibold leading-tight tabular-nums text-foreground">
+                  {formatNumber(s.count)} <span className="text-xs font-medium text-muted-foreground">{formatPct(pct(s.count, top))}</span>
                 </p>
               </div>
               <div className="relative h-full">
@@ -33,9 +33,9 @@ export function FunnelPanel({ funnel }: { funnel: FunnelCounts }) {
                   <polygon points={points} fill={s.color} />
                 </svg>
               </div>
-              <div className="text-xs tabular-nums text-[#6B7280]">
+              <div className="text-xs tabular-nums text-muted-foreground">
                 {next && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#F3F4F6] px-2 py-0.5 font-medium text-[#374151]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-body">
                     <ArrowDown className="size-3" aria-hidden />
                     <span className="sr-only">Drop-off </span>
                     {formatPct(lost)}

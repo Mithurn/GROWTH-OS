@@ -43,19 +43,19 @@ export function AudienceMixPanel({ personas }: { personas: PersonaSlice[] }) {
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-semibold tabular-nums text-[#111827]">{formatNumber(total)}</span>
-              <span className="text-xs text-[#6B7280]">customers</span>
+              <span className="text-2xl font-semibold tabular-nums text-foreground">{formatNumber(total)}</span>
+              <span className="text-xs text-muted-foreground">customers</span>
             </div>
           </div>
           <ul className="w-full min-w-0 flex-1 space-y-2.5">
             {personas.map((p, i) => (
               <li key={p.persona_name} className="flex items-center justify-between gap-3 text-sm">
-                <span className="flex min-w-0 items-center gap-2 text-[#374151]">
+                <span className="flex min-w-0 items-center gap-2 text-body">
                   <span className="size-2.5 shrink-0 rounded-sm" style={{ background: colorOf(i) }} aria-hidden />
                   <span className="truncate">{p.persona_name}</span>
                 </span>
-                <span className="shrink-0 tabular-nums text-[#6B7280]">
-                  <span className="font-medium text-[#111827]">{p.percentage}%</span> · {formatNumber(p.count)}
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  <span className="font-medium text-foreground">{p.percentage}%</span> · {formatNumber(p.count)}
                 </span>
               </li>
             ))}
@@ -85,7 +85,7 @@ export function SegmentRevenuePanel({ personas, revenue }: { personas: PersonaSl
                 type="category"
                 dataKey="name"
                 width={BAR_AXIS_WIDTH}
-                tick={{ fill: '#374151', fontSize: CHART_UI.fontSize }}
+                tick={{ fill: 'var(--body)', fontSize: CHART_UI.fontSize }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -93,7 +93,7 @@ export function SegmentRevenuePanel({ personas, revenue }: { personas: PersonaSl
                 {data.map((d, i) => (
                   <Cell key={d.name} fill={colorOf(i)} />
                 ))}
-                <LabelList dataKey="value" position="right" formatter={(v: number) => formatCurrency(v)} fill="#111827" fontSize={CHART_UI.fontSize} fontWeight={600} />
+                <LabelList dataKey="value" position="right" formatter={(v: number) => formatCurrency(v)} fill="var(--foreground)" fontSize={CHART_UI.fontSize} fontWeight={600} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

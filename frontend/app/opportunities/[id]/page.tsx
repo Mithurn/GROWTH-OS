@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Gauge, Gem, Target, Users, Wallet, X } from 'lucide-react';
@@ -64,8 +65,8 @@ function Card({ title, children, className }: { title: string; children: React.R
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-[#6B7280]">{label}</span>
-      <span className="font-medium text-[#1A1A1A]">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
     </div>
   );
 }
@@ -147,8 +148,8 @@ export default function OpportunityDetailPage() {
 
   if (error || !opp) {
     return (
-      <div className="mx-auto w-full max-w-[1100px] px-4 py-8 sm:px-8">
-        <Link href="/opportunities" className="inline-flex items-center gap-1.5 text-sm text-[#6B7280] hover:text-[#4B3FE5]">
+      <div className={PAGE_SHELL_CLASS}>
+        <Link href="/opportunities" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary-hover">
           <ArrowLeft className="size-4" aria-hidden /> Opportunities
         </Link>
         <StatePanel
@@ -174,8 +175,8 @@ export default function OpportunityDetailPage() {
   const recency = opp.audience_definition?.max_days_since_last_order;
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-8 sm:py-8">
-      <Link href="/opportunities" className="inline-flex items-center gap-1.5 text-sm text-[#6B7280] transition-colors hover:text-[#4B3FE5]">
+    <div className={PAGE_SHELL_CLASS}>
+      <Link href="/opportunities" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary-hover">
         <ArrowLeft className="size-4" aria-hidden /> Opportunities
       </Link>
 
@@ -186,7 +187,7 @@ export default function OpportunityDetailPage() {
             <StatusPill tone="live">{isRefining ? 'Agent is refining' : 'Ready for action'}</StatusPill>
             <StatusPill>{channel}</StatusPill>
           </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-3xl">{opp.title}</h1>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">{opp.title}</h1>
         </div>
       </header>
 
@@ -203,13 +204,13 @@ export default function OpportunityDetailPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card title="Agent reasoning">
-            <p className="text-sm leading-relaxed text-[#4B5563]">{opp.ai_summary || opp.description}</p>
-            <ul className="mt-4 space-y-2.5 border-t border-[#F0F0F2] pt-4">
+            <p className="text-sm leading-relaxed text-body">{opp.ai_summary || opp.description}</p>
+            <ul className="mt-4 space-y-2.5 border-t border-line-soft pt-4">
               {reasons.map((signal, i) => {
                 const Icon = SIGNAL_ICONS[i % SIGNAL_ICONS.length];
                 return (
-                  <li key={signal} className="flex items-start gap-2.5 text-sm text-[#4B5563]">
-                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-[#EEF2FF] text-[#5B4FFF]">
+                  <li key={signal} className="flex items-start gap-2.5 text-sm text-body">
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-brand-tint text-primary">
                       <Icon className="size-3" aria-hidden />
                     </span>
                     {signal}
@@ -230,7 +231,7 @@ export default function OpportunityDetailPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedCustomer(customers[0])}
-                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-[#5B4FFF] hover:underline"
+                  className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
                   Inspect a customer <ArrowRight className="size-3" aria-hidden />
                 </button>
@@ -239,16 +240,16 @@ export default function OpportunityDetailPage() {
 
             <Card title="Personas the agent found">
               {personas.length === 0 ? (
-                <p className="text-sm text-[#6B7280]">No personas yet.</p>
+                <p className="text-sm text-muted-foreground">No personas yet.</p>
               ) : (
                 <ul className="space-y-3">
                   {personas.map((p) => (
                     <li key={p.name}>
-                      <p className="flex items-center justify-between text-sm font-medium text-[#1A1A1A]">
+                      <p className="flex items-center justify-between text-sm font-medium text-foreground">
                         {p.name}
-                        {p.count != null && <span className="text-xs text-[#6B7280]">{p.count}</span>}
+                        {p.count != null && <span className="text-xs text-muted-foreground">{p.count}</span>}
                       </p>
-                      <p className="text-xs leading-relaxed text-[#6B7280]">{p.description}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{p.description}</p>
                     </li>
                   ))}
                 </ul>
@@ -258,9 +259,9 @@ export default function OpportunityDetailPage() {
         </div>
 
         <aside className="space-y-6">
-          <section className="rounded-2xl border border-[#C7D2FE] bg-[#FCFBFF] p-5">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#5B4FFF]">Recommended play</p>
-            <h2 className="mt-1 text-lg font-semibold tracking-tight text-[#1A1A1A]">{playName(opp.title)}</h2>
+          <section className="rounded-2xl border border-brand-line bg-surface-inset p-5">
+            <p className="text-xs font-medium text-primary">Recommended play</p>
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{playName(opp.title)}</h2>
             <div className="mt-4 space-y-2.5">
               <Row label="Channel" value={channel} />
               <Row label="Offer" value={`₹${voucher} voucher`} />
@@ -276,12 +277,12 @@ export default function OpportunityDetailPage() {
             <Card title="Alternatives considered">
               <ul className="space-y-3">
                 {opp.alternative_strategies.map((alt) => (
-                  <li key={alt.title} className="rounded-xl bg-[#F9FAFB] p-3">
-                    <p className="flex items-center justify-between text-xs font-medium text-[#1A1A1A]">
+                  <li key={alt.title} className="rounded-xl bg-surface-inset p-3">
+                    <p className="flex items-center justify-between text-xs font-medium text-foreground">
                       {alt.title}
-                      <span className="text-[#6B7280]">{alt.conversion_rate}%</span>
+                      <span className="text-muted-foreground">{alt.conversion_rate}%</span>
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-[#6B7280]">{alt.note}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{alt.note}</p>
                   </li>
                 ))}
               </ul>
@@ -290,7 +291,7 @@ export default function OpportunityDetailPage() {
         </aside>
       </div>
 
-      <div className="sticky bottom-4 z-30 mt-8 rounded-2xl bg-[#FAFAFA]/90 p-1 backdrop-blur">
+      <div className="sticky bottom-4 z-30 mt-8 rounded-2xl bg-surface-inset/90 p-1 backdrop-blur">
         <AgentPromptInput
           value={modifier}
           onChange={setModifier}
@@ -331,33 +332,33 @@ function CustomerDrawer({ customer, onClose }: { customer: Customer; onClose: ()
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={customer.customer_name}>
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-white p-6 shadow-xl">
+      <aside className="absolute right-0 top-0 h-full w-full max-w-sm overflow-y-auto bg-white p-6 shadow-pop">
         <div className="flex items-start justify-between">
           <div>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#5B4FFF]">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-brand-tint text-primary">
               <Gem className="size-5" aria-hidden />
             </span>
-            <h2 className="mt-3 text-lg font-semibold text-[#1A1A1A]">{customer.customer_name}</h2>
-            <p className="text-sm font-medium text-[#5B4FFF]">{customer.persona_name ?? 'Premium customer'}</p>
+            <h2 className="mt-3 text-lg font-semibold text-foreground">{customer.customer_name}</h2>
+            <p className="text-sm font-medium text-primary">{customer.persona_name ?? 'Premium customer'}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex size-8 items-center justify-center rounded-lg text-[#6B7280] hover:bg-[#F3F4F6]"
+            className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
           >
             <X className="size-4" aria-hidden />
           </button>
         </div>
         <dl className="mt-6 grid grid-cols-2 gap-3">
           {stats.map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-[#E5E7EB] p-3">
-              <dt className="text-[13px] font-medium text-[#6B7280]">{label}</dt>
-              <dd className="mt-1 text-base font-semibold tabular-nums text-[#1A1A1A]">{value}</dd>
+            <div key={label} className="rounded-xl border border-border p-3">
+              <dt className="text-label font-medium text-muted-foreground">{label}</dt>
+              <dd className="mt-1 text-base font-semibold tabular-nums text-foreground">{value}</dd>
             </div>
           ))}
         </dl>
-        <div className="mt-4 space-y-3 rounded-xl border border-[#E5E7EB] p-4">
+        <div className="mt-4 space-y-3 rounded-xl border border-border p-4">
           {traits.map(({ label, value }) => (
             <Row key={label} label={label} value={value} />
           ))}

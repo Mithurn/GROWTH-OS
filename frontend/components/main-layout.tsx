@@ -16,7 +16,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-[#FAFAFA]">
+    <div className="flex h-dvh flex-col bg-surface-inset">
       <DemoBanner />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <AppSidebar />

@@ -119,14 +119,14 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-[#06060a] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-ink-deep flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="flex justify-center mb-8">
           <Logo height={LOGIN_LOGO_HEIGHT} />
         </div>
 
-        <div className="bg-[#0b0b12] rounded-2xl border border-white/10 p-8">
+        <div className="bg-ink-raised rounded-2xl border border-white/10 p-8">
           {/* Heading */}
           <div className="mb-6">
             <h1 className="text-xl font-bold text-white">
@@ -162,7 +162,7 @@ function LoginForm() {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 required
-                className="rounded-xl border-white/10 focus:border-[#5B4FFF] focus:ring-[#5B4FFF]/20 h-10 bg-black/30 text-white placeholder:text-zinc-600"
+                className="rounded-xl border-white/10 focus:border-primary focus:ring-primary/20 h-10 bg-black/30 text-white placeholder:text-zinc-600"
               />
             </div>
 
@@ -178,7 +178,7 @@ function LoginForm() {
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="rounded-xl border-white/10 focus:border-[#5B4FFF] focus:ring-[#5B4FFF]/20 h-10 bg-black/30 text-white placeholder:text-zinc-600"
+                className="rounded-xl border-white/10 focus:border-primary focus:ring-primary/20 h-10 bg-black/30 text-white placeholder:text-zinc-600"
               />
             </div>
 
@@ -193,7 +193,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-10 bg-[#5B4FFF] hover:bg-[#4B3FE5] text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full h-10 bg-primary hover:bg-primary-hover text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading && (
                 <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -207,7 +207,7 @@ function LoginForm() {
             {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
             <button
               onClick={() => { setMode(m => m === 'signin' ? 'signup' : 'signin'); setError(null); setSuccess(null); }}
-              className="text-[#5B4FFF] font-medium hover:underline"
+              className="text-primary font-medium hover:underline"
             >
               {mode === 'signin' ? 'Sign up' : 'Sign in'}
             </button>
@@ -224,7 +224,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#06060a]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-ink-deep" />}>
       <LoginForm />
     </Suspense>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BorderBeam } from 'border-beam';
@@ -34,10 +35,10 @@ function ListSkeleton() {
     <div className="grid animate-pulse gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
       <div className="space-y-2">
         {Array.from({ length: SKELETON_ROWS }, (_, i) => (
-          <div key={i} className="h-[76px] rounded-xl bg-[#F3F4F6]" />
+          <div key={i} className="h-[76px] rounded-xl bg-muted" />
         ))}
       </div>
-      <div className="h-[520px] rounded-2xl bg-[#F3F4F6]" />
+      <div className="h-[520px] rounded-2xl bg-muted" />
     </div>
   );
 }
@@ -50,13 +51,13 @@ function CampaignRow({ c, selected, onSelect }: { c: CampaignWithMetrics; select
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        'w-full rounded-xl border bg-white p-3.5 text-left transition-all',
-        selected ? 'border-[#5B4FFF]/40 shadow-[0_6px_20px_-10px_rgba(91,79,255,0.45)] ring-1 ring-[#5B4FFF]/15' : 'border-[#E5E7EB] hover:border-[#5B4FFF]/30 hover:shadow-sm',
+        'w-full rounded-xl border bg-white p-3.5 text-left transition-colors',
+        selected ? 'border-primary/40 ring-1 ring-primary/15' : 'border-border hover:border-primary/30',
       )}
     >
-      <span className="line-clamp-2 text-sm font-medium leading-snug text-[#1A1A1A]">{c.name}</span>
+      <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">{c.name}</span>
       <span className="mt-2.5 flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-[#6B7280]">
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Icon className="size-3.5 shrink-0" aria-hidden />
           <span className="truncate">
             {c.channel} · {formatNumber(c.audience_size ?? 0)}
@@ -106,8 +107,8 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
         <section className="p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-xl font-semibold tracking-tight text-[#1A1A1A]">{c.name}</h2>
-              <p className="mt-1 text-sm leading-relaxed text-[#6B7280]">{c.objective}</p>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">{c.name}</h2>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{c.objective}</p>
             </div>
             <StatusBadge status={c.status} />
           </div>
@@ -137,14 +138,14 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
           ) : (
             <div className="mt-7">
               <PanelLabel className="mb-2">Message</PanelLabel>
-              <p className="whitespace-pre-wrap rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4 text-[15px] leading-relaxed text-[#1A1A1A]">{c.message_content}</p>
+              <p className="whitespace-pre-wrap rounded-xl border border-border bg-surface-inset p-4 text-sm leading-relaxed text-foreground">{c.message_content}</p>
             </div>
           )}
 
           {c.reasoning && (
-            <div className="mt-6 flex items-start gap-3 rounded-xl bg-[#F5F6FF] p-4">
+            <div className="mt-6 flex items-start gap-3 rounded-xl bg-brand-wash p-4">
               <AgentAvatar size="md" className="shrink-0" />
-              <p className="text-sm leading-relaxed text-[#4B5563]">{c.reasoning}</p>
+              <p className="text-sm leading-relaxed text-body">{c.reasoning}</p>
             </div>
           )}
 
@@ -159,7 +160,7 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
             </p>
           )}
 
-          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[#F0F1F4] pt-5">
+          <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-line-soft pt-5">
             {canDecide && (
               <>
                 <PrimaryAction disabled={busy} onClick={() => void act(() => approveCampaign(c.id))}>
@@ -180,7 +181,7 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
                 View analytics <ArrowRight className="size-4" aria-hidden />
               </PrimaryAction>
             )}
-            {!canDecide && !live && c.status !== 'Approved' && <p className="text-sm text-[#9CA3AF]">No actions available for this campaign.</p>}
+            {!canDecide && !live && c.status !== 'Approved' && <p className="text-sm text-muted-foreground">No actions available for this campaign.</p>}
           </div>
         </section>
       </Panel>
@@ -257,7 +258,7 @@ function CampaignList() {
         <MetricStrip items={stats} />
         <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           <div className="space-y-3">
-            <div role="tablist" aria-label="Filter campaigns" className="flex gap-1 overflow-x-auto rounded-xl bg-[#F3F4F6] p-1">
+            <div role="tablist" aria-label="Filter campaigns" className="flex gap-1 overflow-x-auto rounded-xl bg-muted p-1">
               {FILTERS.map(({ key, label }) => (
                 <button
                   key={key}
@@ -266,8 +267,8 @@ function CampaignList() {
                   aria-selected={filter === key}
                   onClick={() => setFilter(key)}
                   className={cn(
-                    'shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
-                    filter === key ? 'bg-white text-[#1A1A1A] shadow-sm ring-1 ring-black/5' : 'text-[#6B7280] hover:text-[#1A1A1A]',
+                    'shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                    filter === key ? 'bg-white text-foreground shadow-sm ring-1 ring-black/5' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {label}
@@ -278,13 +279,13 @@ function CampaignList() {
               {visible.map((c) => (
                 <CampaignRow key={c.id} c={c} selected={c.id === selected?.id} onSelect={() => setSelectedId(c.id)} />
               ))}
-              {visible.length === 0 && <p className="rounded-xl border border-dashed border-[#E5E7EB] px-3 py-8 text-center text-sm text-[#9CA3AF]">Nothing in this view.</p>}
+              {visible.length === 0 && <p className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">Nothing in this view.</p>}
             </div>
           </div>
           {selected ? (
             <CampaignDetail key={selected.id} c={selected} onChanged={() => void load()} />
           ) : (
-            <Panel className="px-6 py-16 text-center text-sm text-[#9CA3AF]">Pick a campaign to see its message and results.</Panel>
+            <Panel className="px-6 py-16 text-center text-sm text-muted-foreground">Pick a campaign to see its message and results.</Panel>
           )}
         </div>
       </div>
@@ -292,11 +293,11 @@ function CampaignList() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+    <div className={PAGE_SHELL_CLASS}>
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-3xl">Campaigns</h1>
-          <p className="mt-1 text-sm text-[#6B7280]">Drafted by the agent, sent only after you approve.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Campaigns</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Drafted by the agent, sent only after you approve.</p>
         </div>
         <Link href="/opportunities" className={statePanelSecondaryClass}>
           <Target className="size-4" aria-hidden /> Opportunities

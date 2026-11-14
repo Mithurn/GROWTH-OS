@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { PAGE_SHELL_CLASS } from '@/components/ui/surface';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Check, Sparkles, Target, TrendingUp, Users } from 'lucide-react';
@@ -144,8 +145,8 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
   const wordCount = draft.message_content.trim().split(/\s+/).length;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
-      <Link href={backHref} className="mb-5 inline-flex items-center gap-1.5 text-sm text-[#6B7280] transition-colors hover:text-[#5B4FFF]">
+    <div className={PAGE_SHELL_CLASS}>
+      <Link href={backHref} className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary">
         <ArrowLeft className="size-4" aria-hidden /> Opportunities
       </Link>
 
@@ -158,11 +159,11 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
                 <PanelLabel>Agent draft v{revision}</PanelLabel>
                 <StatusBadge status={approved ? 'Approved' : 'PendingApproval'} />
               </div>
-              <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-[28px]">{draft.name}</h1>
-              <p className="mt-0.5 text-sm text-[#6B7280]">From {opportunity.title}</p>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#4B5563]">{draft.reasoning ?? draft.objective}</p>
+              <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">{draft.name}</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground">From {opportunity.title}</p>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-body">{draft.reasoning ?? draft.objective}</p>
               {draft.expected_outcome && (
-                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#EEF2FF] px-2.5 py-1 text-xs font-medium text-[#4B3FE5]">
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-2.5 py-1 text-xs font-medium text-primary-hover">
                   <Sparkles className="size-3" aria-hidden /> Expected: {draft.expected_outcome}
                 </p>
               )}
@@ -175,8 +176,8 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
             <Stat icon={TrendingUp} label="Projected">
               {formatCurrency(opportunity.potential_revenue)}
             </Stat>
-            <div className="col-span-2 rounded-xl bg-[#F9FAFB] px-3.5 py-3">
-              <dt className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">
+            <div className="col-span-2 rounded-xl bg-surface-inset px-3.5 py-3">
+              <dt className="mb-2 flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
                 <Target className="size-3.5" aria-hidden /> Confidence
               </dt>
               <dd>
@@ -185,10 +186,10 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
             </div>
           </dl>
         </div>
-        <ul className="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-[#F0F1F4] px-5 py-3 text-xs text-[#6B7280] sm:px-6">
+        <ul className="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-line-soft px-5 py-3 text-xs text-muted-foreground sm:px-6">
           {DRAFT_STEPS.map(({ label }) => (
             <li key={label} className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-emerald-500" aria-hidden />
+              <Check className="size-3.5 text-success" aria-hidden />
               {label}
             </li>
           ))}
@@ -200,13 +201,13 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
           <Panel>
             <section className="p-5 sm:p-6">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-base font-semibold tracking-tight text-[#1A1A1A]">Message</h2>
+                <h2 className="text-base font-semibold tracking-tight text-foreground">Message</h2>
                 <ChannelTabs value={channel} disabled={refining || approved} onChange={(ch) => void rewrite('', ch)} />
               </div>
 
-              <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#1A1A1A]">{draft.message_content}</p>
-                <p className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#E5E7EB] pt-2.5 text-xs text-[#6B7280]">
+              <div className="rounded-xl border border-border bg-surface-inset p-4">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{draft.message_content}</p>
+                <p className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5 text-xs text-muted-foreground">
                   <span>{CHANNEL_META[channel].blurb}</span>
                   <span className="tabular-nums">
                     {wordCount} words · {draft.message_content.length} characters
@@ -224,8 +225,8 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
               </dl>
 
               {!approved && (
-                <div className="mt-6 border-t border-[#F0F1F4] pt-5">
-                  <p className="mb-3 text-sm font-medium text-[#1A1A1A]">Ask the agent to change it</p>
+                <div className="mt-6 border-t border-line-soft pt-5">
+                  <p className="mb-3 text-sm font-medium text-foreground">Ask the agent to change it</p>
                   <RefineBar busy={refining} onRefine={rewrite} />
                 </div>
               )}
