@@ -16,8 +16,8 @@ export function ClosingCta() {
       <h2 className="mt-8 text-4xl font-semibold tracking-tight text-white sm:text-5xl">See the agent work before you bring your data</h2>
       <p className="mt-4 max-w-xl text-zinc-400">
         {live
-          ? 'The backend is awake. Create an account and point the agent at your own customers.'
-          : 'The live backend sleeps to save costs, and so does the agent. The demo is always awake: walk the whole flow, from opportunity to campaign to results.'}
+          ? 'Create an account and point the agent at your own customers.'
+          : 'Walk the whole flow on sample data, from opportunity to campaign to results. Nothing is sent.'}
       </p>
       <div className="mt-10">
         <HeroActions />

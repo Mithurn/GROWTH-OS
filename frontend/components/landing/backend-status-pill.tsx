@@ -3,9 +3,9 @@
 import { useBackendStatus } from '@/lib/use-backend-status';
 
 const COPY = {
-  checking: { dot: 'bg-zinc-500', text: 'Checking the live backend' },
-  online: { dot: 'bg-emerald-400', text: 'Live backend is running. Sign in with your own data.' },
-  offline: { dot: 'bg-amber-400', text: 'Live backend is asleep to save costs. The demo is always on.' },
+  checking: { dot: 'bg-zinc-500', text: 'Checking workspace status' },
+  online: { dot: 'bg-emerald-400', text: 'Live workspace is ready. Sign in with your own data.' },
+  offline: { dot: 'bg-amber-400', text: 'Explore the full product on sample data. No sign-up needed.' },
 } as const;
 
 export function BackendStatusPill() {

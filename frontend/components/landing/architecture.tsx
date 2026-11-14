@@ -1,22 +1,22 @@
 import { Reveal } from './reveal';
-import { ARCHITECTURE, BOUNDARY, STACK } from './config';
+import { ARCHITECTURE, BOUNDARY } from './config';
 
 export function Architecture() {
   return (
     <section id="architecture" className="mx-auto max-w-6xl scroll-mt-20 px-6 pb-28">
       <Reveal>
-        <p className="text-sm font-medium text-indigo-300">Under the hood</p>
+        <p className="text-sm font-medium text-indigo-300">Trust and control</p>
         <h2 className="mt-3 max-w-2xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-          Code decides. The model only writes.
+          You stay in control. The agent does the work.
         </h2>
-        <p className="mt-4 max-w-2xl text-zinc-400">The numbers are arithmetic in TypeScript. The model only touches language.</p>
+        <p className="mt-4 max-w-2xl text-zinc-400">Every number comes from your own data. The AI only writes the words.</p>
       </Reveal>
 
       <Reveal className="mt-12">
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b12]">
           <div className="grid grid-cols-2 border-b border-white/10 text-xs font-medium uppercase tracking-wider">
-            <div className="p-4 text-indigo-300">Code decides</div>
-            <div className="border-l border-white/10 p-4 text-zinc-500">Model writes</div>
+            <div className="p-4 text-indigo-300">Calculated from your data</div>
+            <div className="border-l border-white/10 p-4 text-zinc-500">Written by the agent</div>
           </div>
           {BOUNDARY.map((row) => (
             <div key={row.code} className="grid grid-cols-2 border-b border-white/[0.06] text-sm last:border-b-0">
@@ -36,13 +36,6 @@ export function Architecture() {
         ))}
       </dl>
 
-      <ul className="mt-14 flex flex-wrap gap-2">
-        {STACK.map((tech) => (
-          <li key={tech} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 font-(family-name:--font-jetbrains) text-xs text-zinc-400">
-            {tech}
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

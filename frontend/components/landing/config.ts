@@ -6,7 +6,7 @@ export const AUTHOR_URL = 'https://github.com/Mithurn';
 export const NAV_LINKS = [
   { href: '#workflow', label: 'Workflow' },
   { href: '#product', label: 'Product' },
-  { href: '#architecture', label: 'Architecture' },
+  { href: '#architecture', label: 'Trust' },
 ] as const;
 
 export const STAGES = [
@@ -97,19 +97,17 @@ export const BENTO = [
 ] as const;
 
 export const BOUNDARY = [
-  { code: 'RFM scoring and recency windows', model: 'Persona names and descriptions' },
-  { code: 'Opportunity detection rules', model: 'Why an opportunity matters, in prose' },
-  { code: 'Audience sizing and revenue estimates', model: 'Campaign copy and variants' },
-  { code: 'Delivery state machine and ordering', model: 'Natural-language refinement' },
+  { code: 'Customer scoring and recency', model: 'Persona names and descriptions' },
+  { code: 'Which opportunities are worth chasing', model: 'Why an opportunity matters, in plain words' },
+  { code: 'Audience size and revenue estimates', model: 'Campaign copy and variants' },
+  { code: 'Delivery tracking and results', model: 'Rewrites when you ask for a change' },
 ] as const;
 
 export const ARCHITECTURE = [
-  { title: 'Typed boundaries', body: 'Prompt, JSON parse, Zod validation, database write, with a retry and a usable fallback. No free-form model output reaches the database or the UI.' },
-  { title: 'Tenant isolation', body: 'Every transaction carries the authenticated tenant into PostgreSQL. Row-level security and ownership checks both reject cross-tenant access.' },
-  { title: 'Durable delivery', body: 'Approved campaigns leave through retried recipient jobs. Signed, idempotent webhooks keep the funnel honest.' },
-  { title: 'Built to sleep', body: 'The site and demo live on Vercel. The API, worker and channel service run on AWS only when switched on, and the app falls back to the demo.' },
+  { title: 'Nothing sends without you', body: 'The agent drafts, you approve. Every campaign waits for your decision before a single message leaves.' },
+  { title: 'Consent comes first', body: 'Only customers who opted in on that channel are ever messaged. Anyone without consent or contact details is left out.' },
+  { title: 'Your data stays yours', body: 'Every workspace is isolated at the database level. One customer account can never see another.' },
+  { title: 'Results you can trust', body: 'Messages are retried until they land, and duplicate or out-of-order delivery reports never inflate your numbers.' },
 ] as const;
-
-export const STACK = ['Next.js 16', 'React 19', 'TypeScript', 'Tailwind 4', 'Express 5', 'PostgreSQL', 'Prisma 7', 'Supabase Auth', 'BullMQ', 'Redis', 'Zod', 'OpenRouter'] as const;
 
 export const REVEAL = { threshold: 0.15, rootMargin: '0px 0px -8% 0px' } as const;
