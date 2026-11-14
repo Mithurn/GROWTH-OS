@@ -63,14 +63,14 @@ export function AgentPromptInput({
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
-            className="min-w-0 flex-1 bg-transparent text-sm text-[#1A1A1A] outline-none placeholder:text-[#9CA3AF]"
+            className="min-w-0 flex-1 bg-transparent text-sm text-[#1A1A1A] outline-none placeholder:text-[#6B7280]"
           />
           <button
             type="button"
             onClick={submit}
             disabled={!canSubmit}
             aria-label={busy ? 'Agent is working' : 'Send goal to agent'}
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#5B4FFF] text-white transition-colors hover:bg-[#4B3FE5] disabled:bg-[#E5E7EB] disabled:text-[#9CA3AF]"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#5B4FFF] text-white transition-colors hover:bg-[#4B3FE5] disabled:bg-[#E5E7EB] disabled:text-[#6B7280]"
           >
             {busy ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
           </button>

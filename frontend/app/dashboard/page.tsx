@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Check, Loader2, Sparkles, Users, Wallet } from 'lucide-react';
 import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
 import { AiOrb } from '@/components/ui/ai-orb';
+import { MetricTile } from '@/components/agent/metric-tile';
 import { AgentAvatar } from '@/components/agent/agent-avatar';
 import { AgentActivityFeed, type AgentActivityItem } from '@/components/agent/agent-activity-feed';
 import { toActivityEntry } from '@/components/agent/activity-model';
@@ -44,20 +45,6 @@ interface ActivityRecord {
   createdAt: string;
 }
 
-function Metric({ icon: Icon, label, value }: { icon: typeof Wallet; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
-      <span className="flex size-8 items-center justify-center rounded-lg bg-[#EEF2FF] text-[#5B4FFF]">
-        <Icon className="size-4" aria-hidden />
-      </span>
-      <div>
-        <p className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</p>
-        <p className="font-mono text-lg font-semibold tabular-nums text-[#1A1A1A]">{value}</p>
-      </div>
-    </div>
-  );
-}
-
 function RunPanel({ steps, current }: { steps: string[]; current: number }) {
   return (
     <div role="status" aria-live="polite" className="rounded-2xl border border-[#C7D2FE] bg-white p-6">
@@ -65,7 +52,7 @@ function RunPanel({ steps, current }: { steps: string[]; current: number }) {
         <AiOrb size="md" state="searching" />
         <div>
           <p className="ai-shimmer text-base font-semibold">The agent is working on your goal</p>
-          <p className="text-xs text-[#9CA3AF]">
+          <p className="text-xs text-[#6B7280]">
             Step {current + 1} of {steps.length}
           </p>
         </div>
@@ -109,15 +96,15 @@ function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: bool
 
       <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <div>
-          <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Recoverable</dt>
-          <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</dd>
+          <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Recoverable</dt>
+          <dd className="mt-1 text-2xl font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</dd>
         </div>
         <div>
-          <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Audience</dt>
-          <dd className="mt-1 font-mono text-2xl font-semibold tabular-nums text-[#1A1A1A]">{opp.audience_size.toLocaleString()}</dd>
+          <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Audience</dt>
+          <dd className="mt-1 text-2xl font-semibold tabular-nums text-[#1A1A1A]">{opp.audience_size.toLocaleString()}</dd>
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <dt className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Agent confidence</dt>
+          <dt className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Agent confidence</dt>
           <dd className="mt-3">
             <ConfidenceMeter value={opp.confidence_score} />
           </dd>
@@ -125,7 +112,7 @@ function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: bool
       </dl>
 
       <div className="mt-6 border-t border-[#F0F0F2] pt-5">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">Why the agent flagged this</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-[#6B7280]">Why the agent flagged this</p>
         <ul className="mt-3 flex flex-wrap gap-2">
           {parseTriggerReasons(opp).map((reason) => (
             <li key={reason} className="flex items-center gap-1.5 rounded-lg bg-[#F8F7FF] px-2.5 py-1 text-xs text-[#4B5563]">
@@ -141,7 +128,7 @@ function FeaturedCard({ opp, pinned, onUnpin }: { opp: Opportunity; pinned: bool
           Review and draft campaign
           <ArrowRight className="size-4" aria-hidden />
         </PrimaryAction>
-        <span className="text-xs text-[#9CA3AF]">
+        <span className="text-xs text-[#6B7280]">
           via {parseChannel(opp.recommended_action)} to {opp.supporting_customer_segment || 'all customers'}
         </span>
       </div>
@@ -162,8 +149,8 @@ function OpportunityTile({ opp }: { opp: Opportunity }) {
       </div>
       <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#6B7280]">{opp.description}</p>
       <div className="mt-4 flex items-end justify-between">
-        <p className="font-mono text-lg font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</p>
-        <p className="text-xs text-[#9CA3AF]">{opp.audience_size.toLocaleString()} customers</p>
+        <p className="text-lg font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opportunityRevenue(opp))}</p>
+        <p className="text-xs text-[#6B7280]">{opp.audience_size.toLocaleString()} customers</p>
       </div>
       <ConfidenceMeter value={opp.confidence_score} className="mt-3" />
     </Link>
@@ -293,7 +280,7 @@ export default function HomePage() {
       <header className="flex items-center gap-4">
         <AgentAvatar state={processing ? 'working' : 'idle'} size="lg" />
         <div className="min-w-0">
-          <p className="text-xs font-medium text-[#9CA3AF]">{greetingFor(new Date().getHours())}</p>
+          <p className="text-xs font-medium text-[#6B7280]">{greetingFor(new Date().getHours())}</p>
           <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A] sm:text-3xl">Give the agent a goal</h1>
           <p className="mt-0.5 text-sm text-[#6B7280]">
             {loading
@@ -345,9 +332,9 @@ export default function HomePage() {
       {hasContent && (
         <>
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <Metric icon={Wallet} label="Revenue the agent found" value={formatCurrency(totalRevenue)} />
-            <Metric icon={Users} label="Customers in scope" value={totalAudience.toLocaleString()} />
-            <Metric icon={Check} label="Open opportunities" value={String(opportunities.length)} />
+            <MetricTile icon={Wallet} accent label="Revenue the agent found" value={formatCurrency(totalRevenue)} hint={`Recoverable across ${opportunities.length} opportunities`} />
+            <MetricTile icon={Users} label="Customers in scope" value={totalAudience.toLocaleString()} hint="Reachable by the campaigns it proposes" />
+            <MetricTile icon={Check} label="Open opportunities" value={String(opportunities.length)} hint={`${formatCurrency(Math.round(totalRevenue / opportunities.length))} average per opportunity`} />
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-12">

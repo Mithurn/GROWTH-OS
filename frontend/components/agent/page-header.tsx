@@ -17,7 +17,7 @@ export function PageHeader({ title, description, state = 'idle', actions }: Page
         <h1 className="text-2xl font-semibold tracking-tight text-[#1A1A1A]">{title}</h1>
         {description && <p className="text-sm text-[#6B7280]">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </header>
   );
 }

@@ -12,13 +12,17 @@ type MetricTileProps = {
 
 export function MetricTile({ label, value, icon: Icon, hint, accent = false, className }: MetricTileProps) {
   return (
-    <div className={cn('rounded-xl border border-[#E5E7EB] bg-white px-4 py-3', className)}>
+    <div className={cn('flex flex-col rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)]', className)}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-[#9CA3AF]">{label}</p>
-        {Icon && <Icon className="size-3.5 text-[#9CA3AF]" aria-hidden />}
+        <p className="text-[13px] font-medium text-[#6B7280]">{label}</p>
+        {Icon && (
+          <span className={cn('flex size-7 items-center justify-center rounded-lg', accent ? 'bg-[#EEF2FF] text-[#5B4FFF]' : 'bg-[#F4F4F5] text-[#6B7280]')}>
+            <Icon className="size-3.5" aria-hidden />
+          </span>
+        )}
       </div>
-      <p className={cn('mt-1 font-mono text-xl font-semibold tabular-nums', accent ? 'text-[#5B4FFF]' : 'text-[#1A1A1A]')}>{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-[#9CA3AF]">{hint}</p>}
+      <p className={cn('mt-3 text-[28px] font-semibold leading-none tracking-tight tabular-nums', accent ? 'text-[#5B4FFF]' : 'text-[#111827]')}>{value}</p>
+      {hint && <p className="mt-2 text-[13px] leading-snug text-[#6B7280]">{hint}</p>}
     </div>
   );
 }

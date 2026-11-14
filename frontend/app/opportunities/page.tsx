@@ -69,30 +69,30 @@ function OpportunityRow({ opp, campaignStatus }: { opp: Opportunity; campaignSta
     <li>
       <Link
         href={`/opportunities/${opp.opportunity_id}`}
-        className="group grid items-center gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-[#FCFBFF] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:grid-cols-[minmax(0,1fr)_88px_88px_150px_auto]"
+        className="group grid items-center gap-x-6 gap-y-3 px-4 py-4 transition-colors hover:bg-[#FCFBFF] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:grid-cols-[minmax(0,1fr)_88px_88px_150px_200px]"
       >
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-[#1A1A1A] group-hover:text-[#4B3FE5]">{opp.title}</p>
           <p className="mt-0.5 line-clamp-1 text-xs text-[#6B7280]">{opp.trigger_reason || opp.description}</p>
         </div>
         <div className="hidden sm:block lg:text-right">
-          <p className="font-mono text-sm font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</p>
-          <p className="text-[11px] text-[#9CA3AF]">recoverable</p>
+          <p className="text-sm font-semibold tabular-nums text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</p>
+          <p className="text-xs text-[#6B7280]">recoverable</p>
         </div>
         <div className="hidden lg:block lg:text-right">
-          <p className="font-mono text-sm font-semibold tabular-nums text-[#1A1A1A]">{audience.toLocaleString()}</p>
-          <p className="text-[11px] text-[#9CA3AF]">customers</p>
+          <p className="text-sm font-semibold tabular-nums text-[#1A1A1A]">{audience.toLocaleString()}</p>
+          <p className="text-xs text-[#6B7280]">customers</p>
         </div>
         <ConfidenceMeter value={opp.confidence_score} className="hidden w-[150px] lg:flex" />
         <div className="flex items-center justify-between gap-3 sm:justify-end">
           <div className="flex flex-col items-start gap-1 sm:items-end">
             <StatusPill tone={stage.tone}>{stage.label}</StatusPill>
-            <span className="text-[11px] font-medium text-[#6B7280]">{stage.action(channel)}</span>
+            <span className="text-xs font-medium text-[#6B7280]">{stage.action(channel)}</span>
           </div>
           <ChevronRight className="size-4 text-[#D1D5DB] transition-transform group-hover:translate-x-0.5 group-hover:text-[#5B4FFF]" aria-hidden />
         </div>
         <div className="flex items-center gap-4 text-xs text-[#6B7280] sm:hidden">
-          <span className="font-mono font-semibold text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</span>
+          <span className="font-semibold text-[#5B4FFF]">{formatCurrency(opp.potential_revenue)}</span>
           <span>{audience.toLocaleString()} customers</span>
           <span>{Math.round(opp.confidence_score)}% confident</span>
         </div>
@@ -256,7 +256,7 @@ export default function OpportunitiesPage() {
                 setStatus(null);
               }}
             >
-              All <span className="font-mono text-[#9CA3AF]">{all.length}</span>
+              All <span className="text-[#6B7280]">{all.length}</span>
             </Chip>
             {CATEGORY_FILTERS.map(({ key, icon: Icon }) => (
               <Chip
@@ -265,13 +265,13 @@ export default function OpportunitiesPage() {
                 onClick={() => setCategory(category === key ? null : key)}
               >
                 <Icon className="size-3" aria-hidden />
-                {key} <span className="font-mono text-[#9CA3AF]">{categoryCounts[key] ?? 0}</span>
+                {key} <span className="text-[#6B7280]">{categoryCounts[key] ?? 0}</span>
               </Chip>
             ))}
             <span className="mx-1 hidden h-4 w-px bg-[#E5E7EB] sm:block" aria-hidden />
             {STATUS_FILTERS.map(({ key, label }) => (
               <Chip key={key} active={status === key} onClick={() => setStatus(status === key ? null : key)}>
-                {label} <span className="font-mono text-[#9CA3AF]">{statusCounts[key]}</span>
+                {label} <span className="text-[#6B7280]">{statusCounts[key]}</span>
               </Chip>
             ))}
           </div>
