@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BotAvatar } from 'bot-avatars';
+import { AGENT_AVATAR_LOOK } from '@/components/agent/agent-config';
 import { Check, Loader2, Save } from 'lucide-react';
 import {
   getCompany,
@@ -262,7 +263,7 @@ export default function SettingsPage() {
             <ConsoleCard glow>
               <section className="p-5 sm:p-6">
                 <div className="flex items-center gap-3">
-                  <BotAvatar shading="plastic" type="pill" state="default" size={32} interactive={false} />
+                  <BotAvatar {...AGENT_AVATAR_LOOK} state="default" size={32} interactive={false} />
                   <div>
                     <h2 className="text-sm font-semibold tracking-tight text-white">Autonomy</h2>
                     <p className="text-xs text-zinc-500">How much the agent does before asking you</p>
