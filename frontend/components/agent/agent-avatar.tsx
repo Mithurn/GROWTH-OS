@@ -12,6 +12,7 @@ type AgentAvatarProps = {
 export function AgentAvatar({ state = 'idle', size = 'md', className }: AgentAvatarProps) {
   return (
     <BotAvatar
+      shading="plastic"
       type={AGENT_AVATAR_TYPE}
       state={AGENT_STATES[state].avatar}
       size={AGENT_AVATAR_SIZES[size]}

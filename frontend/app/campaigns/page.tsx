@@ -130,7 +130,7 @@ function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: (
 
           {c.reasoning && (
             <div className="mt-6 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
-              <BotAvatar type="pill" state="default" size={32} interactive={false} />
+              <BotAvatar shading="plastic" type="pill" state="default" size={32} interactive={false} />
               <p className="text-sm leading-relaxed text-zinc-400">{c.reasoning}</p>
             </div>
           )}

@@ -24,7 +24,7 @@ export function AgentWorking({ active, title = 'Drafting your campaign', classNa
       <BorderBeam size="md" theme="dark" colorVariant="ocean" strength={0.9}>
         <ConsoleCard glow>
           <div className="flex items-center gap-4 border-b border-white/10 px-5 py-5">
-            <BotAvatar type="pill" state={active ? 'working' : 'default'} size={56} interactive={false} />
+            <BotAvatar shading="plastic" type="pill" state={active ? 'working' : 'default'} size={64} interactive={false} />
             <div className="min-w-0 flex-1">
               <p className="text-base font-semibold tracking-tight text-white">{title}</p>
               <p className="mt-0.5 truncate text-sm text-zinc-400">{step.label}</p>

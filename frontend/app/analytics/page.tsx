@@ -183,7 +183,7 @@ function AnalyticsView({ data }: { data: AnalyticsData }) {
           <ConsoleCard className={next?.title ? 'lg:col-span-7' : 'lg:col-span-12'}>
             <section className="p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-3">
-                <BotAvatar type="pill" state="default" size={40} interactive={false} />
+                <BotAvatar shading="plastic" type="pill" state="default" size={32} interactive={false} />
                 <div>
                   <h2 className="text-sm font-semibold tracking-tight text-white">What the agent learned</h2>
                   <p className="text-xs text-zinc-500">From this campaign&apos;s results</p>

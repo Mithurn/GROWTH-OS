@@ -191,7 +191,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 lg:pt-8">
       <header className="mb-6 flex items-center gap-4">
-        <BotAvatar type="pill" state="default" size={48} interactive={false} />
+        <BotAvatar shading="plastic" type="pill" state="default" size={64} interactive={false} />
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">Decide what the agent works on and how much it does alone.</p>
@@ -265,7 +265,7 @@ export default function SettingsPage() {
             <ConsoleCard glow>
               <section className="p-5 sm:p-6">
                 <div className="flex items-center gap-3">
-                  <BotAvatar type="pill" state="default" size={40} interactive={false} />
+                  <BotAvatar shading="plastic" type="pill" state="default" size={32} interactive={false} />
                   <div>
                     <h2 className="text-sm font-semibold tracking-tight text-white">Autonomy</h2>
                     <p className="text-xs text-zinc-500">How much the agent does before asking you</p>

@@ -73,8 +73,8 @@ export default function LandingPage() {
         <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-y-8 px-6 py-10 lg:grid-cols-4">
           {STATS.map((stat) => (
             <div key={stat.label} className="flex flex-col px-2 lg:px-6 lg:first:pl-0">
-              <dt className="order-2 mt-1 text-sm text-zinc-500">{stat.label}</dt>
-              <dd className="text-4xl font-semibold tracking-tight text-white">{stat.value}</dd>
+              <dt className="order-2 mt-2 max-w-[16rem] text-sm leading-snug text-zinc-400">{stat.label}</dt>
+              <dd className="bg-gradient-to-b from-white to-[#A89DFF] bg-clip-text text-5xl font-semibold tracking-tight text-transparent lg:text-6xl">{stat.value}</dd>
             </div>
           ))}
         </dl>

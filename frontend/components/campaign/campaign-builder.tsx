@@ -155,7 +155,7 @@ export function CampaignBuilder({ opportunityId, backHref = '/opportunities' }: 
           <ConsoleCard glow>
             <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_280px]">
               <div className="flex gap-4">
-                <BotAvatar type="pill" state="default" size={52} interactive={false} className="shrink-0" />
+                <BotAvatar shading="plastic" type="pill" state="default" size={64} interactive={false} className="shrink-0" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <ConsoleLabel>Agent draft v{revision}</ConsoleLabel>
