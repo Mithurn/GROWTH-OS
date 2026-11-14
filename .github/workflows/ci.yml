@@ -1,8 +1,7 @@
 name: CI
 
-# Gate for production. Render is set to autoDeployTrigger: checksPass, so a failed
-# job here blocks backend and channel deploys. The Deploy workflow runs after this
-# succeeds on main and triggers Vercel/Render hooks when those secrets are set.
+# Gate for main. Branch protection requires these jobs, and the Deploy workflow runs
+# after this succeeds on main.
 
 on:
   push:
@@ -52,13 +51,13 @@ jobs:
       # Same reasoning as the frontend's build step below. tsc resolves modules through
       # this package's tsconfig `paths`; esbuild resolves them through the tsconfig
       # nearest each imported file. A `packages/*` file importing an npm dependency can
-      # therefore typecheck clean and still fail the real Render build, which is exactly
-      # what `packages/contracts` did. Runs the same script render.yaml runs.
+      # therefore typecheck clean and still fail the real production build, which is exactly
+      # what `packages/contracts` did.
       - name: Build
         run: npm run build
 
       # Same reasoning as the API build above, for the worker entrypoint that
-      # runs BullMQ jobs as its own Render service (docs/V3_PLAN.md Phase 0.2).
+      # runs BullMQ jobs as its own process (docs/V3_PLAN.md Phase 0.2).
       - name: Build worker
         run: npm run build:worker
 
@@ -119,7 +118,7 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
-      NEXT_PUBLIC_API_URL: https://placeholder.onrender.com/api
+      NEXT_PUBLIC_API_URL: https://placeholder.example.com/api
 
     steps:
       - uses: actions/checkout@v7

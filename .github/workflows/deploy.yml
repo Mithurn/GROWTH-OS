@@ -6,21 +6,48 @@ on:
     types: [completed]
     branches: [main]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
-      BACKEND_HEALTH_URL: https://xeno-crm-backend-n6d8.onrender.com/health
+      AWS_REGION: ap-south-1
     steps:
-      - name: Trigger Render deploy
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
-      - name: Wait for backend health
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-south-1
+
+      - name: Check the server is running
+        id: server
         run: |
-          for attempt in $(seq 1 30); do
-            if curl -fsS "$BACKEND_HEALTH_URL"; then exit 0; fi
-            sleep 20
+          . deploy/aws/lib.sh
+          id=$(iid)
+          if [ -n "$id" ] && [ "$(state "$id")" = running ]; then
+            echo "running=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The server is asleep, skipping the deploy. It picks up the latest code on the next deploy/aws/push.sh."
+          fi
+
+      - name: Ship to the AWS server
+        if: steps.server.outputs.running == 'true'
+        run: deploy/aws/push.sh
+
+      - name: Wait for backend health
+        if: steps.server.outputs.running == 'true'
+        run: |
+          . deploy/aws/lib.sh
+          sleep 60
+          for _ in $(seq 1 40); do
+            if curl -fsS -m 10 "$(site)/api/health"; then exit 0; fi
+            sleep 15
           done
           exit 1

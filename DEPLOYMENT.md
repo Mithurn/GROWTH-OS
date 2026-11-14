@@ -8,7 +8,7 @@ GrowthOS is split so the part people look at is free and always up, and the part
 | API, BullMQ workers, channel service, Redis | One AWS EC2 server, `ap-south-1` (`t3.medium`) | about $0.05/hour while running, the 20 GB disk only while stopped | no, sleeps |
 | Database and auth | Supabase | free tier | yes |
 
-Live API: https://growthos.duckdns.org (health at `/api/health`)
+Live API: https://growthos-crm.duckdns.org (health at `/api/health`)
 
 ## What visitors see
 
@@ -36,7 +36,7 @@ Per-project scripts, run from the repo root:
 
 ## How it works
 
-- The server is found by the EC2 tag `Name=GrowthOS`. The public IP changes on every start, so a boot service repoints the DuckDNS name `growthos` (token from SSM `/recoveryops/duckdns`) and starts `deploy/docker-compose.prod.yml`: Caddy for HTTPS, the API with workers in-process, the channel service, and Redis.
+- The server is found by the EC2 tag `Name=GrowthOS`. The public IP changes on every start, so a boot service repoints the DuckDNS name `growthos-crm` (token from SSM `/recoveryops/duckdns`) and starts `deploy/docker-compose.prod.yml`: Caddy for HTTPS, the API with workers in-process, the channel service, and Redis.
 - Server environment lives in the encrypted SSM parameter `/growthos/env`. `up.sh` fills it from `backend/.env`; `deploy/.env.prod.example` lists every key. Change a value in SSM, then run `push.sh`.
 - Code ships as a tarball through the private S3 bucket `growthos-deploy-<account id>`. `release.sh` runs on the server, writes `.env` from SSM and rebuilds the images.
 - Only ports 80 and 443 are open. There is no SSH; use SSM Run Command.
@@ -46,8 +46,18 @@ Per-project scripts, run from the repo root:
 1. `cp backend/.env.example backend/.env` and fill it in. Set `FRONTEND_URL` to the Vercel URL and `DIRECT_URL` to the Supabase direct connection.
 2. `deploy/aws/up.sh`. It prints the instance ID.
 3. Add that instance ID to the `stop-at-50-usd` budget action, as described in the aws-workspace playbook.
-4. In Vercel, set `NEXT_PUBLIC_API_URL=https://growthos.duckdns.org/api` (plus the Supabase keys already there) and redeploy.
+4. In Vercel, set `NEXT_PUBLIC_API_URL=https://growthos-crm.duckdns.org/api` (plus the Supabase keys already there) and redeploy.
 5. `awsstop`, `awsstart`, confirm it comes back healthy on its new IP, then `awsstop`.
+
+## CI and deploys
+
+- `ci.yml` (typecheck, lint, tests, integration tests, builds, Docker images, audit, secret scan) must pass before anything merges to `main`.
+- After CI passes on `main`, `deploy.yml` checks the server. If it is running it ships the code with `push.sh` and waits for `/api/health`. If it is asleep it skips and never starts it.
+- GitHub reaches AWS through the OIDC role `growthos-github-deploy` (repository variable `AWS_DEPLOY_ROLE_ARN`), created once by `deploy/aws/ci-role.sh`. No AWS keys are stored in GitHub.
+
+## Messaging
+
+Without `RESEND_API_KEY` or the Twilio keys, the channel service uses the simulator: nothing is sent to anyone, delivery events are faked and logged. Leave those keys unset on this server unless you want real sends.
 
 ## Database migrations
 
@@ -64,11 +74,7 @@ cd backend && DIRECT_URL=... npx prisma migrate deploy
 | OpenRouter out of credit, bad key, sustained 429 or 5xx, and low balance (checked every 30 minutes) | `backend/src/lib/llm-watch.ts` | `ALERT_WEBHOOK_URL`, optional `OPENROUTER_MIN_CREDITS_USD` (default 2) |
 | Crashes, failed boot, repeated 500s | `backend/src/lib/alerts.ts` | `ALERT_WEBHOOK_URL`, optionally `SENTRY_DSN` |
 | Landing page or demo down, or backend awake but unhealthy | `.github/workflows/health-monitor.yml` opens and closes an issue labelled `bug-bot` | nothing |
-| Weekly dependency updates, grouped per service | `.github/dependabot.yml` | nothing |
+| Weekly dependency updates, grouped per service. Minor and patch PRs auto-merge once CI is green, major ones wait for a person | `.github/dependabot.yml`, `.github/workflows/dependabot-automerge.yml` | nothing |
 | Stale issues and pull requests, merged branches | `.github/workflows/housekeeping.yml` | nothing |
 
 `ALERT_WEBHOOK_URL` is a Slack or Discord incoming webhook. Each alert repeats at most once an hour. An asleep backend is never reported as an incident.
-
-## Moving off Render
-
-`render.yaml`, `.github/workflows/keep-alive.yml` and `deploy.yml` still target Render. Once Vercel points at AWS, delete those three and remove the Render services, or the keep-alive pings keep a second backend running.
