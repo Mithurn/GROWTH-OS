@@ -15,6 +15,7 @@ import {
   type BillingStatus,
 } from '@/lib/api';
 import { ConsoleCard } from '@/components/campaign/console';
+import { PageHeader } from '@/components/agent/page-header';
 import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
 import { cn } from '@/lib/utils';
 
@@ -168,7 +169,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl animate-pulse space-y-4 px-4 py-8 sm:px-6" aria-hidden>
+      <div className="mx-auto w-full max-w-[1100px] animate-pulse space-y-4 px-4 py-8 sm:px-8" aria-hidden>
         <div className="h-16 rounded-2xl bg-muted" />
         <div className="h-10 w-2/3 rounded-lg bg-muted" />
         <div className="h-64 rounded-2xl bg-muted" />
@@ -189,14 +190,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 lg:pt-8">
-      <header className="mb-6 flex items-center gap-4">
-        <BotAvatar shading="plastic" type="pill" state="default" size={64} interactive={false} />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Decide what the agent works on and how much it does alone.</p>
-        </div>
-      </header>
+    <div className="mx-auto w-full max-w-[1100px] px-4 pt-6 sm:px-8 sm:pt-8">
+      <div className="mb-6">
+        <PageHeader title="Settings" description="Decide what the agent works on and how much it does alone." />
+      </div>
 
       <div role="tablist" aria-label="Settings sections" className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map(({ id, label }) => (
@@ -323,8 +320,8 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/90 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <div className="sticky bottom-0 z-30 -mx-4 mt-8 border-t border-border bg-card/90 backdrop-blur sm:-mx-8">
+        <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3 px-4 py-3 sm:px-8">
           <p role="status" className={cn('min-w-0 truncate text-sm', error ? 'text-red-600' : success ? 'text-emerald-600' : 'text-muted-foreground')}>
             {error ?? (success ? 'Saved' : dirty ? 'You have unsaved changes' : 'All changes saved')}
           </p>
