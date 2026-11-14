@@ -2,23 +2,22 @@
 
 import { useId, useState } from 'react';
 import { BorderBeam } from 'border-beam';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
 import { ACTIVITY_KINDS, ACTIVITY_TIMING } from './activity-config';
-import { groupByDay, isLive, type ActivityEntry } from './activity-model';
+import { groupByDay, type ActivityEntry } from './activity-model';
 
 type ActivityTimelineProps = {
   entries: readonly ActivityEntry[];
-  busy?: boolean;
+  onOpen?: (entry: ActivityEntry) => void;
   freshIds?: ReadonlySet<string>;
   className?: string;
 };
 
-export function ActivityTimeline({ entries, busy = false, freshIds, className }: ActivityTimelineProps) {
+export function ActivityTimeline({ entries, onOpen, freshIds, className }: ActivityTimelineProps) {
   const groups = groupByDay(entries);
-  const newestId = entries[0]?.id;
 
   return (
     <div className={cn('space-y-5', className)}>
@@ -34,7 +33,7 @@ export function ActivityTimeline({ entries, busy = false, freshIds, className }:
                 key={entry.id}
                 entry={entry}
                 last={i === group.entries.length - 1}
-                live={isLive(entry, entry.id === newestId, busy)}
+                onOpen={onOpen}
                 fresh={freshIds?.has(entry.id) ?? false}
               />
             ))}
@@ -45,31 +44,40 @@ export function ActivityTimeline({ entries, busy = false, freshIds, className }:
   );
 }
 
-type TimelineRowProps = { entry: ActivityEntry; last: boolean; live: boolean; fresh: boolean };
+type TimelineRowProps = { entry: ActivityEntry; last: boolean; onOpen?: (entry: ActivityEntry) => void; fresh: boolean };
 
-function TimelineRow({ entry, last, live, fresh }: TimelineRowProps) {
+function TimelineRow({ entry, last, onOpen, fresh }: TimelineRowProps) {
+  const live = Boolean(entry.live);
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const reduced = useReducedMotion();
   const meta = ACTIVITY_KINDS[entry.kind];
   const Icon = entry.icon;
-  const expandable = Boolean(entry.reasoning || entry.metrics);
+  const openable = Boolean(onOpen && (entry.runId || entry.live));
+  const expandable = !openable && Boolean(entry.reasoning || entry.metrics);
+  const interactive = openable || expandable;
 
   const card = (
-    <div className="rounded-xl border border-[#EEEEF2] bg-white transition-colors hover:border-[#DCDFF5]">
+    <div className="rounded-xl border border-[#EEEEF2] bg-white transition-colors hover:border-[#DCDFF5] hover:shadow-sm">
       <button
         type="button"
-        disabled={!expandable}
+        disabled={!interactive}
         aria-expanded={expandable ? open : undefined}
         aria-controls={expandable ? panelId : undefined}
-        onClick={() => setOpen((v) => !v)}
+        aria-haspopup={openable ? 'dialog' : undefined}
+        onClick={() => (openable ? onOpen?.(entry) : setOpen((v) => !v))}
         className="flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:outline-[#5B4FFF] disabled:cursor-default"
       >
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wider">
             <span className={cn('flex items-center gap-1.5', meta.text)}>
               {entry.label}
-              {live && <span className="rounded-full bg-[#EEF2FF] px-1.5 py-px text-[10px] normal-case tracking-normal text-[#4B3FE5]">live</span>}
+              {live && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#EEF2FF] px-1.5 py-px text-[10px] normal-case tracking-normal text-[#4B3FE5]">
+                  <span className="size-1.5 rounded-full bg-[#5B4FFF] motion-safe:animate-pulse" aria-hidden />
+                  Running
+                </span>
+              )}
             </span>
             <time dateTime={entry.createdAt} title={new Date(entry.createdAt).toLocaleString()} className="font-mono normal-case tracking-normal text-[#9CA3AF]">
               {timeAgo(entry.createdAt)}
@@ -77,6 +85,7 @@ function TimelineRow({ entry, last, live, fresh }: TimelineRowProps) {
           </span>
           <span className="mt-0.5 block text-[13px] leading-snug text-[#1A1A1A]">{entry.description}</span>
         </span>
+        {openable && <ChevronRight className="mt-4 size-3.5 shrink-0 text-[#9CA3AF]" aria-hidden />}
         {expandable && (
           <ChevronDown className={cn('mt-4 size-3.5 shrink-0 text-[#9CA3AF] transition-transform motion-reduce:transition-none', open && 'rotate-180')} aria-hidden />
         )}

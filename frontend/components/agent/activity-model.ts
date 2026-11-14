@@ -5,7 +5,6 @@ import {
   ACTIVITY_DAY_LABELS,
   ACTIVITY_FALLBACK,
   ACTIVITY_KINDS,
-  ACTIVITY_TIMING,
   type ActivityFilter,
   type ActivityKind,
   type ActivityMetrics,
@@ -21,6 +20,8 @@ export type ActivityEntry = {
   reasoning?: string;
   metrics?: ActivityMetrics;
   live?: boolean;
+  runId?: string;
+  agentId?: string;
 };
 
 export type RawActivity = {
@@ -28,7 +29,8 @@ export type RawActivity = {
   actionType: string;
   description: string;
   createdAt: string;
-  details?: { reasoning?: unknown; metrics?: unknown } | null;
+  agentId?: string;
+  details?: { reasoning?: unknown; metrics?: unknown; runId?: unknown; status?: unknown } | null;
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -54,6 +56,9 @@ export function toActivityEntry(raw: RawActivity): ActivityEntry {
     icon: action?.icon ?? (action ? meta.icon : ACTIVITY_FALLBACK.icon),
     reasoning: typeof raw.details?.reasoning === 'string' ? raw.details.reasoning : undefined,
     metrics: parseMetrics(raw.details?.metrics),
+    runId: typeof raw.details?.runId === 'string' ? raw.details.runId : undefined,
+    agentId: raw.agentId,
+    live: raw.details?.status === 'running' || undefined,
   };
 }
 
@@ -82,11 +87,6 @@ export function groupByDay(entries: readonly ActivityEntry[], now = new Date()) 
   return groups;
 }
 
-export function isLive(entry: ActivityEntry, isNewest: boolean, busy: boolean) {
-  if (!isNewest) return false;
-  return entry.live ?? (busy || Date.now() - new Date(entry.createdAt).getTime() < ACTIVITY_TIMING.liveWindowMs);
-}
-
 export function useFreshIds(entries: readonly ActivityEntry[], ready: boolean) {
   const seen = useRef<Set<string> | null>(null);
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
@@ -107,12 +107,12 @@ export function useFreshIds(entries: readonly ActivityEntry[], ready: boolean) {
   return fresh;
 }
 
-export function useRotatingText(phrases: readonly string[], intervalMs: number, paused: boolean) {
-  const [index, setIndex] = useState(0);
+export function useNow(intervalMs: number, paused = false) {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (paused) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % phrases.length), intervalMs);
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
     return () => clearInterval(id);
-  }, [phrases.length, intervalMs, paused]);
-  return phrases[index];
+  }, [intervalMs, paused]);
+  return now;
 }

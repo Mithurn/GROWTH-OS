@@ -359,7 +359,7 @@ export default function HomePage() {
               )}
             </div>
             <div className="lg:col-span-4">
-              <AgentActivityFeed items={feed} loading={activityLoading} busy={processing} seeAllHref="/activity" />
+              <AgentActivityFeed items={feed} loading={activityLoading} seeAllHref="/activity" />
             </div>
           </div>
 

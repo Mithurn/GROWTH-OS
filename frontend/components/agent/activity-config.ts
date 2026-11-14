@@ -37,17 +37,11 @@ export const ACTIVITY_FILTERS: readonly { id: ActivityFilter; label: string }[] 
   { id: 'delivery', label: 'Delivery' },
 ];
 
-export const ACTIVITY_STATUS_PHRASES = [
-  'Scoring 1,480 customers...',
-  'Drafting email for 76 VIPs...',
-  'Checking send guardrails...',
-  'Estimating revenue lift...',
-] as const;
-
 export const ACTIVITY_TIMING = {
-  statusRotateMs: 3200,
-  pollMs: 4000,
-  liveWindowMs: 10 * 60_000,
+  pollMs: 2500,
+  heartbeatMs: 1000,
+  runPollMs: 1500,
+  runTickMs: 200,
   beamStrength: 1,
 } as const;
 
@@ -63,6 +57,7 @@ export const RUN_TRACE_NODES: Record<string, string> = {
   reviewer: 'text-emerald-300',
 };
 
-export const RUN_TRACE_STAGGER_MS = 90;
+export const RUN_TRACE_LIVE_STATUS = 'running';
+export const RUN_TRACE_LINK_KEYS = { opportunityId: '/opportunities/', campaignId: '/campaigns' } as const;
 
 export const ACTIVITY_DAY_LABELS = { today: 'Today', yesterday: 'Yesterday' } as const;
