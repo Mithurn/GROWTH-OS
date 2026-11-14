@@ -47,10 +47,10 @@ export const RUN_TIMING = {
 } as const;
 
 export const STATS = [
-  { value: '7', label: 'opportunity types detected by rules' },
-  { value: '3', label: 'message variants drafted per campaign' },
-  { value: '4', label: 'delivery events tracked per send' },
-  { value: '3', label: 'services: web, API and channel' },
+  { value: '~60s', label: 'from uploaded customers to ranked opportunities' },
+  { value: '1 tap', label: 'to approve a draft. Nothing sends without it' },
+  { value: '0', label: 'messages to customers who have not opted in' },
+  { value: '3', label: 'channels: WhatsApp, email and SMS' },
 ] as const;
 
 export const BENTO = [

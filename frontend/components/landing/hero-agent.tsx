@@ -8,7 +8,7 @@ import { CONSOLE, STAGES } from './config';
 import { useAgentRun } from './use-agent-run';
 
 const MONO = 'font-(family-name:--font-jetbrains)';
-const AVATAR_SIZE = 56;
+const AVATAR_SIZE = 64;
 
 export function HeroAgent() {
   const run = useAgentRun();
@@ -43,7 +43,7 @@ export function HeroAgent() {
           <div className="grid md:grid-cols-[15rem_1fr]">
             <aside className="flex items-center gap-4 border-b border-white/[0.07] p-5 md:flex-col md:items-start md:border-b-0 md:border-r">
               <div className="flex items-center gap-3">
-                <BotAvatar type="droid" state={avatarState} size={AVATAR_SIZE} aria-label="GrowthOS agent" />
+                <BotAvatar shading="plastic" type="pill" state={avatarState} size={AVATAR_SIZE} aria-label="GrowthOS agent" />
                 <div>
                   <p className="text-sm font-semibold text-zinc-100">Growth agent</p>
                   <p className="text-xs text-zinc-500">{run.done ? 'Waiting for approval' : run.typing ? 'Ready' : 'Working'}</p>

@@ -2,7 +2,7 @@ export const AGENT_NAME = 'GrowthOS Agent';
 
 export const AGENT_AVATAR_TYPE = 'pill';
 
-export const AGENT_AVATAR_SIZES = { sm: 28, md: 40, lg: 64 } as const;
+export const AGENT_AVATAR_SIZES = { sm: 32, md: 32, lg: 64 } as const;
 
 export const AGENT_STATES = {
   idle: { avatar: 'default', orb: 'breathing', label: 'Watching your customers' },
