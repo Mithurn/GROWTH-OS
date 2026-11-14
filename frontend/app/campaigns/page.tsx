@@ -1,708 +1,296 @@
 'use client';
 
-import { AiLoader } from '@/components/ui/ai-loader';
-import { CAMPAIGN_LOADING_STEPS } from '@/lib/loading-copy';
-import { Suspense, useCallback, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  Check,
-  CheckCircle2,
-  Loader2,
-  Mail,
-  MessageSquare,
-  Rocket,
-  Send,
-  Smartphone,
-  Sparkles,
-  Target,
-  TrendingUp,
-  Users,
-  X,
-  Zap,
-} from 'lucide-react';
-import {
-  generateCampaign,
-  saveCampaign,
-  getCampaigns,
-  approveCampaign,
-  rejectCampaign,
-  getOpportunityDashboard,
-  refineCampaign,
-} from '@/lib/api';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { BotAvatar } from 'bot-avatars';
+import { Check, Mail, Target, X } from 'lucide-react';
+import { approveCampaign, getCampaigns, rejectCampaign } from '@/lib/api';
 import type { CampaignWithMetrics } from '@/lib/types';
-import { PhoneMockup } from '@/components/ui/phone-mockup';
+import { CampaignBuilder } from '@/components/campaign/campaign-builder';
+import { CHANNEL_META, LAUNCH_REQUEST, formatNumber, type Channel } from '@/components/campaign/config';
+import { LiveFunnel } from '@/components/campaign/live-funnel';
+import { MessagePreview } from '@/components/campaign/message-preview';
+import { StatusBadge } from '@/components/campaign/status-badge';
+import { StatePanel, statePanelActionClass, statePanelSecondaryClass } from '@/components/ui/state-panel';
+import { cn } from '@/lib/utils';
 
-// ─── Types ───────────────────────────────────────────────────
-interface CampaignData {
-  id: string;
-  name: string;
-  objective: string;
-  channel: string;
-  offer: string | null;
-  message_angle: string | null;
-  message_content: string;
-  expected_outcome: string | null;
-  reasoning: string | null;
-  status: string;
-  opportunity_id: string;
-  audience_size?: number;
-  communications_sent?: number;
-  communications_delivered?: number;
-  case_status?: string | null;
-  reviewer_report?: unknown;
-  case_evidence?: unknown;
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'PendingApproval', label: 'Awaiting approval' },
+  { key: 'Approved', label: 'Approved' },
+  { key: 'Launched', label: 'Live' },
+] as const;
+
+const SKELETON_ROWS = 4;
+
+function ListSkeleton() {
+  return (
+    <div className="grid animate-pulse gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="space-y-2">
+        {Array.from({ length: SKELETON_ROWS }, (_, i) => (
+          <div key={i} className="h-[72px] rounded-xl bg-muted" />
+        ))}
+      </div>
+      <div className="h-96 rounded-2xl bg-muted" />
+    </div>
+  );
 }
 
-interface Opportunity {
-  opportunity_id: string;
-  title: string;
-  description: string;
-  audience_size: number;
-  potential_revenue: number;
-  confidence_score?: number;
-  predicted_conversion_rate?: number | null;
-  supporting_customer_segment?: string;
+function CampaignRow({ c, selected, onSelect }: { c: CampaignWithMetrics; selected: boolean; onSelect: () => void }) {
+  const Icon = CHANNEL_META[c.channel as Channel]?.icon ?? Target;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        'w-full rounded-xl border bg-card p-3.5 text-left transition-colors',
+        selected ? 'border-primary/50 bg-accent/50 ring-1 ring-primary/20' : 'border-border hover:border-primary/30',
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="line-clamp-2 text-sm font-medium leading-snug">{c.name}</span>
+        <StatusBadge status={c.status} />
+      </div>
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="size-3.5" aria-hidden />
+        {c.channel} · {formatNumber(c.audience_size ?? 0)} customers
+      </p>
+    </button>
+  );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────
-const CHANNELS = ['WhatsApp', 'Email', 'SMS'] as const;
-type Channel = typeof CHANNELS[number];
-
-const CHANNEL_META: Record<Channel, { icon: React.ElementType; color: string; desc: string; stats: string }> = {
-  WhatsApp: {
-    icon: MessageSquare,
-    color: 'text-emerald-600',
-    desc: 'High engagement. Conversational format with rich media support.',
-    stats: '86% open rate',
-  },
-  Email: {
-    icon: Mail,
-    color: 'text-blue-600',
-    desc: 'Ideal for detailed offers. Supports images, links and long copy.',
-    stats: '24% open rate',
-  },
-  SMS: {
-    icon: Smartphone,
-    color: 'text-violet-600',
-    desc: 'Instant delivery. 160 char limit. Best for flash sales.',
-    stats: '98% delivery rate',
-  },
-};
-
-const REFINE_CHIPS = ['Make it more urgent', 'Make it shorter', 'More premium tone'];
-
-const LAUNCH_REQUEST_EMAIL = 'openlogtech@gmail.com';
-const LAUNCH_REQUEST_PHONE = '8056687515';
-const LAUNCH_REQUEST_HREF = `mailto:${LAUNCH_REQUEST_EMAIL}?subject=${encodeURIComponent('GrowthOS launch access')}`;
-
-const formatCurrency = (v: number) => {
-  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}K`;
-  return `₹${Math.round(v)}`;
-};
-
-function statusStyles(status: string) {
-  switch (status) {
-    case 'Approved': return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-    case 'Launched': return 'border-blue-200 bg-blue-50 text-blue-800';
-    case 'Completed': return 'border-stone-200 bg-stone-100 text-stone-700';
-    default: return 'border-amber-200 bg-amber-50 text-amber-800';
-  }
-}
-
-// ─── Main component ──────────────────────────────────────────
-function CampaignsContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const opportunityId = searchParams.get('opportunityId');
-
-  // Builder mode state
-  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
-  const [savedCampaign, setSavedCampaign] = useState<CampaignData | null>(null);
-  const [selectedChannel, setSelectedChannel] = useState<Channel>('WhatsApp');
-  const [currentMessage, setCurrentMessage] = useState('');
-  const [modifier, setModifier] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isRefining, setIsRefining] = useState(false);
-
-  // List mode state
-  const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
-  const [selectedCampaign, setSelectedCampaign] = useState<CampaignData | null>(null);
-
-  // Shared
-  const [loading, setLoading] = useState(true);
+function CampaignDetail({ c, onChanged }: { c: CampaignWithMetrics; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [alreadyLaunchedId, setAlreadyLaunchedId] = useState<string | null>(null);
-  const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const live = c.status === 'Launched' || c.status === 'Completed';
+  const canDecide = c.status === 'PendingApproval' && c.case_status === 'READY_FOR_APPROVAL';
 
-
-  // ── Builder mode: load opportunity + campaign ──
-  const loadBuilderData = useCallback(async () => {
-    if (!opportunityId) return;
-    setLoading(true);
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
     setError(null);
     try {
-      const [dashRes, campaignsRes] = await Promise.all([
-        getOpportunityDashboard(),
-        getCampaigns(),
-      ]);
-
-      const opp = (dashRes.data.opportunityDistribution ?? []).find(
-        (o: Opportunity) => o.opportunity_id === opportunityId,
-      );
-      if (!opp) { setError('Opportunity not found.'); return; }
-      setOpportunity(opp);
-
-      const existing = (campaignsRes.data ?? []).find(
-        (c: CampaignWithMetrics) => c.opportunity_id === opportunityId,
-      );
-
-      if (existing) {
-        if (existing.status === 'Launched') {
-          setAlreadyLaunchedId(existing.id);
-          setLoading(false);
-          setTimeout(() => router.push(`/analytics?campaignId=${existing.id}`), 2500);
-          return;
-        }
-        setSavedCampaign(existing);
-        setCurrentMessage(existing.message_content);
-        setSelectedChannel((existing.channel as Channel) ?? 'WhatsApp');
-      } else {
-        setIsGenerating(true);
-        const genRes = await generateCampaign(opportunityId);
-        const draft = genRes.data.campaign;
-        const saveRes = await saveCampaign(opportunityId, draft);
-        const saved = saveRes.data;
-        setSavedCampaign(saved);
-        setCurrentMessage(saved.message_content);
-        setSelectedChannel((saved.channel as Channel) ?? 'WhatsApp');
-        setIsGenerating(false);
-      }
+      await fn();
+      onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load campaign');
-      setIsGenerating(false);
+      setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
-  }, [opportunityId]);
+  };
 
-  // ── List mode: load campaigns ──
-  const loadCampaigns = useCallback(async () => {
-    if (opportunityId) return;
-    setLoading(true);
+  const reject = () => {
+    const reason = window.prompt('Why are you rejecting this campaign?');
+    if (reason === null) return;
+    void act(() => rejectCampaign(c.id, reason));
+  };
+
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <section className="min-w-0 rounded-2xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold tracking-tight">{c.name}</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">{c.objective}</p>
+          </div>
+          <StatusBadge status={c.status} />
+        </div>
+
+        <dl className="mt-5 grid grid-cols-3 gap-3">
+          {[
+            ['Channel', c.channel],
+            ['Audience', formatNumber(c.audience_size ?? 0)],
+            ['Sent', formatNumber(c.communications_sent ?? 0)],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-xl bg-muted/60 px-3 py-2.5">
+              <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">{k}</dt>
+              <dd className="mt-0.5 text-sm font-semibold">{v}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {live && (
+          <LiveFunnel
+            className="mt-5"
+            heading="Delivery funnel"
+            live={c.status === 'Launched'}
+            counts={{
+              targeted: c.audience_size ?? 0,
+              sent: c.communications_sent ?? 0,
+              delivered: c.communications_delivered ?? 0,
+              read: c.communications_read ?? 0,
+              clicked: c.communications_clicked ?? 0,
+              failed: c.communications_failed ?? 0,
+            }}
+          />
+        )}
+
+        {c.reasoning && (
+          <div className="mt-5 flex items-start gap-3 rounded-xl border border-border bg-accent/40 p-3.5">
+            <BotAvatar type="pill" state="default" size={32} interactive={false} />
+            <p className="text-sm leading-relaxed text-muted-foreground">{c.reasoning}</p>
+          </div>
+        )}
+
+        {c.case_status === 'BLOCKED' && (
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            The reviewer agent blocked this draft. Edit it to start a new review.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {canDecide && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void act(() => approveCampaign(c.id))}
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Check className="size-4" aria-hidden /> Approve
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={reject}
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-border px-5 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                <X className="size-4" aria-hidden /> Reject
+              </button>
+            </>
+          )}
+          {c.status === 'Approved' && (
+            <a
+              href={LAUNCH_REQUEST.href}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              <Mail className="size-4" aria-hidden /> Request launch access
+            </a>
+          )}
+          {live && (
+            <Link
+              href={`/analytics?campaignId=${c.id}`}
+              className="inline-flex h-9 items-center rounded-full border border-border px-5 text-sm font-medium hover:bg-muted"
+            >
+              View analytics
+            </Link>
+          )}
+        </div>
+      </section>
+
+      <MessagePreview channel={c.channel as Channel} message={c.message_content} subject={c.name} offer={c.offer} />
+    </div>
+  );
+}
+
+function CampaignList() {
+  const [campaigns, setCampaigns] = useState<CampaignWithMetrics[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
     try {
       const res = await getCampaigns();
-      const list = res.data ?? [];
-      setCampaigns(list);
-      if (list.length > 0) setSelectedCampaign(list[0]);
+      setCampaigns(res.data ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load campaigns');
-    } finally {
-      setLoading(false);
     }
-  }, [opportunityId]);
+  }, []);
 
   useEffect(() => {
-    if (opportunityId) loadBuilderData();
-    else loadCampaigns();
-  }, [opportunityId, loadBuilderData, loadCampaigns]);
+    void load();
+  }, [load]);
 
-  // ── Handlers ──
-  async function handleChannelChange(ch: Channel) {
-    if (ch === selectedChannel || !savedCampaign || isRefining) return;
-    setSelectedChannel(ch);
-    setIsRefining(true);
-    try {
-      const res = await refineCampaign(savedCampaign.id, '', ch);
-      if (res.data?.message_content) setCurrentMessage(res.data.message_content);
-    } catch (e) {
-      console.error('[channel refine]', e);
-    } finally {
-      setIsRefining(false);
-    }
-  }
+  const visible = useMemo(
+    () => (campaigns ?? []).filter((c) => filter === 'all' || c.status === filter),
+    [campaigns, filter],
+  );
+  const selected = visible.find((c) => c.id === selectedId) ?? visible[0];
 
-  async function handleRefine(text?: string) {
-    const query = (text ?? modifier).trim();
-    if (!query || !savedCampaign || isRefining) return;
-    setIsRefining(true);
-    try {
-      const res = await refineCampaign(savedCampaign.id, query);
-      if (res.data?.message_content) setCurrentMessage(res.data.message_content);
-      setModifier('');
-    } catch (e) {
-      console.error('[refine]', e);
-    } finally {
-      setIsRefining(false);
-    }
-  }
-
-  // ── Render: already launched — redirect to analytics ──
-  if (alreadyLaunchedId) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E1A]">
-        <div className="bg-[#141929] border border-[#1E2545] rounded-2xl p-10 text-center max-w-md w-full mx-6 shadow-2xl">
-          <div className="relative h-20 w-20 mx-auto mb-6">
-            <div className="relative h-20 w-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center">
-              <CheckCircle2 className="h-9 w-9 text-emerald-400" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-extrabold text-white mb-2">Already Launched</h2>
-          <p className="text-[#8B92A5] text-sm mb-6">This opportunity&apos;s campaign has already been launched. Taking you to the analytics...</p>
-          <div className="h-1 w-full bg-[#1E2545] rounded-full overflow-hidden">
-            <div className="h-1 bg-emerald-500 rounded-full animate-[width_2.5s_ease-in-out_forwards]" style={{ width: '100%', transition: 'width 2.5s ease-in-out' }} />
-          </div>
-        </div>
-      </div>
+  let body;
+  if (error) {
+    body = (
+      <StatePanel tone="error" title="We could not load campaigns" message={error}>
+        <button type="button" onClick={() => void load()} className={statePanelActionClass}>
+          Try again
+        </button>
+      </StatePanel>
     );
-  }
-
-  // ── Render: generating ──
-  if (isGenerating || (loading && opportunityId)) {
-    return (
-      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <AiLoader state="composing" title="Drafting your campaign" steps={CAMPAIGN_LOADING_STEPS} />
-      </div>
+  } else if (!campaigns) {
+    body = <ListSkeleton />;
+  } else if (campaigns.length === 0) {
+    body = (
+      <StatePanel tone="empty" title="No campaigns yet" message="Pick an opportunity and the agent will draft the campaign for you.">
+        <Link href="/opportunities" className={statePanelActionClass}>
+          View opportunities
+        </Link>
+      </StatePanel>
     );
-  }
-
-  // ── Render: builder mode error (opportunityId present but something failed) ──
-  if (opportunityId && !savedCampaign && error) {
-    return (
-      <div className="min-h-screen bg-[#FAFAFA] flex flex-col items-center justify-center gap-4 px-6">
-        <div className="bg-white rounded-xl border border-red-200 p-8 max-w-md w-full text-center shadow-sm">
-          <div className="h-10 w-10 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-            <X className="h-5 w-5 text-red-500" />
-          </div>
-          <h2 className="text-base font-bold text-gray-900 mb-1">Campaign generation failed</h2>
-          <p className="text-sm text-red-600 mb-5">{error}</p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => { setError(null); loadBuilderData(); }}
-              className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={() => router.push('/opportunities')}
-              className="px-5 py-2.5 border border-gray-200 text-gray-500 text-sm font-semibold rounded-xl hover:border-gray-300 transition-all"
-            >
-              Back
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render: builder mode ──
-  if (opportunityId && savedCampaign && opportunity) {
-    const conv = opportunity.predicted_conversion_rate ?? Math.round((opportunity.confidence_score ?? 75) * 0.16);
-
-    return (
-      <>
-      <div className="min-h-screen bg-[#FAFAFA] pb-32">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-
-          {/* Top bar */}
-          <div className="flex items-center justify-between mb-6">
-            <button
-              onClick={() => router.push('/opportunities')}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to Opportunities
-            </button>
-            <span className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-indigo-50 text-indigo-600 rounded-full border border-indigo-200">
-              Draft Generated by AI
-            </span>
-          </div>
-
-          {error && (
-            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-          )}
-
-          {/* Title */}
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">{savedCampaign.name}</h1>
-          <p className="text-sm text-gray-400 mb-5">Generated from <span className="text-gray-600 font-medium">{opportunity.title}</span></p>
-
-          {/* Metric chips */}
-          <div className="flex items-center gap-3 flex-wrap mb-8">
-            <MetricChip icon={Users} label={`${opportunity.audience_size} Customers`} />
-            <MetricChip icon={TrendingUp} label={`${formatCurrency(opportunity.potential_revenue)} Projected Rev`} />
-            <MetricChip icon={Zap} label={`${conv}% Conversion`} accent />
-          </div>
-
-          {/* 3-col layout: left strategy (2), right mockup (1) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-            {/* Left: 2/3 */}
-            <div className="lg:col-span-2 space-y-6">
-
-              {/* Why section */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <div className="flex items-center gap-1.5 mb-3">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-500">Why I Created This Campaign</span>
-                </div>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  {savedCampaign.reasoning ?? savedCampaign.objective}
-                </p>
-                {savedCampaign.expected_outcome && (
-                  <p className="mt-2 text-xs text-gray-400 italic">{savedCampaign.expected_outcome}</p>
+  } else {
+    body = (
+      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <div role="tablist" aria-label="Filter campaigns" className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-0.5">
+            {FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  'shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  filter === key ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground',
                 )}
-              </div>
-
-              {/* Channel selector */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-3">
-                  <Target className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Channel Strategy</span>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {CHANNELS.map(ch => {
-                    const meta = CHANNEL_META[ch];
-                    const Icon = meta.icon;
-                    const selected = selectedChannel === ch;
-                    return (
-                      <button
-                        key={ch}
-                        onClick={() => handleChannelChange(ch)}
-                        disabled={isRefining}
-                        className={`rounded-xl border p-4 text-left transition-all duration-200 ${
-                          selected
-                            ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-1 ring-indigo-300'
-                            : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-gray-50'
-                        } disabled:opacity-50`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className={`flex items-center gap-1.5 ${selected ? 'text-indigo-600' : 'text-gray-600'}`}>
-                            <Icon className="h-4 w-4" />
-                            <span className="text-sm font-bold">{ch}</span>
-                          </div>
-                          {selected && <Check className="h-3.5 w-3.5 text-indigo-500" />}
-                        </div>
-                        <p className="text-[10px] text-gray-400 leading-snug mb-1.5">{meta.desc}</p>
-                        <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">{meta.stats}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: 1/3 — Phone mockup */}
-            <div className="lg:col-span-1 flex justify-center pt-2">
-              <div className="sticky top-6">
-                <PhoneMockup
-                  channel={selectedChannel}
-                  message={currentMessage}
-                  brandName="Your Brand"
-                  isRefining={isRefining}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Fixed bottom bar ── */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
-          <div className="max-w-7xl mx-auto px-6 py-3">
-            {/* Chips */}
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
-              {REFINE_CHIPS.map(chip => (
-                <button
-                  key={chip}
-                  onClick={() => handleRefine(chip)}
-                  disabled={isRefining}
-                  className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-full hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-40 transition-all"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-
-            {/* Input + actions */}
-            <div className="flex items-center gap-3">
-              <div className={`flex-1 flex items-center gap-2 rounded-xl border px-4 py-2.5 transition-all ${
-                isRefining ? 'border-indigo-300 bg-indigo-50/40' : 'border-gray-200 bg-white focus-within:border-indigo-400'
-              }`}>
-                {isRefining
-                  ? <Loader2 className="h-3.5 w-3.5 text-indigo-400 animate-spin shrink-0" />
-                  : <Sparkles className="h-3.5 w-3.5 text-gray-300 shrink-0" />}
-                <input
-                  value={modifier}
-                  onChange={e => setModifier(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleRefine()}
-                  disabled={isRefining}
-                  placeholder={isRefining ? 'AI is rewriting your copy…' : 'Tell GrowthOS how you\'d like to improve this campaign…'}
-                  className="flex-1 bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none disabled:cursor-not-allowed"
-                />
-                <button
-                  onClick={() => handleRefine()}
-                  disabled={!modifier.trim() || isRefining}
-                  className="h-7 w-7 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center disabled:opacity-30 shrink-0 transition-all"
-                >
-                  {isRefining
-                    ? <Loader2 className="h-3 w-3 animate-spin" />
-                    : <Send className="h-3 w-3" />}
-                </button>
-              </div>
-
-              <button
-                onClick={() => router.push('/opportunities')}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-500 border border-gray-200 rounded-xl hover:text-red-500 hover:border-red-200 disabled:opacity-40 transition-all shrink-0"
               >
-                <X className="h-4 w-4" /> Discard
+                {label}
               </button>
-
-              <button
-                onClick={() => setShowLaunchModal(true)}
-                disabled={isRefining}
-                className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl disabled:opacity-50 transition-all shrink-0"
-                style={{ boxShadow: '0 4px 14px 0 rgba(99,102,241,0.4)' }}
-              >
-                <Sparkles className="h-4 w-4" /> Approve draft
-              </button>
-            </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {visible.map((c) => (
+              <CampaignRow key={c.id} c={c} selected={c.id === selected?.id} onSelect={() => setSelectedId(c.id)} />
+            ))}
+            {visible.length === 0 && <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing in this view.</p>}
           </div>
         </div>
-      </div>
-
-      {/* ── Launch confirmation ── */}
-      {showLaunchModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-          onClick={() => setShowLaunchModal(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-5">
-              <Rocket className="h-7 w-7 text-indigo-600" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Your campaign is ready</h2>
-            <p className="text-sm font-semibold text-gray-800 mb-4">
-              {savedCampaign?.name ?? 'your campaign'}
-              {savedCampaign?.audience_size ? ` for ${savedCampaign.audience_size.toLocaleString()} customers` : ''}
-            </p>
-            <p className="text-xs text-gray-400 mb-6 leading-relaxed">
-              Launching campaigns is available on request. Email or call us and we will set up your account to send it.
-            </p>
-            <a
-              href={LAUNCH_REQUEST_HREF}
-              className="flex items-center justify-center gap-2 w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors mb-3"
-            >
-              <Mail className="h-4 w-4" /> Request launch access
-            </a>
-            <a
-              href={`tel:${LAUNCH_REQUEST_PHONE}`}
-              className="block w-full py-2.5 mb-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
-            >
-              Or call {LAUNCH_REQUEST_PHONE}
-            </a>
-            <button
-              onClick={() => setShowLaunchModal(false)}
-              className="w-full py-2.5 text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              Keep exploring
-            </button>
-          </div>
-        </div>
-      )}
-      </>
-    );
-  }
-
-  // ── Render: list mode ──
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <AiLoader size="md" title="Loading campaigns" />
+        {selected && <CampaignDetail key={selected.id} c={selected} onChanged={() => void load()} />}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pb-16">
-      <div className="max-w-6xl mx-auto px-6 py-8">
-
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Campaigns</h1>
-            <p className="text-sm text-gray-400 mt-1">All your AI-generated campaigns</p>
-          </div>
-          <button
-            onClick={() => router.push('/opportunities')}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-indigo-600 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" /> Opportunities
-          </button>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Campaigns</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Drafted by the agent, sent only after you approve.</p>
         </div>
-
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
-
-        {campaigns.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center shadow-sm">
-            <Sparkles className="h-10 w-10 text-indigo-300 mx-auto mb-3" />
-            <h2 className="text-lg font-bold text-gray-900 mb-1">No campaigns yet</h2>
-            <p className="text-sm text-gray-400 mb-5">Create your first campaign from an opportunity</p>
-            <button
-              onClick={() => router.push('/opportunities')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all"
-            >
-              <Target className="h-4 w-4" /> View Opportunities
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Campaign list */}
-            <div className="lg:col-span-1 space-y-3">
-              {campaigns.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedCampaign(c)}
-                  className={`w-full rounded-xl border p-4 text-left transition-all ${
-                    selectedCampaign?.id === c.id
-                      ? 'border-indigo-300 bg-indigo-50 shadow-sm'
-                      : 'border-gray-200 bg-white hover:border-indigo-200'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="text-sm font-bold text-gray-900 leading-snug">{c.name}</span>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusStyles(c.status)}`}>
-                      {c.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-400">{c.channel} · {c.audience_size ?? 0} customers</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Campaign detail */}
-            {selectedCampaign && (
-              <div className="lg:col-span-2 space-y-5">
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900">{selectedCampaign.name}</h2>
-                      <p className="text-sm text-gray-400 mt-0.5">{selectedCampaign.objective}</p>
-                    </div>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles(selectedCampaign.status)}`}>
-                      {selectedCampaign.status}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3 mb-5">
-                    <StatCard label="Channel" value={selectedCampaign.channel} />
-                    <StatCard label="Audience" value={`${selectedCampaign.audience_size ?? 0}`} />
-                    <StatCard label="Sent" value={`${selectedCampaign.communications_sent ?? 0}`} />
-                  </div>
-
-                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 mb-4">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Message Content</div>
-                    <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">{selectedCampaign.message_content}</pre>
-                  </div>
-
-                  {selectedCampaign.reasoning && (
-                    <p className="text-xs text-gray-400 italic border-l-2 border-indigo-100 pl-3">{selectedCampaign.reasoning}</p>
-                  )}
-
-                  <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${selectedCampaign.case_status === 'BLOCKED' ? 'border-red-200 bg-red-50 text-red-700' : 'border-indigo-100 bg-indigo-50 text-indigo-700'}`}>
-                    <span className="font-semibold">Campaign case: </span>
-                    {selectedCampaign.case_status === 'READY_FOR_APPROVAL' ? 'Scout, strategist, and reviewer completed. Owner approval is required before sending.' : selectedCampaign.case_status === 'BLOCKED' ? 'Reviewer blocked this campaign. Edit the draft to create a new review.' : 'Review is still running or unavailable.'}
-                  </div>
-                  {Boolean(selectedCampaign.case_evidence) && (
-                    <div className="mt-3 flex gap-2 text-[11px] text-gray-500">
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Scout evidence captured</span>
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Prior campaigns retrieved: {Array.isArray((selectedCampaign.case_evidence as { priorCampaigns?: unknown[] }).priorCampaigns) ? (selectedCampaign.case_evidence as { priorCampaigns: unknown[] }).priorCampaigns.length : 0}</span>
-                      <span className="rounded-full bg-gray-100 px-2.5 py-1">Human approval required</span>
-                    </div>
-                  )}
-
-                  {selectedCampaign.status === 'PendingApproval' && selectedCampaign.case_status === 'READY_FOR_APPROVAL' && (
-                    <div className="flex gap-3 mt-5">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await approveCampaign(selectedCampaign.id);
-                            loadCampaigns();
-                          } catch {}
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all"
-                      >
-                        <Check className="h-4 w-4" /> Approve
-                      </button>
-                      <button
-                        onClick={async () => {
-                          const reason = window.prompt('Why are you rejecting this campaign?') ?? '';
-                          try {
-                            await rejectCampaign(selectedCampaign.id, reason);
-                            setSelectedCampaign(null);
-                            loadCampaigns();
-                          } catch {}
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-sm font-bold rounded-xl transition-all"
-                      >
-                        <X className="h-4 w-4" /> Reject
-                      </button>
-                    </div>
-                  )}
-                  {selectedCampaign.status === 'Approved' && (
-                    <div className="flex gap-3 mt-5">
-                      <a
-                        href={LAUNCH_REQUEST_HREF}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-all"
-                      >
-                        <Mail className="h-4 w-4" /> Request launch access
-                      </a>
-                    </div>
-                  )}
-                  {selectedCampaign.status === 'Launched' && (
-                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> Campaign is live!
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        <Link href="/opportunities" className={statePanelSecondaryClass}>
+          <Target className="size-4" aria-hidden /> Opportunities
+        </Link>
+      </header>
+      {body}
     </div>
   );
 }
 
-function MetricChip({ icon: Icon, label, accent }: { icon: React.ElementType; label: string; accent?: boolean }) {
-  return (
-    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium shadow-sm ${
-      accent ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-700'
-    }`}>
-      <Icon className={`h-4 w-4 ${accent ? 'text-indigo-500' : 'text-gray-400'}`} />
-      {label}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</div>
-      <div className="text-sm font-bold text-gray-900">{value}</div>
-    </div>
-  );
+function CampaignsContent() {
+  const opportunityId = useSearchParams().get('opportunityId');
+  return opportunityId ? <CampaignBuilder opportunityId={opportunityId} /> : <CampaignList />;
 }
 
 export default function CampaignsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-      </div>
-    }>
+    <Suspense fallback={null}>
       <CampaignsContent />
     </Suspense>
   );
