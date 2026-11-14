@@ -61,7 +61,7 @@ export const BENTO = [
     body: 'Who they are, how many, and what recovering them is worth. Ask for a goal in plain language and the agent builds one on demand.',
     shot: '/shots/opportunity-v2.jpg',
     alt: 'Opportunity detail showing audience intelligence, key signals and the recommended campaign',
-    span: 'lg:col-span-4',
+    span: 'lg:col-span-3',
     beam: true,
   },
   {
@@ -71,7 +71,7 @@ export const BENTO = [
     body: 'Preview it as the customer will see it, then steer with a sentence: shorter, more urgent, more premium.',
     shot: '/shots/campaign-v2.jpg',
     alt: 'Campaign builder with a WhatsApp preview and refinement controls',
-    span: 'lg:col-span-2',
+    span: 'lg:col-span-3',
     beam: false,
   },
   {
@@ -81,7 +81,7 @@ export const BENTO = [
     body: 'Sent, delivered, read and clicked. Duplicate and out-of-order events cannot push a number backward.',
     shot: '/shots/analytics-v2.jpg',
     alt: 'Campaign analytics with conversion flow, audience mix and channel performance',
-    span: 'lg:col-span-2',
+    span: 'lg:col-span-3',
     beam: false,
   },
   {
@@ -91,7 +91,7 @@ export const BENTO = [
     body: 'A model names the clusters that actually exist, with the spend, recency and category behaviour behind each.',
     shot: '/shots/personas-v2.jpg',
     alt: 'Customer personas with spend, orders and favourite category',
-    span: 'lg:col-span-4',
+    span: 'lg:col-span-3',
     beam: false,
   },
 ] as const;

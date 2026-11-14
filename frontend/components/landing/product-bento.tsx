@@ -21,7 +21,7 @@ export function ProductBento() {
               <p className="text-xs font-medium text-indigo-300">{tile.eyebrow}</p>
               <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">{tile.title}</h3>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-400">{tile.body}</p>
-              <div className="mt-6 flex-1 [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+              <div className="mt-6 aspect-[5/4] overflow-hidden [mask-image:linear-gradient(to_bottom,black_75%,transparent)]">
                 <BrowserFrame src={tile.shot} alt={tile.alt} />
               </div>
             </article>
