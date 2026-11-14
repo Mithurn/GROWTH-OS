@@ -1,30 +1,26 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { NavHeader } from './nav-header';
+import { AppSidebar } from './app-sidebar';
 import { DemoBanner } from './demo-banner';
+
+const STANDALONE_PREFIXES = ['/onboarding', '/login', '/demo', '/auth'];
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-
-  // The landing page and the auth/onboarding flows carry their own chrome — the app
-  // nav would be misleading there, since the visitor may not be signed in at all.
-  const isStandalone =
-    pathname === '/' ||
-    pathname.startsWith('/onboarding') ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/demo') ||
-    pathname.startsWith('/auth');
+  const isStandalone = pathname === '/' || STANDALONE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
   if (isStandalone) {
     return <>{children}</>;
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex flex-col">
+    <div className="flex min-h-screen flex-col bg-[#FAFAFA]">
       <DemoBanner />
-      <NavHeader />
-      <main className="flex-1 flex flex-col">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
+        <AppSidebar />
+        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      </div>
     </div>
   );
 }

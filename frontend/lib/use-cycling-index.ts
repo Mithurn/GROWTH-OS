@@ -2,6 +2,18 @@ import { useEffect, useState } from 'react';
 
 export const DEFAULT_CYCLE_INTERVAL_MS = 2600;
 
+export function useLoopingIndex(length: number, intervalMs = DEFAULT_CYCLE_INTERVAL_MS): number {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (length < 2) return;
+    const id = setInterval(() => setIndex((i) => (i + 1) % length), intervalMs);
+    return () => clearInterval(id);
+  }, [length, intervalMs]);
+
+  return index;
+}
+
 export function useCyclingIndex(length: number, intervalMs = DEFAULT_CYCLE_INTERVAL_MS): number {
   const [index, setIndex] = useState(0);
 
