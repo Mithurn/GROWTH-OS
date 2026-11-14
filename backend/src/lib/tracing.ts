@@ -47,7 +47,7 @@ export class GrowthRootSampler implements Sampler {
 }
 
 /**
- * Manual spans, not auto-instrumentation. `render.yaml`'s build bundles the
+ * Manual spans, not auto-instrumentation. The production build bundles the
  * whole backend into one file with esbuild; OTel's auto-instrumentation
  * packages work by monkey-patching `require()` calls before a module is
  * first loaded, which cannot see anything esbuild has already inlined —

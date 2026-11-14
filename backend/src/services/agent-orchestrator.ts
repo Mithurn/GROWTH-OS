@@ -27,8 +27,8 @@ export class AgentOrchestrator {
   /**
    * Run agents on an in-process interval.
    *
-   * Only useful where the process is guaranteed to stay up. On Render's free tier the
-   * instance sleeps after 15 minutes idle and the interval dies with it, so production
+   * Only useful where the process is guaranteed to stay up. On a host that sleeps when idle the
+   * instance stops and the interval dies with it, so production
    * drives `runAllAgents` from an external cron via
    * `POST /api/internal/agents/run-scheduled` instead. Opt in with
    * `ENABLE_AGENT_INTERVAL=true` for local development.

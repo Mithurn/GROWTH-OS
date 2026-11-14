@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
-  // esbuild (the real render.yaml build) reads tsconfig.json's `paths` natively;
+  // esbuild (the production build) reads tsconfig.json's `paths` natively;
   // Vite/Vitest does not, so the same alias is declared here explicitly rather than
   // pulling in a vite-tsconfig-paths dependency for one entry.
   resolve: {

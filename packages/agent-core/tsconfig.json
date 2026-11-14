@@ -9,7 +9,7 @@
   // If a future package needs a dependency the backend must not install, or a
   // second consumer appears on a different major, stop patching these files and
   // move the repo to npm workspaces — that change has to be verified against
-  // Render (`cd backend && npm install`) and Vercel (root dir `frontend/`).
+  // the backend install (`cd backend && npm install`) and Vercel (root dir `frontend/`).
   "compilerOptions": {
     "paths": {
       "@langchain/langgraph": ["../../backend/node_modules/@langchain/langgraph"],

@@ -19,7 +19,7 @@ import { closeAgentCheckpointer } from './lib/agent-checkpointer';
  * Running them inside server.ts meant every deploy killed whatever job was
  * mid-flight — including a send already in progress — because the same
  * process serving HTTP requests was also the one holding the job. This is a
- * separate Render service so a deploy of one never interrupts the other.
+ * separate process so a deploy of one never interrupts the other.
  */
 async function main(): Promise<void> {
   await assertRedisReachable();

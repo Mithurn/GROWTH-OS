@@ -5,7 +5,7 @@ import { reportLlmFailure } from '../lib/llm-watch';
 import { schemaDefault } from '@growthos/contracts/config/registry';
 
 /**
- * Production must have a key (Render). Local / test may boot without one —
+ * Production must have a key. Local / test may boot without one —
  * the shadow observer falls back to observeScriptPlanner. Discovery and
  * campaign workers still fail at the first LLM call, which is honest.
  */
