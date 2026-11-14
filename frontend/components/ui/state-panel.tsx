@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { AlertCircle, Sparkles } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { AiOrb } from '@/components/ui/ai-orb';
 import { cn } from '@/lib/utils';
 
 const TONES = {
   error: { icon: AlertCircle, well: 'bg-red-50 text-red-500', role: 'alert' },
-  empty: { icon: Sparkles, well: 'bg-[#EEF2FF] text-[#5B4FFF]', role: undefined },
+  empty: { icon: null, well: '', role: undefined },
 } as const;
 
 type StatePanelProps = {
@@ -20,9 +21,13 @@ export function StatePanel({ tone, title, message, children, className }: StateP
 
   return (
     <div role={role} className={cn('mx-auto flex max-w-md flex-col items-center px-6 py-16 text-center', className)}>
-      <span className={cn('flex size-12 items-center justify-center rounded-2xl', well)}>
-        <Icon className="size-6" aria-hidden />
-      </span>
+      {Icon ? (
+        <span className={cn('flex size-12 items-center justify-center rounded-2xl', well)}>
+          <Icon className="size-6" aria-hidden />
+        </span>
+      ) : (
+        <AiOrb size="lg" state="breathing" />
+      )}
       <h2 className="mt-5 text-lg font-semibold tracking-tight text-[#1A1A1A]">{title}</h2>
       {message && <p className="mt-1.5 text-sm leading-relaxed text-[#6B7280]">{message}</p>}
       {children && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{children}</div>}

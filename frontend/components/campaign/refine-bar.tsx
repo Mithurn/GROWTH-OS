@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { BorderBeam } from 'border-beam';
-import { ArrowUp, Loader2, Sparkles } from 'lucide-react';
+import { ArrowUp, Loader2 } from 'lucide-react';
+import { AiOrb } from '@/components/ui/ai-orb';
 import { cn } from '@/lib/utils';
 import { REFINE_CHIPS } from './config';
 
@@ -32,7 +33,7 @@ export function RefineBar({ busy, onRefine, className }: RefineBarProps) {
           }}
           className="flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white py-1.5 pl-3.5 pr-1.5"
         >
-          <Sparkles className="size-4 shrink-0 text-[#5B4FFF]" aria-hidden />
+          <AiOrb size="sm" state={busy ? 'composing' : focused ? 'listening' : 'breathing'} className="shrink-0" />
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
