@@ -1,7 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
+import { Logo } from '@/components/brand/logo';
+
+const LOGIN_LOGO_HEIGHT = 32;
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
@@ -121,7 +123,7 @@ function LoginForm() {
       <div className="w-full max-w-[400px]">
         {/* Logo */}
         <div className="flex justify-center mb-8">
-          <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white"><Image src="/favicon.png" alt="" width={28} height={28} className="rounded-md" />GrowthOS</span>
+          <Logo height={LOGIN_LOGO_HEIGHT} />
         </div>
 
         <div className="bg-[#0b0b12] rounded-2xl border border-white/10 p-8">

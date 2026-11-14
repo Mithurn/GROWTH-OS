@@ -42,10 +42,14 @@ export const metadata: Metadata = {
   ],
   other: { 'darkreader-lock': 'light-only' },
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
+  manifest: "/manifest.webmanifest",
   // Drives the preview card when the link is shared on LinkedIn, X, or Slack.
   openGraph: {
     type: "website",
@@ -53,13 +57,13 @@ export const metadata: Metadata = {
     siteName: "GrowthOS",
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: "/logo.png", width: 1200, height: 630, alt: "GrowthOS" }],
+    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "GrowthOS" }],
   },
   twitter: {
     card: "summary_large_image",
     title: TITLE,
     description: DESCRIPTION,
-    images: ["/logo.png"],
+    images: ["/og.jpg"],
   },
 };
 

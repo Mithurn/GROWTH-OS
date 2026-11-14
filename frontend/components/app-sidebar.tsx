@@ -1,6 +1,6 @@
 'use client';
 
-import Image from 'next/image';
+import { Logo } from '@/components/brand/logo';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -17,6 +17,7 @@ import { AGENT_NAME, type AgentState } from '@/components/agent/agent-config';
 import { StatusPill } from '@/components/agent/status-pill';
 import { NAV_GROUPS, OPEN_PALETTE_EVENT } from './nav-config';
 
+const SIDEBAR_LOGO_HEIGHT = 26;
 const DEMO_EMAIL = 'demo@growthos.app';
 const DEMO_INITIALS = 'DM';
 const INITIALS_LENGTH = 2;
@@ -58,7 +59,7 @@ function SidebarBody({ pathname, onNavigate }: { pathname: string; onNavigate?: 
     <div className="flex h-full flex-col bg-[#0A0E1A]">
       <div className="flex h-14 shrink-0 items-center px-4">
         <Link href="/dashboard" onClick={onNavigate} aria-label="GrowthOS home">
-          <Image src="/logo.png" alt="GrowthOS" width={80} height={22} className="object-contain brightness-0 invert" />
+          <Logo height={SIDEBAR_LOGO_HEIGHT} />
         </Link>
       </div>
 
@@ -153,7 +154,7 @@ export function AppSidebar() {
 
       <div className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-[#1E2545] bg-[#0A0E1A] px-4 lg:hidden">
         <Link href="/dashboard" aria-label="GrowthOS home">
-          <Image src="/logo.png" alt="GrowthOS" width={80} height={22} className="object-contain brightness-0 invert" />
+          <Logo height={SIDEBAR_LOGO_HEIGHT} />
         </Link>
         <button
           type="button"
