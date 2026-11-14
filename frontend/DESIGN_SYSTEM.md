@@ -139,7 +139,7 @@ The app is operated like an agent, not filled in like a form. Shared pieces live
 - **ConfidenceMeter** shows a 0 to 100 score as ten segments.
 - **PrimaryAction** is the one `metal-fx` button allowed per screen, the main call to action.
 
-**Shell.** A 240px left sidebar (agent card, grouped navigation, account) on large screens; a top bar with a drawer below `lg`.
+**Shell.** A dark ink 240px sidebar (agent card, search, grouped navigation, account) on large screens, matching the landing console; a top bar with a drawer below `lg`. Content stays on the light canvas. `Cmd+K` opens the command palette (`components/command-palette.tsx`, destinations in `nav-config.ts`).
 
 **Density.** Cards are `rounded-2xl` with a 1px border and no shadow. Labels are 11px uppercase, numbers are mono and tabular.
 

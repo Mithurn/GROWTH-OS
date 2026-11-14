@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { AppSidebar } from './app-sidebar';
+import { CommandPalette } from './command-palette';
 import { DemoBanner } from './demo-banner';
 
 const STANDALONE_PREFIXES = ['/onboarding', '/login', '/demo', '/auth'];
@@ -21,6 +22,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
       </div>
+      <CommandPalette />
     </div>
   );
 }
