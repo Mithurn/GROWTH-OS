@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
 
 export const PRIMARY_ACTION_CLASS =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#5B4FFF] px-5 text-sm font-medium text-white transition-colors hover:bg-[#4B3FE5] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF] disabled:opacity-50';
+  'inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#141929] px-5 text-sm font-medium text-white transition-colors hover:bg-[#0A0E1A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5B4FFF] disabled:opacity-50';
 
 const METAL_STRENGTH = 0.8;
 
@@ -32,7 +32,7 @@ export function PrimaryAction({ href, children, className, ...buttonProps }: Pri
 
   if (reduced) return host;
   return (
-    <MetalFx variant="button" preset="silver" theme="light" strength={METAL_STRENGTH} className="inline-flex">
+    <MetalFx variant="button" preset="silver" theme="dark" strength={METAL_STRENGTH} className="inline-flex">
       {host}
     </MetalFx>
   );

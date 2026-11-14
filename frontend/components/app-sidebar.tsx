@@ -159,11 +159,11 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 border-r border-[#E5E7EB] bg-white lg:block">
+      <aside className="hidden w-60 shrink-0 border-r border-[#E5E7EB] bg-white lg:block">
         <SidebarBody pathname={pathname} />
       </aside>
 
-      <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[#E5E7EB] bg-white/95 px-4 backdrop-blur lg:hidden">
+      <div className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-[#E5E7EB] bg-white px-4 lg:hidden">
         <Link href="/dashboard" aria-label="GrowthOS home">
           <Image src="/logo.png" alt="GrowthOS" width={80} height={22} className="object-contain" />
         </Link>
