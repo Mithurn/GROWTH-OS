@@ -51,14 +51,17 @@ export function installTenantRls(pool: Pool): void {
     const p = rawConnect().then(async (client) => {
       if (!companyId) return client;
       const origQuery = client.query.bind(client);
+      let pendingBind = false;
       client.query = ((...args: unknown[]) => {
         const text = typeof args[0] === 'string' ? args[0] : (args[0] as { text?: string })?.text ?? '';
-        const out = (origQuery as (...a: unknown[]) => unknown)(...args);
-        if (!/^\s*BEGIN\b/i.test(text)) return out;
-        return Promise.resolve(out).then(async (result) => {
-          await bindTenant(client, companyId);
-          return result;
-        });
+        const run = () => (origQuery as (...a: unknown[]) => unknown)(...args);
+        if (/^\s*BEGIN\b/i.test(text)) {
+          pendingBind = true;
+          return run();
+        }
+        if (!pendingBind || /^\s*SET\s+TRANSACTION\b/i.test(text)) return run();
+        pendingBind = false;
+        return bindTenant(client, companyId).then(run);
       }) as PoolClient['query'];
       return client;
     });

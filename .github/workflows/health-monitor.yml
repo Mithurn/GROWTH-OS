@@ -6,7 +6,7 @@ name: Health monitor
 # backend that answers with an error (database down, app crashing) is. Set the repository
 # variables below, or the defaults apply.
 #   FRONTEND_URL   default https://growos-ai.vercel.app
-#   BACKEND_URL    default https://growthos.duckdns.org
+#   BACKEND_URL    default https://growthos-crm.duckdns.org
 
 on:
   schedule:
@@ -18,7 +18,7 @@ permissions:
 
 env:
   FRONTEND_URL: ${{ vars.FRONTEND_URL || 'https://growos-ai.vercel.app' }}
-  BACKEND_URL: ${{ vars.BACKEND_URL || 'https://growthos.duckdns.org' }}
+  BACKEND_URL: ${{ vars.BACKEND_URL || 'https://growthos-crm.duckdns.org' }}
   ISSUE_TITLE: 'Bug bot: production health check failing'
 
 jobs:
