@@ -1,9 +1,8 @@
 'use client';
 
-import { AiLoader } from '@/components/ui/ai-loader';
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Save } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BotAvatar } from 'bot-avatars';
+import { Check, Loader2, Save } from 'lucide-react';
 import {
   getCompany,
   getIntegrations,
@@ -15,6 +14,8 @@ import {
   type IntegrationCard,
   type BillingStatus,
 } from '@/lib/api';
+import { StatePanel, statePanelActionClass } from '@/components/ui/state-panel';
+import { cn } from '@/lib/utils';
 
 type OnboardingSettings = {
   companyName: string;
@@ -26,6 +27,15 @@ type OnboardingSettings = {
   involvement: string[];
   budget: string;
 };
+
+const SAVED_NOTICE_MS = 3000;
+
+const TABS = [
+  { id: 'workspace', label: 'Workspace' },
+  { id: 'agent', label: 'Agent behaviour' },
+  { id: 'connections', label: 'Connections and plan' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
 
 const industryOptions = [
   'Fashion & Apparel',
@@ -44,12 +54,7 @@ const priorityOptions = [
   'Drive Store Visits',
 ];
 
-const audienceOptions = [
-  'Highest Revenue Potential',
-  'Fastest Wins',
-  'Customer Retention',
-  'Balanced Mix',
-];
+const audienceOptions = ['Highest Revenue Potential', 'Fastest Wins', 'Customer Retention', 'Balanced Mix'];
 
 const engagementOptions = [
   'Cross-sell opportunities',
@@ -67,29 +72,33 @@ const involvementOptions = [
   'Autonomous — Executes within approved guardrails',
 ];
 
+const EMPTY_SETTINGS: OnboardingSettings = {
+  companyName: '',
+  industry: '',
+  priority: [],
+  audience: [],
+  engagement: [],
+  channels: [],
+  involvement: [],
+  budget: '10000',
+};
+
 export default function SettingsPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [settings, setSettings] = useState<OnboardingSettings>({
-    companyName: '',
-    industry: '',
-    priority: [],
-    audience: [],
-    engagement: [],
-    channels: [],
-    involvement: [],
-    budget: '10000',
-  });
+  const [tab, setTab] = useState<TabId>('workspace');
+  const [settings, setSettings] = useState<OnboardingSettings>(EMPTY_SETTINGS);
+  const [saved, setSaved] = useState<OnboardingSettings>(EMPTY_SETTINGS);
 
   const loadSettings = useCallback(async () => {
+    setLoadError(null);
     try {
       const data = await getCompany();
       const profile = data.data?.onboarding_profile || {};
-
-      setSettings({
+      const next: OnboardingSettings = {
         companyName: data.data?.company_name || '',
         industry: data.data?.industry || '',
         priority: profile.strategy?.priority || [],
@@ -97,19 +106,22 @@ export default function SettingsPage() {
         engagement: profile.strategy?.engagement || [],
         channels: profile.strategy?.channels || [],
         involvement: profile.strategy?.involvement || [],
-        budget: profile.guardrails?.budget || '10000',
-      });
-
-      setLoading(false);
+        budget: profile.guardrails?.budget || EMPTY_SETTINGS.budget,
+      };
+      setSettings(next);
+      setSaved(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load settings');
+      setLoadError(err instanceof Error ? err.message : 'Failed to load settings');
+    } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadSettings();
+    void loadSettings();
   }, [loadSettings]);
+
+  const dirty = useMemo(() => JSON.stringify(settings) !== JSON.stringify(saved), [settings, saved]);
 
   async function handleSave() {
     try {
@@ -117,7 +129,7 @@ export default function SettingsPage() {
       setError(null);
       setSuccess(false);
 
-      const profile = {
+      await saveOnboardingProfile({
         companyName: settings.companyName,
         industry: settings.industry,
         strategy: {
@@ -131,12 +143,11 @@ export default function SettingsPage() {
           budget: settings.budget,
           allowedChannels: settings.channels,
         },
-      };
+      });
 
-      await saveOnboardingProfile(profile);
-
+      setSaved(settings);
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      setTimeout(() => setSuccess(false), SAVED_NOTICE_MS);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
@@ -147,191 +158,153 @@ export default function SettingsPage() {
   function toggleSelection(key: keyof OnboardingSettings, value: string, multi: boolean = false) {
     setSettings((prev) => {
       const current = prev[key] as string[];
-
       if (multi) {
-        const isSelected = current.includes(value);
-        return {
-          ...prev,
-          [key]: isSelected ? current.filter((v) => v !== value) : [...current, value],
-        };
-      } else {
-        return { ...prev, [key]: [value] };
+        return { ...prev, [key]: current.includes(value) ? current.filter((v) => v !== value) : [...current, value] };
       }
+      return { ...prev, [key]: [value] };
     });
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <AiLoader size="md" title="Loading settings" />
+      <div className="mx-auto max-w-4xl animate-pulse space-y-4 px-4 py-8 sm:px-6" aria-hidden>
+        <div className="h-16 rounded-2xl bg-muted" />
+        <div className="h-10 w-2/3 rounded-lg bg-muted" />
+        <div className="h-64 rounded-2xl bg-muted" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-6">
+        <StatePanel tone="error" title="We could not load settings" message={loadError}>
+          <button type="button" onClick={() => { setLoading(true); void loadSettings(); }} className={statePanelActionClass}>
+            Try again
+          </button>
+        </StatePanel>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <div className="mx-auto max-w-4xl px-6 py-8">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <button
-              onClick={() => router.push('/opportunities')}
-              className="mb-4 flex items-center gap-2 text-sm font-medium text-[#71717A] transition hover:text-[#1A1A1A]"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </button>
-            <h1 className="text-3xl font-bold text-[#1A1A1A]">Settings</h1>
-            <p className="mt-2 text-sm text-[#71717A]">
-              Update your preferences and AI team configuration
-            </p>
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex h-10 shrink-0 items-center whitespace-nowrap gap-2 rounded-lg bg-[#5B4FFF] px-5 text-sm font-semibold text-white transition hover:bg-[#4B3FE5] disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
+    <div className="mx-auto max-w-4xl px-4 pb-28 pt-6 sm:px-6 lg:pt-8">
+      <header className="mb-6 flex items-center gap-4">
+        <BotAvatar type="pill" state="default" size={48} interactive={false} />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Settings</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">Decide what the agent works on and how much it does alone.</p>
         </div>
+      </header>
 
-        {/* Notifications */}
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+      <div role="tablist" aria-label="Settings sections" className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={cn(
+              '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              tab === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        {success && (
-          <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            Settings saved successfully!
-          </div>
-        )}
-
-        {/* Settings Sections */}
-        <div className="space-y-6">
-          {/* Business Information */}
-          <Section title="Business Information">
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#1A1A1A]">
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  value={settings.companyName}
-                  onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
-                  className="h-11 w-full rounded-lg border border-[#E4E4E7] bg-white px-4 text-sm font-medium outline-none transition focus:border-[#5B4FFF] focus:ring-4 focus:ring-[#5B4FFF]/10"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#1A1A1A]">Industry</label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {industryOptions.map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setSettings({ ...settings, industry: option })}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
-                        settings.industry === option
-                          ? 'border-[#5B4FFF] bg-[#F7F6FF] text-[#5B4FFF]'
-                          : 'border-[#E4E4E7] bg-white text-[#1A1A1A] hover:border-[#A1A1AA]'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
+      <div className="space-y-5">
+        {tab === 'workspace' && (
+          <>
+            <Section title="Business information">
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="company-name" className="mb-1.5 block text-sm font-medium">
+                    Company name
+                  </label>
+                  <input
+                    id="company-name"
+                    type="text"
+                    value={settings.companyName}
+                    onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
+                    className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+                  />
+                </div>
+                <div>
+                  <span className="mb-1.5 block text-sm font-medium">Industry</span>
+                  <OptionGrid
+                    options={industryOptions}
+                    selected={[settings.industry]}
+                    onToggle={(value) => setSettings({ ...settings, industry: value })}
+                    columns="sm:grid-cols-3"
+                  />
                 </div>
               </div>
-            </div>
-          </Section>
-
-          {/* Growth Goals */}
-          <Section title="What's the most important outcome you want in the next 90 days?">
-            <OptionGrid
-              options={priorityOptions}
-              selected={settings.priority}
-              onToggle={(value) => toggleSelection('priority', value)}
-            />
-          </Section>
-
-          <Section title="How would you like opportunities prioritized?">
-            <OptionGrid
-              options={audienceOptions}
-              selected={settings.audience}
-              onToggle={(value) => toggleSelection('audience', value)}
-            />
-          </Section>
-
-          <Section title="What type of opportunities should I look for?">
-            <OptionGrid
-              options={engagementOptions}
-              selected={settings.engagement}
-              onToggle={(value) => toggleSelection('engagement', value)}
-            />
-          </Section>
-
-          <Section title="Where can I reach your customers?">
-            <OptionGrid
-              options={channelOptions}
-              selected={settings.channels}
-              onToggle={(value) => toggleSelection('channels', value, true)}
-            />
-          </Section>
-
-          <Section title="How should your AI team operate?">
-            <div className="space-y-2">
-              {involvementOptions.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => toggleSelection('involvement', option)}
-                  className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
-                    settings.involvement.includes(option)
-                      ? 'border-[#5B4FFF] bg-[#F7F6FF]'
-                      : 'border-[#E4E4E7] bg-white hover:border-[#A1A1AA]'
-                  }`}
-                >
-                  <span className="text-sm font-medium text-[#1A1A1A]">{option}</span>
-                  {settings.involvement.includes(option) && (
-                    <Check className="h-5 w-5 text-[#5B4FFF]" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <BillingSection />
-
-          <IntegrationsSection />
-
-          {/* Budget */}
-          <Section title="Monthly Marketing Budget">
-            <div className="max-w-md">
-              <div className="flex h-14 items-center rounded-lg border-2 border-[#E4E4E7] bg-white px-5 focus-within:border-[#5B4FFF] focus-within:ring-4 focus-within:ring-[#5B4FFF]/10">
-                <span className="text-base font-semibold text-[#71717A]">INR</span>
+            </Section>
+            <Section title="Monthly marketing budget" hint="The agent will not plan campaigns beyond this.">
+              <div className="flex h-11 max-w-xs items-center rounded-lg border border-border bg-card px-3 focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10">
+                <span className="text-sm font-medium text-muted-foreground">INR</span>
                 <input
                   type="text"
                   value={settings.budget}
                   onChange={(e) => setSettings({ ...settings, budget: e.target.value })}
                   inputMode="numeric"
-                  className="ml-3 min-w-0 flex-1 bg-transparent text-base font-semibold outline-none"
+                  aria-label="Monthly marketing budget in INR"
+                  className="ml-3 min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
                 />
               </div>
-            </div>
-          </Section>
-        </div>
+            </Section>
+          </>
+        )}
 
-        {/* Save Button (Bottom) */}
-        <div className="mt-8 flex justify-end">
+        {tab === 'agent' && (
+          <>
+            <Section title="How should the agent operate?" hint="You always approve campaigns before anything is sent unless you choose Autonomous.">
+              <OptionGrid
+                options={involvementOptions}
+                selected={settings.involvement}
+                onToggle={(value) => toggleSelection('involvement', value)}
+                columns="sm:grid-cols-1"
+              />
+            </Section>
+            <Section title="Most important outcome in the next 90 days">
+              <OptionGrid options={priorityOptions} selected={settings.priority} onToggle={(value) => toggleSelection('priority', value)} />
+            </Section>
+            <Section title="How should opportunities be prioritised?">
+              <OptionGrid options={audienceOptions} selected={settings.audience} onToggle={(value) => toggleSelection('audience', value)} />
+            </Section>
+            <Section title="What should the agent look for?">
+              <OptionGrid options={engagementOptions} selected={settings.engagement} onToggle={(value) => toggleSelection('engagement', value)} />
+            </Section>
+            <Section title="Channels it may use">
+              <OptionGrid options={channelOptions} selected={settings.channels} onToggle={(value) => toggleSelection('channels', value, true)} />
+            </Section>
+          </>
+        )}
+
+        {tab === 'connections' && (
+          <>
+            <IntegrationsSection />
+            <BillingSection />
+          </>
+        )}
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/90 backdrop-blur">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <p role="status" className={cn('min-w-0 truncate text-sm', error ? 'text-red-600' : success ? 'text-emerald-600' : 'text-muted-foreground')}>
+            {error ?? (success ? 'Saved' : dirty ? 'You have unsaved changes' : 'All changes saved')}
+          </p>
           <button
+            type="button"
             onClick={handleSave}
-            disabled={saving}
-            className="flex h-11 items-center gap-2 rounded-lg bg-[#5B4FFF] px-6 text-sm font-semibold text-white transition hover:bg-[#4B3FE5] disabled:opacity-50"
+            disabled={saving || !dirty}
+            className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
+            {saving ? 'Saving' : 'Save changes'}
           </button>
         </div>
       </div>
@@ -421,13 +394,13 @@ function IntegrationsSection() {
 
   return (
     <Section title="Integrations">
-      <p className="mb-4 text-sm text-[#71717A]">
+      <p className="mb-4 text-sm text-[var(--muted-foreground)]">
         Simulator is the default and free. Real sends use your own account
         (AES-256-GCM, keys never returned to the browser) — GrowthOS never
         spends its own money sending on your behalf.
       </p>
       {available === false && (
-        <p className="mb-4 text-sm text-[#71717A]">
+        <p className="mb-4 text-sm text-[var(--muted-foreground)]">
           Integration tables are not applied yet. Cards still default to simulator.
         </p>
       )}
@@ -445,12 +418,12 @@ function IntegrationsSection() {
           return (
             <div key={card.kind} className="rounded-lg border border-[#E4E4E7] p-4">
               <h3 className="text-sm font-semibold text-[#1A1A1A]">{copy.title}</h3>
-              <p className="mt-1 text-xs text-[#71717A]">{copy.hint}</p>
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">{copy.hint}</p>
               <p className="mt-3 text-xs font-medium text-[#1A1A1A]">
                 Mode: {card.mode} · {card.status}
               </p>
               {card.maskedKey && (
-                <p className="mt-1 font-mono text-xs text-[#71717A]">{card.maskedKey}</p>
+                <p className="mt-1 font-mono text-xs text-[var(--muted-foreground)]">{card.maskedKey}</p>
               )}
               <div className="mt-3 space-y-2">
                 {CREDENTIAL_FIELDS[card.kind].map((field) => (
@@ -530,7 +503,7 @@ function BillingSection() {
 
   return (
     <Section title="Plan">
-      <p className="mb-4 text-sm text-[#71717A]">
+      <p className="mb-4 text-sm text-[var(--muted-foreground)]">
         Everything is free and unlimited in simulator mode — dashboards, the
         agent, personas, opportunities. Real WhatsApp/Email sends need either
         your own connected key above, or the Pro plan, which sends on
@@ -542,10 +515,10 @@ function BillingSection() {
           Current plan: {status?.plan === 'pro' ? 'Pro' : 'Free (simulator)'}
         </p>
         {status?.subscriptionStatus && (
-          <p className="mt-1 text-xs text-[#71717A]">Subscription: {status.subscriptionStatus}</p>
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">Subscription: {status.subscriptionStatus}</p>
         )}
         {status && !status.configured && (
-          <p className="mt-2 text-xs text-[#71717A]">Billing is not configured on this deployment yet.</p>
+          <p className="mt-2 text-xs text-[var(--muted-foreground)]">Billing is not configured on this deployment yet.</p>
         )}
         {status?.plan !== 'pro' && (
           <button
@@ -562,12 +535,13 @@ function BillingSection() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#E4E4E7] bg-white p-6">
-      <h2 className="mb-4 text-lg font-bold text-[#1A1A1A]">{title}</h2>
-      {children}
-    </div>
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -575,28 +549,30 @@ function OptionGrid({
   options,
   selected,
   onToggle,
+  columns = 'sm:grid-cols-2',
 }: {
   options: string[];
   selected: string[];
   onToggle: (value: string) => void;
+  columns?: string;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div className={cn('grid grid-cols-1 gap-2', columns)}>
       {options.map((option) => {
         const isSelected = selected.includes(option);
-
         return (
           <button
             key={option}
+            type="button"
+            aria-pressed={isSelected}
             onClick={() => onToggle(option)}
-            className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left transition ${
-              isSelected
-                ? 'border-[#5B4FFF] bg-[#F7F6FF]'
-                : 'border-[#E4E4E7] bg-white hover:border-[#A1A1AA]'
-            }`}
+            className={cn(
+              'flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left text-sm font-medium transition-colors',
+              isSelected ? 'border-primary/60 bg-accent text-primary' : 'border-border bg-card hover:border-primary/30',
+            )}
           >
-            <span className="text-sm font-medium text-[#1A1A1A]">{option}</span>
-            {isSelected && <Check className="h-5 w-5 shrink-0 text-[#5B4FFF]" />}
+            {option}
+            {isSelected && <Check className="size-4 shrink-0" aria-hidden />}
           </button>
         );
       })}
